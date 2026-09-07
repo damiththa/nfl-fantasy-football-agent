@@ -19,6 +19,15 @@ def test_health_check(client):
     assert len(data["leagues"]) == 2
 
 
+def test_root_dashboard(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Mad Dawg" in response.text
+    assert "PNA 2026" in response.text
+    assert "Chips Ahoy" in response.text
+
+
 def test_query_lineup_invalid_league(client):
     response = client.post("/query/lineup?league_id=99999999")
     assert response.status_code == 404
