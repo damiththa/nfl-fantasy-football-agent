@@ -15,7 +15,7 @@ from src.espn.matchup import MatchupData
 from src.espn.roster import ParsedRoster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_lineup_prompt
-from src.intelligence.schemas import LineupRecommendation, StartSitDecision
+from src.intelligence.schemas import CurrentRosterPlayer, LineupRecommendation, StartSitDecision
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +169,168 @@ def enrich_lineup_recommendation_with_espn_status(
             swaps.append(f"⬇️ Move {nb.player_name} ({nb.current_slot}) to Bench")
 
     rec.actionable_swaps = swaps
+
+    rec_starters_map = {s.player_name.lower(): s for s in rec.recommended_starters}
+    rec_bench_map = {b.player_name.lower(): b for b in rec.bench_players}
+
+    # Build current_lineup from roster.starters
+    current_lineup_items: list[CurrentRosterPlayer] = []
+    for p in roster.starters:
+        p_lower = p.name.lower()
+        if p_lower in rec_starters_map:
+            s_rec = rec_starters_map[p_lower]
+            current_lineup_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot=p.slot,
+                    projected_points=p.projected_points,
+                    injury_status=p.injury_status,
+                    action="KEEP_STARTING",
+                    action_label="✅ KEEP STARTING",
+                    action_detail=s_rec.reasoning,
+                    floor=s_rec.floor,
+                    ceiling=s_rec.ceiling,
+                    game_script_note=s_rec.game_script_note,
+                )
+            )
+        else:
+            b_rec = rec_bench_map.get(p_lower)
+            reason = b_rec.reasoning if b_rec else "Out-projected by optimal starters."
+            is_out = (p.injury_status or "").upper() in ("OUT", "IR", "DOUBTFUL")
+            label = "🚨 BENCH THIS PLAYER"
+            detail = (
+                f"🚨 INACTIVE/OUT ({p.injury_status}): Remove from lineup immediately!"
+                if is_out
+                else f"Suboptimal ({p.projected_points:.1f} pts). {reason}"
+            )
+            current_lineup_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot=p.slot,
+                    projected_points=p.projected_points,
+                    injury_status=p.injury_status,
+                    action="BENCH_NOW",
+                    action_label=label,
+                    action_detail=detail,
+                    floor=round(p.projected_points * 0.7, 1),
+                    ceiling=round(p.projected_points * 1.3, 1),
+                    game_script_note=None,
+                )
+            )
+
+    rec.current_lineup = sort_current_lineup_by_order(current_lineup_items, league)
+
+    # Build current_bench from roster.bench
+    current_bench_items: list[CurrentRosterPlayer] = []
+    for p in roster.bench:
+        p_lower = p.name.lower()
+        if p_lower in rec_starters_map:
+            s_rec = rec_starters_map[p_lower]
+            current_bench_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot=p.slot,
+                    projected_points=p.projected_points,
+                    injury_status=p.injury_status,
+                    action="PROMOTE_TO_START",
+                    action_label="⚡ START THIS PLAYER",
+                    action_detail=f"Optimal starter on your bench! {s_rec.reasoning}",
+                    floor=s_rec.floor,
+                    ceiling=s_rec.ceiling,
+                    game_script_note=s_rec.game_script_note,
+                )
+            )
+        else:
+            b_rec = rec_bench_map.get(p_lower)
+            reason = b_rec.reasoning if b_rec else f"Backup depth ({p.projected_points:.1f} projected pts)."
+            current_bench_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot=p.slot,
+                    projected_points=p.projected_points,
+                    injury_status=p.injury_status,
+                    action="STAY_ON_BENCH",
+                    action_label="⏸️ KEEP ON BENCH",
+                    action_detail=reason,
+                    floor=round(p.projected_points * 0.7, 1),
+                    ceiling=round(p.projected_points * 1.3, 1),
+                    game_script_note=None,
+                )
+            )
+
+    pos_priority = {"QB": 1, "TQB": 1, "RB": 2, "WR": 3, "TE": 4, "DST": 5, "D/ST": 5, "K": 6, "PK": 6}
+    rec.current_bench = sorted(
+        current_bench_items,
+        key=lambda p: (pos_priority.get(p.position.upper(), 99), -p.projected_points),
+    )
+
     return rec
+
+
+def sort_current_lineup_by_order(
+    starters: list[CurrentRosterPlayer], league: LeagueConfig
+) -> list[CurrentRosterPlayer]:
+    """Sort current ESPN starters strictly into standard fantasy roster order:
+    QB, RB, RB, WR, WR, TE, FLEX, [FLEX], [K], D/ST (D/ST strictly last row).
+    """
+    qbs = [s for s in starters if "QB" in s.position.upper()]
+    rbs = [s for s in starters if s.position.upper() == "RB"]
+    wrs = [s for s in starters if s.position.upper() == "WR"]
+    tes = [s for s in starters if s.position.upper() == "TE"]
+    dsts = [
+        s
+        for s in starters
+        if s.position.upper() in ("DST", "D/ST", "DEF") or "DEF" in s.position.upper()
+    ]
+    kickers = [s for s in starters if s.position.upper() in ("K", "PK")]
+
+    others = [
+        s
+        for s in starters
+        if s not in qbs
+        and s not in rbs
+        and s not in wrs
+        and s not in tes
+        and s not in dsts
+        and s not in kickers
+    ]
+
+    ordered: list[CurrentRosterPlayer] = []
+    ordered.extend(qbs[: league.roster.qb])
+    flex_candidates = qbs[league.roster.qb :]
+
+    ordered.extend(rbs[: league.roster.rb])
+    flex_candidates.extend(rbs[league.roster.rb :])
+
+    ordered.extend(wrs[: league.roster.wr])
+    flex_candidates.extend(wrs[league.roster.wr :])
+
+    ordered.extend(tes[: league.roster.te])
+    flex_candidates.extend(tes[league.roster.te :])
+
+    flex_candidates.extend(others)
+    ordered.extend(flex_candidates[: league.roster.flex])
+
+    if league.roster.k:
+        ordered.extend(kickers[: league.roster.k])
+
+    for s in dsts[: league.roster.dst]:
+        ordered.append(s.model_copy(update={"position": "D/ST"}))
+
+    added = {s.player_name.lower() for s in ordered}
+    for s in starters:
+        if s.player_name.lower() not in added:
+            ordered.append(s)
+
+    return ordered
 
 
 def sort_bench_by_position(bench: list[StartSitDecision]) -> list[StartSitDecision]:

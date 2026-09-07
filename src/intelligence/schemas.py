@@ -37,6 +37,29 @@ class StartSitDecision(BaseModel):
     )
 
 
+class CurrentRosterPlayer(BaseModel):
+    """Player on user's current ESPN roster with explicit, actionable start/bench guidance."""
+
+    player_name: str = Field(description="Player full name")
+    position: str = Field(description="Primary position (QB, RB, WR, TE, K, D/ST)")
+    team: str = Field(description="NFL team abbreviation")
+    current_slot: str = Field(description="Current ESPN slot (e.g. QB, RB, WR, FLEX, BE, IR)")
+    projected_points: float = Field(description="Projected fantasy points for the week")
+    injury_status: str = Field(default="NORMAL", description="Current injury tag")
+    action: Literal["KEEP_STARTING", "BENCH_NOW", "PROMOTE_TO_START", "STAY_ON_BENCH"] = Field(
+        description="Explicit directive for this player"
+    )
+    action_label: str = Field(
+        description="Human-friendly badge (e.g. '✅ KEEP STARTING', '🚨 BENCH THIS PLAYER', '⚡ START THIS PLAYER', '⏸️ KEEP ON BENCH')"
+    )
+    action_detail: str = Field(
+        description="Concrete explanation of what to do and why (e.g. 'Confirmed starter (+18.8 pts)', 'Bench for Tyjae Spears')"
+    )
+    floor: float = Field(default=0.0, description="Conservative floor projection")
+    ceiling: float = Field(default=0.0, description="Optimistic ceiling projection")
+    game_script_note: Optional[str] = Field(default=None, description="Game script note")
+
+
 class LineupRecommendation(BaseModel):
     """Complete starting lineup recommendation tailored to matchup game theory."""
 
@@ -46,6 +69,14 @@ class LineupRecommendation(BaseModel):
         description="Lineup approach: PROTECT_LEAD (high-floor), SEEK_VARIANCE (high-ceiling underdog), or BALANCED"
     )
     strategy_reasoning: str = Field(description="Why this game-theory approach was selected")
+    current_lineup: list[CurrentRosterPlayer] = Field(
+        default_factory=list,
+        description="User's exact ESPN starting lineup as-is, each with an explicit start/bench verdict",
+    )
+    current_bench: list[CurrentRosterPlayer] = Field(
+        default_factory=list,
+        description="User's exact ESPN bench as-is, each with an explicit keep/promote verdict",
+    )
     recommended_starters: list[StartSitDecision] = Field(
         description="Recommended starting lineup players"
     )

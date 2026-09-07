@@ -131,6 +131,60 @@ def test_vacant_slots_and_actionable_swaps():
     assert mahomes_rec.alignment == "SWAP_TO_START"
 
 
+def test_current_lineup_and_current_bench_directives():
+    # Roster with active starters, an injured starter, and bench players
+    mahomes = RosterPlayer("Patrick Mahomes", "QB", "KC", "QB", 22.0, 0.0, "NORMAL", 10, 99.0)
+    kelce = RosterPlayer("Travis Kelce", "TE", "KC", "TE", 14.0, 0.0, "NORMAL", 10, 98.0)
+    wr1 = RosterPlayer("WR_1", "WR", "DAL", "WR", 16.0, 0.0, "NORMAL", 7, 90.0)
+    wr2 = RosterPlayer("WR_2", "WR", "DAL", "WR", 14.0, 0.0, "NORMAL", 7, 85.0)
+    wr3 = RosterPlayer("WR_3", "WR", "DAL", "WR", 12.0, 0.0, "NORMAL", 7, 80.0)
+    wr4 = RosterPlayer("WR_4", "WR", "DAL", "WR", 11.0, 0.0, "NORMAL", 7, 75.0)
+    rb1 = RosterPlayer("RB_1", "RB", "SF", "RB", 15.0, 0.0, "NORMAL", 9, 85.0)
+    injured = RosterPlayer("Injured Guy", "RB", "NYJ", "RB", 2.0, 0.0, "OUT", 5, 10.0)
+    dst = RosterPlayer("SF Defense", "DST", "SF", "D/ST", 8.0, 0.0, "NORMAL", 9, 90.0)
+
+    rb_bench = RosterPlayer("RB_Bench", "RB", "SF", "BE", 18.0, 0.0, "NORMAL", 9, 88.0)
+    deep_bench = RosterPlayer("Deep Bench WR", "WR", "DAL", "BE", 3.0, 0.0, "NORMAL", 7, 20.0)
+
+    players = [mahomes, kelce, wr1, wr2, wr3, wr4, rb1, injured, dst, rb_bench, deep_bench]
+    roster = ParsedRoster(
+        team_name="Mad Dawg Team",
+        players=players,
+        starters=[mahomes, kelce, wr1, wr2, wr3, wr4, rb1, injured, dst],
+        bench=[rb_bench, deep_bench],
+    )
+
+    rec = optimize_lineup(PNA_2026, 1, roster)
+
+    # Verify current_lineup exists and has correct directives
+    assert len(rec.current_lineup) == 9
+    assert rec.current_lineup[-1].position == "D/ST"
+    lineup_dict = {p.player_name: p for p in rec.current_lineup}
+
+    # Mahomes is an optimal starter -> KEEP_STARTING
+    assert lineup_dict["Patrick Mahomes"].action == "KEEP_STARTING"
+    assert "KEEP STARTING" in lineup_dict["Patrick Mahomes"].action_label
+
+    # Kelce is an optimal starter -> KEEP_STARTING
+    assert lineup_dict["Travis Kelce"].action == "KEEP_STARTING"
+
+    # Injured Guy is suboptimal / OUT -> BENCH_NOW
+    assert lineup_dict["Injured Guy"].action == "BENCH_NOW"
+    assert "BENCH THIS PLAYER" in lineup_dict["Injured Guy"].action_label
+
+    # Verify current_bench exists and has correct directives
+    assert len(rec.current_bench) == 2
+    bench_dict = {p.player_name: p for p in rec.current_bench}
+
+    # RB_Bench has 18.0 pts, is optimal -> PROMOTE_TO_START
+    assert bench_dict["RB_Bench"].action == "PROMOTE_TO_START"
+    assert "START THIS PLAYER" in bench_dict["RB_Bench"].action_label
+
+    # Deep Bench WR has 3.0 pts, is backup depth -> STAY_ON_BENCH
+    assert bench_dict["Deep Bench WR"].action == "STAY_ON_BENCH"
+    assert "KEEP ON BENCH" in bench_dict["Deep Bench WR"].action_label
+
+
 
 def test_benches_injured_players():
     # RB_0 is marked OUT

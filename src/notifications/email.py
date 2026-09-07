@@ -139,64 +139,126 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
         <span style="background: {color}; color: #0f172a; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: bold;">⚡ {strategy}</span>
       </div>"""
 
-    # Vacant starting slots alert
-    if data.get("vacant_slots"):
-        vacant_items = "".join(f"<li style='margin-bottom: 4px; font-weight: bold;'>Slot {s} is currently UNFILLED</li>" for s in data["vacant_slots"])
-        content_html += f"""
+    # 1. Action Checklist & Lineup Status
+    if data.get("current_lineup"):
+        has_swaps = bool(data.get("actionable_swaps"))
+        has_vacant = bool(data.get("vacant_slots"))
+
+        if not has_swaps and not has_vacant:
+            content_html += """
+      <div style="background: rgba(34, 197, 94, 0.15); border-left: 4px solid #22c55e; border-radius: 0 6px 6px 0; padding: 12px 14px; margin-bottom: 14px;">
+        <h4 style="color: #22c55e; margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase;">✅ Lineup Status: 100% Optimal</h4>
+        <p style="color: #bbf7d0; font-size: 12px; margin: 0;">All your current ESPN starters are confirmed optimal. No moves needed before kickoff!</p>
+      </div>"""
+        else:
+            if has_vacant:
+                vacant_items = "".join(f"<li style='margin-bottom: 4px; font-weight: bold;'>Slot {s} is currently UNFILLED</li>" for s in data["vacant_slots"])
+                content_html += f"""
       <div style="background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; border-radius: 0 6px 6px 0; padding: 12px 14px; margin-bottom: 14px;">
         <h4 style="color: #ef4444; margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;">🚨 Vacant Starting Slots Detected on ESPN</h4>
-        <p style="color: #fca5a5; font-size: 12px; margin: 0 0 6px 0;">You have starting roster slots that are completely empty. Action is needed before kickoff:</p>
         <ul style="margin: 0; padding-left: 18px; color: #fecaca; font-size: 12px;">{vacant_items}</ul>
       </div>"""
-
-    # Actionable swaps alert
-    if data.get("actionable_swaps"):
-        swaps_items = "".join(f"<li style='margin-bottom: 4px;'>{swap}</li>" for swap in data["actionable_swaps"])
-        content_html += f"""
+            if has_swaps:
+                swaps_items = "".join(f"<li style='margin-bottom: 4px;'>{swap}</li>" for swap in data["actionable_swaps"])
+                content_html += f"""
       <div style="background: rgba(234, 179, 8, 0.15); border-left: 4px solid #eab308; border-radius: 0 6px 6px 0; padding: 12px 14px; margin-bottom: 14px;">
         <h4 style="color: #eab308; margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;">⚡ Recommended Lineup Swaps on ESPN</h4>
         <ul style="margin: 0; padding-left: 18px; color: #fef08a; font-size: 12px;">{swaps_items}</ul>
       </div>"""
 
-    # Strategy reasoning
-    if data.get("strategy_reasoning"):
-        content_html += f"""
-      <p style="color: #cbd5e1; font-size: 14px; margin: 0 0 14px 0; font-style: italic;">"{data['strategy_reasoning']}"</p>"""
+        # 2. Current Starting Lineup (On ESPN As-Is)
+        lineup_rows = ""
+        for p in data["current_lineup"]:
+            name = p.get("player_name", "Unknown")
+            pos = p.get("position", "?")
+            slot = p.get("current_slot", pos)
+            team = p.get("team", "?")
+            proj = p.get("projected_points", 0)
+            act = p.get("action", "")
+            act_label = p.get("action_label", "START")
+            act_detail = p.get("action_detail", "")
 
-    # Recommended starters table
-    if data.get("recommended_starters"):
-        rows = ""
-        for p in data["recommended_starters"]:
+            badge_style = "color: #22c55e; background: rgba(34, 197, 94, 0.15);" if act == "KEEP_STARTING" else "color: #ef4444; background: rgba(239, 68, 68, 0.2); font-weight: bold;"
+            lineup_rows += f"""
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #38bdf8; font-weight: bold; font-size: 13px;">{slot}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #f8fafc; font-weight: bold; font-size: 13px;">{name} <span style="color:#94a3b8; font-weight:normal; font-size:11px;">({team})</span></td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #22c55e; font-weight: bold; font-size: 13px;">{proj}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;"><span style="{badge_style} padding: 2px 6px; border-radius: 4px;">{act_label}</span></td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 12px;">{act_detail}</td>
+          </tr>"""
+
+        content_html += f"""
+      <h3 style="color: #38bdf8; font-size: 14px; margin: 14px 0 8px 0; text-transform: uppercase;">📋 Current Starting Lineup (On ESPN As-Is)</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+        <thead>
+          <tr>
+            <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Slot</th>
+            <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
+            <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
+            <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Verdict</th>
+            <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Analysis & Advice</th>
+          </tr>
+        </thead>
+        <tbody>{lineup_rows}</tbody>
+      </table>"""
+
+        # 3. Current Bench (On ESPN As-Is)
+        bench_rows = ""
+        for p in data.get("current_bench", []):
             name = p.get("player_name", "Unknown")
             pos = p.get("position", "?")
             team = p.get("team", "?")
             proj = p.get("projected_points", 0)
-            reasoning = p.get("reasoning", "")
-            game_note = p.get("game_script_note", "")
-            full_reason = f"{reasoning} ({game_note})" if game_note else reasoning
-            slot_display = p.get("current_slot", "")
-            alignment = p.get("alignment", "")
+            act = p.get("action", "")
+            act_label = p.get("action_label", "BENCH")
+            act_detail = p.get("action_detail", "")
 
-            if alignment == "SWAP_TO_START":
-                status_badge = '<span style="color: #f59e0b; font-weight: bold; background: rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">⚠️ Bench (Swap In)</span>'
-            elif alignment == "ALIGNED":
-                status_badge = f'<span style="color: #22c55e; background: rgba(34, 197, 94, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">🟢 Started ({slot_display})</span>'
-            elif slot_display:
-                status_badge = f'<span style="color: #94a3b8; font-size: 11px;">{slot_display}</span>'
-            else:
-                status_badge = '<span style="color: #94a3b8; font-size: 11px;">-</span>'
+            badge_style = "color: #f59e0b; background: rgba(245, 158, 11, 0.2); font-weight: bold;" if act == "PROMOTE_TO_START" else "color: #94a3b8; background: rgba(148, 163, 184, 0.15);"
+            bench_rows += f"""
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-weight: bold; font-size: 13px;">{pos}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">{name} <span style="color:#64748b; font-size:11px;">({team})</span></td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{proj}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;"><span style="{badge_style} padding: 2px 6px; border-radius: 4px;">{act_label}</span></td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{act_detail}</td>
+          </tr>"""
 
-            rows += f"""
+        content_html += f"""
+      <h3 style="color: #94a3b8; font-size: 14px; margin: 16px 0 8px 0; text-transform: uppercase;">⏸️ Current Bench (On ESPN As-Is)</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+        <thead>
+          <tr>
+            <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Pos</th>
+            <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
+            <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
+            <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Verdict</th>
+            <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Analysis & Advice</th>
+          </tr>
+        </thead>
+        <tbody>{bench_rows}</tbody>
+      </table>"""
+    else:
+        # Fallback to recommended starters table if current_lineup not present
+        if data.get("recommended_starters"):
+            rows = ""
+            for p in data["recommended_starters"]:
+                name = p.get("player_name", "Unknown")
+                pos = p.get("position", "?")
+                team = p.get("team", "?")
+                proj = p.get("projected_points", 0)
+                reasoning = p.get("reasoning", "")
+                game_note = p.get("game_script_note", "")
+                full_reason = f"{reasoning} ({game_note})" if game_note else reasoning
+                rows += f"""
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #38bdf8; font-weight: bold; font-size: 13px;">{pos}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #f8fafc; font-weight: bold; font-size: 13px;">{name}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{team}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #22c55e; font-weight: bold; font-size: 13px;">{proj}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;">{status_badge}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{full_reason}</td>
           </tr>"""
-
-        content_html += f"""
+            content_html += f"""
       <h3 style="color: #22c55e; font-size: 14px; margin: 14px 0 8px 0; text-transform: uppercase;">🟢 Start 'Em (Optimal Lineup)</h3>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
         <thead>
@@ -205,60 +267,29 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Team</th>
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
-            <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">ESPN Status</th>
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Intel & Matchup</th>
           </tr>
         </thead>
-        <tbody>{rows}
-        </tbody>
+        <tbody>{rows}</tbody>
       </table>"""
 
-    # Bench players / Sit 'Em table & Injury Alert
-    if data.get("bench_players"):
-        bench_rows = ""
-        injury_alerts = []
-        for p in data["bench_players"]:
-            name = p.get("player_name", "Unknown")
-            pos = p.get("position", "?")
-            team = p.get("team", "?")
-            proj = p.get("projected_points", 0)
-            reasoning = p.get("reasoning", "")
-            slot_display = p.get("current_slot", "")
-            alignment = p.get("alignment", "")
-
-            if alignment == "MOVE_TO_BENCH":
-                status_badge = f'<span style="color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">🚨 In Lineup ({slot_display}) (Bench Now)</span>'
-            elif slot_display in ("Bench", "BE"):
-                status_badge = '<span style="color: #94a3b8; background: rgba(148, 163, 184, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">⏸️ On Bench</span>'
-            elif slot_display:
-                status_badge = f'<span style="color: #94a3b8; font-size: 11px;">{slot_display}</span>'
-            else:
-                status_badge = '<span style="color: #94a3b8; font-size: 11px;">-</span>'
-
-            # Identify injured/inactive players
-            upper_r = reasoning.upper()
-            if any(term in upper_r for term in ("OUT", "IR", "DOUBTFUL", "INACTIVE", "SUSPENDED", "QUESTIONABLE")):
-                injury_alerts.append(f"<strong>{name} ({pos} - {team})</strong>: {reasoning}")
-
-            bench_rows += f"""
+        if data.get("bench_players"):
+            bench_rows = ""
+            for p in data["bench_players"]:
+                name = p.get("player_name", "Unknown")
+                pos = p.get("position", "?")
+                team = p.get("team", "?")
+                proj = p.get("projected_points", 0)
+                reasoning = p.get("reasoning", "")
+                bench_rows += f"""
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #ef4444; font-weight: bold; font-size: 13px;">{pos}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">{name}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{team}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{proj}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;">{status_badge}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{reasoning}</td>
           </tr>"""
-
-        if injury_alerts:
-            alerts_li = "".join(f"<li style='margin-bottom: 4px;'>{a}</li>" for a in injury_alerts)
             content_html += f"""
-      <div style="background: rgba(239, 68, 68, 0.15); border-left: 4px solid #ef4444; border-radius: 0 6px 6px 0; padding: 12px; margin-bottom: 14px;">
-        <h4 style="color: #ef4444; margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase;">🚨 Injury / Inactive Status Alerts (Do Not Start)</h4>
-        <ul style="margin: 0; padding-left: 18px; color: #fca5a5; font-size: 12px;">{alerts_li}</ul>
-      </div>"""
-
-        content_html += f"""
       <h3 style="color: #ef4444; font-size: 14px; margin: 16px 0 8px 0; text-transform: uppercase;">🔴 Sit 'Em (Bench Options)</h3>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
         <thead>
@@ -267,12 +298,10 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Team</th>
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
-            <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">ESPN Status</th>
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Why Sit</th>
           </tr>
         </thead>
-        <tbody>{bench_rows}
-        </tbody>
+        <tbody>{bench_rows}</tbody>
       </table>"""
 
 
