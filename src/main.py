@@ -461,7 +461,11 @@ def run_weekly_analysis() -> dict[str, Any]:
     """Automated weekday workflow triggered by Cloud Scheduler (Tue, Thu, Fri, Sat).
     Routes internally based on current weekday (America/New_York).
     """
-    weekday = datetime.now().weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+    import zoneinfo
+
+    eastern = zoneinfo.ZoneInfo("America/New_York")
+    now_et = datetime.now(eastern)
+    weekday = now_et.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
     day_name = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][
         weekday
     ]

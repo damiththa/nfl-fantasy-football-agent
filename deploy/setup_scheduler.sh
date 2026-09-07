@@ -63,26 +63,30 @@ upsert_cron_job() {
     echo "✅ Scheduled ${job_name} [${cron_schedule} ET] -> ${endpoint}"
 }
 
-# 1. Weekly Analysis (Tue: Waivers, Thu: TNF lock, Fri: Injury roundup, Sat: Matchup preview)
+# 1. Tuesday Waiver Wire & Friday Weekend Injury Lock (7:00 PM ET)
+# Tuesday: Ingests full Monday Night Football stats & Tuesday practice reports before waivers process overnight
+# Friday: Ingests official weekend injury designations (Out, Doubtful, Questionable) from all 32 NFL teams
 upsert_cron_job \
     "weekly-routine" \
-    "0 7 * * 2,4,5,6" \
+    "0 19 * * 2,5" \
     "/run/weekly" \
-    "Weekly fantasy routine: Tuesday waivers, Thursday TNF, Friday injuries, Saturday preview"
+    "Tuesday 7:00 PM ET waiver wire priority & Friday 7:00 PM ET weekend injury lock"
 
-# 2. Sunday Early Pregame Inactives (11:30 AM ET - 90 min before 1:00 PM kickoff)
+# 2. Thursday Night Football Inactives (6:50 PM ET - 5 mins after official 90-min inactives drop)
 upsert_cron_job \
-    "sunday-early-pregame" \
-    "30 11 * * 0" \
-    "/run/sunday-pregame" \
-    "Sunday early inactive check and lineup finalization at 11:30 AM ET"
+    "thursday-tnf-lock" \
+    "50 18 * * 4" \
+    "/run/weekly" \
+    "Thursday 6:50 PM ET official TNF 90-minute inactives and start/sit confirmation"
 
-# 3. Sunday Late Slate Inactives (2:30 PM ET - before 4:05/4:25 PM kickoff)
+# 3. Sunday Game Day Kickoff Inactives (11:45 AM ET & 2:45 PM ET)
+# 11:45 AM ET: Captures official inactives and final stadium weather 75 mins before 1:00 PM kickoff
+# 2:45 PM ET: Captures late-afternoon slate inactives for final 4:05/4:25 PM flex swaps
 upsert_cron_job \
-    "sunday-late-pregame" \
-    "30 14 * * 0" \
+    "sunday-gameday-inactives" \
+    "45 11,14 * * 0" \
     "/run/sunday-pregame" \
-    "Sunday late slate inactive check and lineup updates at 2:30 PM ET"
+    "Sunday 11:45 AM ET (1:00 PM kickoff) and 2:45 PM ET (late slate) official inactives"
 
 echo ""
 echo "============================================================"
