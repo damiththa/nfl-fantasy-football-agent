@@ -126,7 +126,7 @@ def propose_league_trades(
     # Identify user's bench depth (healthy bench players with solid projected pts)
     viable_bench = [
         p for p in user_roster.bench
-        if p.injury_status.upper() not in ("OUT", "IR", "SUSPENSION") and p.position in ("RB", "WR", "TE", "QB")
+        if (p.injury_status or "").upper() not in ("OUT", "IR", "SUSPENSION") and p.position in ("RB", "WR", "TE", "QB")
     ]
     viable_bench.sort(key=lambda p: p.projected_points, reverse=True)
 
@@ -147,7 +147,7 @@ def propose_league_trades(
             ]
             opp_bench_at_target_pos = [
                 p for p in opp_roster.bench
-                if p.position == target_pos and p.injury_status.upper() not in ("OUT", "IR")
+                if p.position == target_pos and (p.injury_status or "").upper() not in ("OUT", "IR")
             ]
 
             # If opponent has a weak starter at bench_asset's position and bench surplus at target_pos

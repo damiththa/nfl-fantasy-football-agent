@@ -101,7 +101,7 @@ def enrich_lineup_recommendation_with_espn_status(
     # Update recommended starters
     for s in rec.recommended_starters:
         s.current_slot = player_current_slots.get(s.player_name.lower(), "Bench")
-        if s.current_slot == "Bench":
+        if s.current_slot in ("Bench", "BE"):
             s.alignment = "SWAP_TO_START"
         else:
             s.alignment = "ALIGNED"
@@ -109,7 +109,7 @@ def enrich_lineup_recommendation_with_espn_status(
     # Update bench players
     for b in rec.bench_players:
         b.current_slot = player_current_slots.get(b.player_name.lower(), "Bench")
-        if b.current_slot != "Bench":
+        if b.current_slot not in ("Bench", "BE", "IR"):
             b.alignment = "MOVE_TO_BENCH"
         else:
             b.alignment = "ALIGNED"
@@ -117,7 +117,7 @@ def enrich_lineup_recommendation_with_espn_status(
     # Detect vacant starting slots on ESPN
     current_starter_slots: dict[str, int] = {}
     for p in roster.starters:
-        slot = p.slot.upper().replace("/", "")
+        slot = (p.slot or "").upper().replace("/", "")
         if slot in ("DEF", "DST"):
             slot = "DST"
         elif slot in ("RBWRTE", "FLEX"):
@@ -145,7 +145,7 @@ def enrich_lineup_recommendation_with_espn_status(
     # Detect suboptimal starters currently started on ESPN
     suboptimal = []
     for b in rec.bench_players:
-        if b.current_slot != "Bench":
+        if b.current_slot not in ("Bench", "BE", "IR"):
             suboptimal.append(
                 f"{b.player_name} ({b.position}) — currently in ESPN '{b.current_slot}' slot, but should BENCH: {b.reasoning}"
             )
@@ -326,11 +326,11 @@ def optimize_lineup(
             out_player_names = {
                 p.name.lower()
                 for p in roster.players
-                if p.injury_status.upper() in ("OUT", "IR", "SUSPENSION", "DOUBTFUL")
+                if (p.injury_status or "").upper() in ("OUT", "IR", "SUSPENSION", "DOUBTFUL")
             }
             if injuries:
                 for inj in injuries:
-                    if inj.injury_status.upper() in ("OUT", "IR", "DOUBTFUL"):
+                    if inj.injury_status and inj.injury_status.upper() in ("OUT", "IR", "DOUBTFUL"):
                         out_player_names.add(inj.full_name.lower())
 
             cleaned_starters = []
@@ -378,7 +378,7 @@ def optimize_lineup(
         pos = p.position.upper().replace("/", "")
         if pos == "DEF":
             pos = "DST"
-        is_injured = p.injury_status.upper() in ("OUT", "IR", "DOUBTFUL")
+        is_injured = (p.injury_status or "").upper() in ("OUT", "IR", "DOUBTFUL")
 
         action = "BENCH"
         if not is_injured:
@@ -411,9 +411,13 @@ def optimize_lineup(
             ceiling=round(p.projected_points * 1.3, 1),
             projected_points=p.projected_points,
             reasoning=(
-                f"Ranked for starting role based on {p.projected_points} projected PPR points."
+                f"Ranked for starting role based on {p.projected_points:.1f} projected PPR points."
                 if action == "START"
-                else f"Reserve option; {p.injury_status if is_injured else 'out-projected by starters'}."
+                else (
+                    f"Inactive/Injured ({p.injury_status}). Must remain on bench."
+                    if is_injured
+                    else f"Bench depth ({p.projected_points:.1f} projected pts). Behind starting {p.position}s on depth chart this week."
+                )
             ),
             game_script_note=game_note,
         )

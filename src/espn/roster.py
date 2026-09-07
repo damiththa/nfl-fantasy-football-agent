@@ -53,24 +53,24 @@ def parse_roster(team: Any, league_config: LeagueConfig) -> ParsedRoster:
         # espn_api player object usually has these attributes:
         # name, position, proTeam, projected_points, points, injuryStatus, bye_week, percent_owned
         # lineupSlot is a string like 'Bench', 'IR', 'RB', 'RB/WR/TE'
-        slot_val = getattr(player, "lineupSlot", "Bench")
+        slot_val = getattr(player, "lineupSlot", "Bench") or "Bench"
 
         # If we have an integer slot ID instead for some reason (e.g., box score lineup)
         if isinstance(slot_val, int):
             slot_name = SLOT_DISPLAY_NAMES.get(slot_val, str(slot_val))
         else:
-            slot_name = slot_val
+            slot_name = slot_val or "Bench"
 
         rp = RosterPlayer(
-            name=getattr(player, "name", "Unknown Player"),
-            position=getattr(player, "position", "UNK"),
-            team=getattr(player, "proTeam", "UNK"),
+            name=getattr(player, "name", "Unknown Player") or "Unknown Player",
+            position=getattr(player, "position", "UNK") or "UNK",
+            team=getattr(player, "proTeam", "UNK") or "UNK",
             slot=slot_name,
-            projected_points=getattr(player, "projected_points", 0.0),
-            actual_points=getattr(player, "points", 0.0),
-            injury_status=getattr(player, "injuryStatus", "NORMAL"),
-            bye_week=getattr(player, "bye_week", 0),
-            percent_owned=getattr(player, "percent_owned", 0.0),
+            projected_points=getattr(player, "projected_points", 0.0) or 0.0,
+            actual_points=getattr(player, "points", 0.0) or 0.0,
+            injury_status=getattr(player, "injuryStatus", "NORMAL") or "NORMAL",
+            bye_week=getattr(player, "bye_week", 0) or 0,
+            percent_owned=getattr(player, "percent_owned", 0.0) or 0.0,
         )
 
         parsed.players.append(rp)
