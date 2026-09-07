@@ -165,19 +165,78 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
           </tr>"""
 
         content_html += f"""
+      <h3 style="color: #22c55e; font-size: 14px; margin: 14px 0 8px 0; text-transform: uppercase;">🟢 Start 'Em (Optimal Lineup)</h3>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
         <thead>
           <tr>
-            <th style="padding: 8px; border-bottom: 2px solid #d9381e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Pos</th>
-            <th style="padding: 8px; border-bottom: 2px solid #d9381e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
-            <th style="padding: 8px; border-bottom: 2px solid #d9381e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Team</th>
-            <th style="padding: 8px; border-bottom: 2px solid #d9381e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
-            <th style="padding: 8px; border-bottom: 2px solid #d9381e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Intel</th>
+            <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Pos</th>
+            <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
+            <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Team</th>
+            <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
+            <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Intel & Matchup</th>
           </tr>
         </thead>
         <tbody>{rows}
         </tbody>
       </table>"""
+
+    # Bench players / Sit 'Em table & Injury Alert
+    if data.get("bench_players"):
+        bench_rows = ""
+        injury_alerts = []
+        for p in data["bench_players"]:
+            name = p.get("player_name", "Unknown")
+            pos = p.get("position", "?")
+            team = p.get("team", "?")
+            proj = p.get("projected_points", 0)
+            reasoning = p.get("reasoning", "")
+
+            # Identify injured/inactive players
+            upper_r = reasoning.upper()
+            if any(term in upper_r for term in ("OUT", "IR", "DOUBTFUL", "INACTIVE", "SUSPENDED", "QUESTIONABLE")):
+                injury_alerts.append(f"<strong>{name} ({pos} - {team})</strong>: {reasoning}")
+
+            bench_rows += f"""
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #ef4444; font-weight: bold; font-size: 13px;">{pos}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">{name}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{team}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{proj}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{reasoning}</td>
+          </tr>"""
+
+        if injury_alerts:
+            alerts_li = "".join(f"<li style='margin-bottom: 4px;'>{a}</li>" for a in injury_alerts)
+            content_html += f"""
+      <div style="background: rgba(239, 68, 68, 0.15); border-left: 4px solid #ef4444; border-radius: 0 6px 6px 0; padding: 12px; margin-bottom: 14px;">
+        <h4 style="color: #ef4444; margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase;">🚨 Injury / Inactive Status Alerts (Do Not Start)</h4>
+        <ul style="margin: 0; padding-left: 18px; color: #fca5a5; font-size: 12px;">{alerts_li}</ul>
+      </div>"""
+
+        content_html += f"""
+      <h3 style="color: #ef4444; font-size: 14px; margin: 16px 0 8px 0; text-transform: uppercase;">🔴 Sit 'Em (Bench Options)</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+        <thead>
+          <tr>
+            <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Pos</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Team</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Why Sit</th>
+          </tr>
+        </thead>
+        <tbody>{bench_rows}
+        </tbody>
+      </table>"""
+
+    # Key start/sit dilemmas & flex calls
+    if data.get("key_flex_decisions"):
+        dilemma_items = "".join(f"<li style='margin-bottom: 6px; color: #e2e8f0; font-size: 13px;'>{d}</li>" for d in data["key_flex_decisions"])
+        content_html += f"""
+      <div style="background: #0f172a; border-left: 4px solid #eab308; border-radius: 0 6px 6px 0; padding: 12px 14px; margin-bottom: 14px;">
+        <h4 style="color: #eab308; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase;">⚖️ Key Start/Sit Dilemmas & Flex Decisions</h4>
+        <ul style="margin: 0; padding-left: 18px;">{dilemma_items}</ul>
+      </div>"""
 
     # Waiver wire picks
     if data.get("priority_claims"):

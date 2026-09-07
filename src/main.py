@@ -221,8 +221,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
           12-Team Full PPR • 2 FLEX • 4pt Pass TD • No Kicker
         </p>
-        <button class="btn" onclick="fetchEndpoint('/query/lineup?league_id=991059191', 'PNA 2026 Lineup')">
-          🎯 Optimize Starting Lineup
+        <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=991059191', 'PNA 2026 Start \'Em, Sit \'Em Report')">
+          🎯 Start 'Em, Sit 'Em Master Report
         </button>
       </div>
 
@@ -232,8 +232,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
           10-Team Full PPR • 1 FLEX • 6pt Pass TD • Has Kicker
         </p>
-        <button class="btn" onclick="fetchEndpoint('/query/lineup?league_id=735288', 'Chips Ahoy Lineup')">
-          🎯 Optimize Starting Lineup
+        <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=735288', 'Chips Ahoy Start \'Em, Sit \'Em Report')">
+          🎯 Start 'Em, Sit 'Em Master Report
         </button>
       </div>
 
@@ -358,18 +358,56 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       }
 
       if (data.recommended_starters && data.recommended_starters.length > 0) {
-        html += '<h3>Recommended Starters:</h3>';
-        html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>Verdict & Rationale</th></tr></thead><tbody>';
+        html += '<h3 style="color: #22c55e; margin-top: 16px; margin-bottom: 8px;">🟢 START \'EM (Optimal Lineup)</h3>';
+        html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>Floor-Ceil</th><th>Conf</th><th>Rationale & Game Script</th></tr></thead><tbody>';
         for (const p of data.recommended_starters) {
           html += `<tr>
             <td style="font-weight:bold; color: var(--accent);">${p.position}</td>
             <td style="font-weight:bold;">${p.player_name}</td>
             <td>${p.team}</td>
             <td style="color: var(--success); font-weight:bold;">${p.projected_points}</td>
+            <td style="font-size: 11px; color: #94a3b8;">${p.floor} - ${p.ceiling}</td>
+            <td style="font-size: 11px; color: #38bdf8;">${Math.round(p.confidence * 100)}%</td>
             <td style="font-size: 12px; color: #cbd5e1;">${p.reasoning} ${p.game_script_note ? '<em>(' + p.game_script_note + ')</em>' : ''}</td>
           </tr>`;
         }
         html += '</tbody></table>';
+      }
+
+      if (data.bench_players && data.bench_players.length > 0) {
+        let injuryAlerts = [];
+        let benchRows = '';
+        for (const p of data.bench_players) {
+          const rUpper = p.reasoning.toUpperCase();
+          if (rUpper.includes('OUT') || rUpper.includes('IR') || rUpper.includes('DOUBTFUL') || rUpper.includes('INACTIVE') || rUpper.includes('SUSPENDED')) {
+            injuryAlerts.push(`<strong>${p.player_name} (${p.position} - ${p.team})</strong>: ${p.reasoning}`);
+          }
+          benchRows += `<tr>
+            <td style="font-weight:bold; color: #ef4444;">${p.position}</td>
+            <td style="font-weight:bold;">${p.player_name}</td>
+            <td>${p.team}</td>
+            <td style="color: #94a3b8;">${p.projected_points}</td>
+            <td style="font-size: 12px; color: #cbd5e1;">${p.reasoning}</td>
+          </tr>`;
+        }
+
+        if (injuryAlerts.length > 0) {
+          html += `<div style="background: rgba(239, 68, 68, 0.15); border-left: 4px solid #ef4444; border-radius: 4px; padding: 12px; margin-top: 16px;">
+            <h4 style="color: #ef4444; margin-bottom: 6px; font-size: 13px;">🚨 INJURY / INACTIVE ALERTS (DO NOT START)</h4>
+            <ul style="margin: 0; padding-left: 18px; color: #fca5a5; font-size: 12px;">${injuryAlerts.map(a => `<li style="margin-bottom: 4px;">${a}</li>`).join('')}</ul>
+          </div>`;
+        }
+
+        html += '<h3 style="color: #ef4444; margin-top: 18px; margin-bottom: 8px;">🔴 SIT \'EM (Bench Options)</h3>';
+        html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>Why Sit</th></tr></thead><tbody>';
+        html += benchRows + '</tbody></table>';
+      }
+
+      if (data.key_flex_decisions && data.key_flex_decisions.length > 0) {
+        html += `<div style="background: #090d16; border-left: 4px solid #eab308; border-radius: 4px; padding: 12px; margin-top: 16px;">
+          <h4 style="color: #eab308; margin-bottom: 8px; font-size: 13px;">⚖️ KEY START/SIT DILEMMAS & FLEX CALLS</h4>
+          <ul style="margin: 0; padding-left: 18px; color: #cbd5e1; font-size: 13px;">${data.key_flex_decisions.map(d => `<li style="margin-bottom: 4px;">${d}</li>`).join('')}</ul>
+        </div>`;
       }
 
       if (data.verdict) {
@@ -577,9 +615,10 @@ def run_sunday_pregame() -> dict[str, Any]:
     }
 
 
+@app.post("/query/start-sit")
 @app.post("/query/lineup")
 def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
-    """On-demand start/sit lineup optimization for a specific league."""
+    """On-demand Start 'Em, Sit 'Em master report for a specific league."""
     league_config = ALL_LEAGUES.get(league_id)
     if not league_config:
         raise HTTPException(

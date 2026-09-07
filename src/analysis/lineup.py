@@ -146,7 +146,32 @@ def optimize_lineup(
         )
 
         try:
-            return client.generate_structured(prompt=prompt, response_schema=LineupRecommendation)
+            rec = client.generate_structured(prompt=prompt, response_schema=LineupRecommendation)
+
+            # Code-level safety guard: zero-tolerance for OUT, IR, or DOUBTFUL starters
+            out_player_names = {
+                p.name.lower()
+                for p in roster.players
+                if p.injury_status.upper() in ("OUT", "IR", "SUSPENSION", "DOUBTFUL")
+            }
+            if injuries:
+                for inj in injuries:
+                    if inj.injury_status.upper() in ("OUT", "IR", "DOUBTFUL"):
+                        out_player_names.add(inj.full_name.lower())
+
+            cleaned_starters = []
+            for s in rec.recommended_starters:
+                if s.player_name.lower() in out_player_names:
+                    logger.warning(
+                        "Enforcing injury rule: Moving injured starter %s to bench", s.player_name
+                    )
+                    s.action = "BENCH"
+                    s.reasoning = f"🚨 INACTIVE/OUT: Must be benched. {s.reasoning}"
+                    rec.bench_players.append(s)
+                else:
+                    cleaned_starters.append(s)
+            rec.recommended_starters = cleaned_starters
+            return rec
         except Exception as e:
             logger.warning(
                 "Gemini lineup optimization call failed (%s). Falling back to deterministic optimization.",
