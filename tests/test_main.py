@@ -26,6 +26,14 @@ def test_root_dashboard(client):
     assert "Mad Dawg" in response.text
     assert "PNA 2026" in response.text
     assert "Chips Ahoy" in response.text
+    assert 'rel="icon"' in response.text
+
+
+def test_favicon(client):
+    response = client.get("/favicon.ico")
+    assert response.status_code == 200
+    assert "image/svg+xml" in response.headers["content-type"]
+    assert "🏈" in response.text
 
 
 def test_query_lineup_invalid_league(client):

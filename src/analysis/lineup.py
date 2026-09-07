@@ -335,7 +335,11 @@ def enrich_lineup_recommendation_with_espn_status(
             )
         else:
             b_rec = rec_bench_map.get(p_lower)
-            reason = b_rec.reasoning if b_rec else f"Backup depth ({p.projected_points:.1f} projected pts)."
+            reason = (
+                b_rec.reasoning
+                if b_rec
+                else f"Reserve depth ({p.projected_points:.1f} pts). Lacks the requisite touch volume and scoring equity to unseat our primary starters this week."
+            )
             current_bench_items.append(
                 CurrentRosterPlayer(
                     player_name=p.name,
@@ -668,12 +672,12 @@ def optimize_lineup(
             ceiling=round(p.projected_points * 1.3, 1),
             projected_points=p.projected_points,
             reasoning=(
-                f"Ranked for starting role based on {p.projected_points:.1f} projected PPR points."
+                f"Locked-in starter with a strong {p.projected_points:.1f} pt projection in full PPR. High-floor volume option with secure touch share."
                 if action == "START"
                 else (
-                    f"Inactive/Injured ({p.injury_status}). Must remain on bench."
+                    f"🚨 MUST BENCH: Inactive/Injured ({p.injury_status}). Zero floor and severe liability; remove immediately."
                     if is_injured
-                    else f"Bench depth ({p.projected_points:.1f} projected pts). Behind starting {p.position}s on depth chart this week."
+                    else f"Reserve depth ({p.projected_points:.1f} projected pts). Lacks the target share or scoring equity to unseat our primary starters."
                 )
             ),
             game_script_note=game_note,

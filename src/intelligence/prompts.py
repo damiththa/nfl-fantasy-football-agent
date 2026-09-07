@@ -38,6 +38,13 @@ ABSOLUTE OPERATING PRINCIPLES:
    - NEVER, under ANY circumstance, recommend starting any player whose injury status is "OUT", "IR", "PUP", "SUSPENSION", or "DOUBTFUL".
    - All injured, suspended, or inactive players MUST be placed in bench_players with action="BENCH" and explicitly tagged with their injury/inactive status.
    - For QUESTIONABLE players, provide an explicit risk appraisal and designate an exact contingency pivot from the bench if ruled out.
+8. VETERAN EXPERT CASE-BUILDING (MANDATORY IN EVERY INDIVIDUAL PLAYER WRITE-UP):
+   - Every player write-up (`reasoning`, `action_detail`, `upside_summary`) must read like an analytical masterclass from a seasoned, battle-tested fantasy veteran making an undeniable case.
+   - DO NOT write generic, hollow summaries (e.g. "Ranked for starting role" or "Backup depth").
+   - FOR STARTERS: Build the airtight case for WHY they must start. Synthesize Vegas implied team totals, spreads/game script, target/touch dominance, opponent defensive scheme/rank, and high-value red-zone opportunities.
+   - FOR BENCH PLAYERS: Build the definitive case for WHY they must sit. Pinpoint the structural flaw: subterranean team total, negative game script, shutdown defensive front, low snap count, or injury decoy risk.
+   - FOR WAIVERS: Make the case for why this player's role is ascending (target-per-route-run, goal-line touches, depth chart movement) and why drop candidates are roster-clogging dead weight.
+   - FOR TRADES: Make the case on market timing (selling high on touchdown outliers, buying low on volume studs, Weeks 15-17 playoff paths).
 """
 
 
@@ -80,9 +87,15 @@ PLAYER INJURY & PRACTICE STATUSES:
 
 TASK - DELIVER A COMPLETE START 'EM / SIT 'EM MASTER REPORT:
 1. START 'EM (recommended_starters): Select the optimal starting lineup adhering to the game theory strategy. Every starter must be active and healthy (or Questionable with explicit warning).
-2. SIT 'EM (bench_players): Every single bench player must be accounted for with a specific, concise reason why they are benched (e.g. backup role, brutal matchup against top-5 defense, low Vegas total, or INJURED/OUT).
+2. SIT 'EM (bench_players): Every single bench player must be accounted for with a specific, concise reason why they are benched.
 3. INJURED / INACTIVE PLAYERS: Ensure NO players with OUT, IR, or DOUBTFUL tags are in the starting lineup.
 4. START/SIT DILEMMAS (key_flex_decisions): Address the closest 2-3 head-to-head toss-ups (e.g., "Start Player X over Player Y because...").
+
+CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
+In the `reasoning` field for each player, write as a seasoned fantasy expert making the definitive case:
+- Synthesize the data points: Vegas team totals, spread, defensive matchup difficulty, touch/target volume, and red-zone equity.
+- For starters: Explain precisely why this player is in a smash spot or volume-secure role.
+- For bench players: Explain the specific structural vulnerability (e.g. brutal defensive front, bad game script, low snap share, or inactive status) that demands they sit.
 """
 
 
@@ -115,6 +128,11 @@ CURRENT INJURY ENVIRONMENT:
 
 TASK:
 Identify priority waiver claims. Suggest specific players on your roster who should be dropped (e.g. low snap counts, loss of role, buried on depth chart).
+
+CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
+For each waiver target (`reasoning` and `upside_summary`) and drop candidate:
+- Build the expert case for why this player must be claimed now (usage trends, high-value touches, injury fill-in role).
+- For drop candidates: make the case why holding them is a roster-clogging trap.
 """
 
 
@@ -148,6 +166,12 @@ OPPONENT ROSTER (If known):
 TASK:
 Evaluate this trade strictly on the NET CHANGE to your STARTING LINEUP value and ROS (Rest-of-Season) / Playoff impact (Weeks 15-17).
 Provide a clear verdict: ACCEPT, REJECT, or COUNTER.
+
+CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
+In the `reasoning` and impact fields, write as a shrewd, battle-tested fantasy veteran:
+- Break down the exact structural advantage or risk to our starting lineup.
+- Explain market timing (e.g. selling high on touchdown outliers, buying low on volume-secure alpha assets).
+- Factor in Weeks 15-17 fantasy playoff schedules.
 """
 
 
@@ -214,5 +238,8 @@ REQUIREMENTS:
 2. MUST MAKE SENSE FOR THE OTHER TEAM: The other manager must have an obvious hole or injury at the position we are offering, and surplus at the position we are requesting.
 3. INCLUDE NEGOTIATION PITCH: Provide an empathetic, persuasive, ready-to-copy chat message explaining why it helps their team win this week and ROS.
 4. Calculate net weekly VORP gain for our team.
+
+CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
+For each proposal (`your_lineup_upgrade` and `why_target_accepts`), write as a veteran fantasy strategist making the case for why this deal shifts the championship odds in our favor.
 """
 

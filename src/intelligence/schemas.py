@@ -23,7 +23,9 @@ class StartSitDecision(BaseModel):
         description="Optimistic fantasy point projection under favorable game script"
     )
     projected_points: float = Field(description="Base projected fantasy points")
-    reasoning: str = Field(description="Concise analytical rationale for the start/sit decision")
+    reasoning: str = Field(
+        description="Seasoned veteran expert breakdown making the definitive analytical case for why the player must start or sit, synthesizing Vegas totals, matchups, volume, and game script"
+    )
     game_script_note: Optional[str] = Field(
         default=None, description="Note on Vegas total, weather, or matchup context"
     )
@@ -65,7 +67,7 @@ class CurrentRosterPlayer(BaseModel):
         description="Human-friendly badge (e.g. '✅ KEEP STARTING', '🚨 BENCH THIS PLAYER', '⚡ START THIS PLAYER', '⏸️ KEEP ON BENCH')"
     )
     action_detail: str = Field(
-        description="Concrete explanation of what to do and why (e.g. 'Confirmed starter (+18.8 pts)', 'Bench for Tyjae Spears')"
+        description="Seasoned veteran expert breakdown making the definitive analytical case for why to start or bench this player based on workload, Vegas lines, and game script"
     )
     floor: float = Field(default=0.0, description="Conservative floor projection")
     ceiling: float = Field(default=0.0, description="Optimistic ceiling projection")

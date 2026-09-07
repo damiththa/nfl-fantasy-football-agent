@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from src.analysis.lineup import optimize_lineup
@@ -49,6 +49,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <title>Mad Dawg's Fantasy Football Command Center</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%230b0f19%22 stroke=%22%23d9381e%22 stroke-width=%224%22/><text x=%2250%25%22 y=%2254%25%22 font-size=%2252%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>🏈</text></svg>">
+  <link rel="alternate icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%230b0f19%22 stroke=%22%23d9381e%22 stroke-width=%224%22/><text x=%2250%25%22 y=%2254%25%22 font-size=%2252%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>🏈</text></svg>">
   <style>
     :root {
       --primary: #d9381e;
@@ -811,6 +814,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 def serve_dashboard() -> str:
     """Serve the interactive Web Command Center for on-demand analysis."""
     return DASHBOARD_HTML
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    """Serve SVG football favicon for browser tab icon and bookmark requests."""
+    svg_content = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<circle cx="50" cy="50" r="48" fill="#0b0f19" stroke="#d9381e" stroke-width="4"/>'
+        '<text x="50%" y="54%" font-size="52" text-anchor="middle" dominant-baseline="central">🏈</text>'
+        '</svg>'
+    )
+    return Response(content=svg_content, media_type="image/svg+xml")
 
 
 @app.get("/health")
