@@ -24,6 +24,7 @@ from src.espn.client import LeagueClient
 from src.espn.matchup import get_current_week, get_weekly_matchup
 from src.espn.roster import parse_roster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
+from src.notifications.email import send_digest_email
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fantasy_agent")
@@ -503,6 +504,9 @@ def run_weekly_analysis() -> dict[str, Any]:
             logger.error(f"Error processing league {league_id}: {e}", exc_info=True)
             results[league_config.short_name] = {"error": str(e)}
 
+    # Send digest email
+    send_digest_email("weekly_analysis", results, day=day_name)
+
     return {
         "job": "weekly_analysis",
         "day": day_name,
@@ -562,6 +566,9 @@ def run_sunday_pregame() -> dict[str, Any]:
         except Exception as e:
             logger.error(f"Error in Sunday pregame for league {league_id}: {e}", exc_info=True)
             results[league_config.short_name] = {"error": str(e)}
+
+    # Send game-day digest email
+    send_digest_email("sunday_pregame", results)
 
     return {
         "job": "sunday_pregame",
