@@ -16,11 +16,11 @@ dependencies = [
     "nflreadpy>=0.1.4",
     "fastapi>=0.115.0",
     "uvicorn>=0.34.0",
+    "google-genai>=2.12.0",
 ]
 
 [project.optional-dependencies]
 gcp = [
-    "google-genai>=2.12.0",
     "google-cloud-secret-manager>=2.22.0",
     "google-cloud-firestore>=2.20.0",
 ]
@@ -48,3 +48,4 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]

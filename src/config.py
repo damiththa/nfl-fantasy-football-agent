@@ -312,3 +312,8 @@ def get_gemini_api_key() -> str:
 def get_current_season() -> int:
     """Return the NFL season year from env or default."""
     return int(os.environ.get("NFL_SEASON", "2026"))
+
+
+def get_gemini_model() -> str:
+    """Return configured Gemini model name from env or default to Gemini Pro."""
+    return os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
