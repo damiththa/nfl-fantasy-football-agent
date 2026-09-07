@@ -13,9 +13,10 @@ from src.config import ALL_LEAGUES, LeagueConfig, get_espn_credentials
 
 logger = logging.getLogger(__name__)
 
+
 class LeagueClient:
     """Manages connections to ESPN fantasy football leagues."""
-    
+
     def __init__(self) -> None:
         """Initialize the client with credentials from environment variables."""
         try:
@@ -23,31 +24,28 @@ class LeagueClient:
         except EnvironmentError as e:
             logger.error("Failed to load ESPN credentials: %s", e)
             raise
-            
+
         self._leagues: Dict[int, League] = {}
-        
+
     def get_league(self, config: LeagueConfig) -> League:
         """Get the espn_api.football.League object for the given config.
-        
+
         Args:
             config: The LeagueConfig object defining the league to connect to.
-            
+
         Returns:
             The connected espn_api.football.League instance.
-            
+
         Raises:
             ConnectionError: If authentication fails (e.g. expired cookies).
         """
         if config.league_id in self._leagues:
             return self._leagues[config.league_id]
-            
+
         try:
             # We initialize the espn_api League which makes a request to fetch league data
             league = League(
-                league_id=config.league_id,
-                year=config.season,
-                espn_s2=self.espn_s2,
-                swid=self.swid
+                league_id=config.league_id, year=config.season, espn_s2=self.espn_s2, swid=self.swid
             )
             self._leagues[config.league_id] = league
             return league
@@ -61,9 +59,10 @@ class LeagueClient:
                 ) from e
             raise ConnectionError(f"Failed to connect to league {config.name}: {e}") from e
 
+
 def get_all_clients() -> dict[str, League]:
     """Convenience function to get connected clients for all configured leagues.
-    
+
     Returns:
         A dictionary mapping the league short_name to the connected League object.
     """

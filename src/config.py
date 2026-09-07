@@ -9,7 +9,7 @@ hardcoding league-specific values.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum
 from typing import ClassVar
 
@@ -23,6 +23,7 @@ load_dotenv()
 # ESPN Slot ID mapping — maps ESPN's internal integer slot IDs to
 # human-readable position names. These IDs are stable across seasons.
 # ---------------------------------------------------------------------------
+
 
 class SlotId(IntEnum):
     """ESPN roster slot IDs."""
@@ -90,6 +91,7 @@ STARTER_SLOT_IDS: frozenset[int] = frozenset(
 # stat categories from box scores and projections.
 # ---------------------------------------------------------------------------
 
+
 class StatId(IntEnum):
     """Key ESPN stat IDs used in scoring calculations."""
 
@@ -138,6 +140,7 @@ class StatId(IntEnum):
 # ---------------------------------------------------------------------------
 # League configuration dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class RosterSlots:
@@ -223,11 +226,15 @@ PNA_2026 = LeagueConfig(
         reception=1.0,  # Full PPR
     ),
     roster=RosterSlots(
-        qb=1, rb=2, wr=2, te=1,
+        qb=1,
+        rb=2,
+        wr=2,
+        te=1,
         flex=2,  # 2 FLEX slots
         dst=1,
-        k=0,    # No kicker
-        bench=7, ir=1,
+        k=0,  # No kicker
+        bench=7,
+        ir=1,
     ),
 )
 
@@ -248,11 +255,15 @@ CHIPS_AHOY = LeagueConfig(
         reception=1.0,  # Full PPR
     ),
     roster=RosterSlots(
-        qb=1, rb=2, wr=2, te=1,
+        qb=1,
+        rb=2,
+        wr=2,
+        te=1,
         flex=1,  # 1 FLEX slot
         dst=1,
-        k=1,    # Has kicker
-        bench=7, ir=2,
+        k=1,  # Has kicker
+        bench=7,
+        ir=2,
     ),
 )
 
@@ -266,6 +277,7 @@ ALL_LEAGUES: dict[int, LeagueConfig] = {
 # ---------------------------------------------------------------------------
 # Credential helpers — read from env vars, never hardcoded
 # ---------------------------------------------------------------------------
+
 
 def get_espn_credentials() -> tuple[str, str]:
     """Return (espn_s2, swid) from environment variables.
@@ -292,8 +304,7 @@ def get_gemini_api_key() -> str:
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         raise EnvironmentError(
-            "GEMINI_API_KEY not found. Get a free key from "
-            "https://aistudio.google.com/app/apikey"
+            "GEMINI_API_KEY not found. Get a free key from https://aistudio.google.com/app/apikey"
         )
     return key
 
