@@ -181,3 +181,34 @@ WEATHER CONDITIONS:
 TASK:
 Provide an expert scouting report detailing positional advantages, vulnerabilities, critical game scripts, and the strategic path to victory.
 """
+
+
+def format_league_trade_prompt(
+    league: LeagueConfig,
+    week: int,
+    your_roster: dict[str, Any],
+    other_teams: list[dict[str, Any]],
+) -> str:
+    """Format prompt for scanning the entire league to find proactive, winning trade proposals."""
+    return f"""Analyze the entire league rosters in '{league.name}' (Week {week}) to discover win-win trades that WE should initiate.
+
+LEAGUE FORMAT:
+- Teams: {league.num_teams}
+- Scoring: Full PPR (1.0 pt/rec, {league.scoring.pass_td} pt pass TD)
+- Starters: QB:{league.roster.qb}, RB:{league.roster.rb}, WR:{league.roster.wr}, TE:{league.roster.te}, FLEX:{league.roster.flex}, D/ST:{league.roster.dst}, K:{league.roster.k}
+
+OUR ROSTER (Mad Dawg):
+{your_roster}
+
+OTHER TEAMS IN THE LEAGUE (Rosters and key starters/bench):
+{other_teams}
+
+GOAL:
+Find 2-3 realistic, high-leverage trade proposals that we should propose to other managers right now.
+REQUIREMENTS:
+1. MUST BENEFIT US: The trade MUST upgrade our starting lineup by trading away bench depth or a positional surplus (e.g., trading an extra RB to acquire an elite WR, or a 2-for-1 consolidation trade).
+2. MUST MAKE SENSE FOR THE OTHER TEAM: The other manager must have an obvious hole or injury at the position we are offering, and surplus at the position we are requesting.
+3. INCLUDE NEGOTIATION PITCH: Provide an empathetic, persuasive, ready-to-copy chat message explaining why it helps their team win this week and ROS.
+4. Calculate net weekly VORP gain for our team.
+"""
+

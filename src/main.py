@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from src.analysis.lineup import optimize_lineup
 from src.analysis.matchup_preview import generate_matchup_preview
+from src.analysis.trade_finder import propose_league_trades
 from src.analysis.trades import evaluate_trade
 from src.analysis.waivers import evaluate_waivers
 from src.config import ALL_LEAGUES, get_current_season, get_gemini_model
@@ -224,6 +225,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=991059191', 'PNA 2026 Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
         </button>
+        <button class="btn btn-secondary" style="margin-top: 8px;" onclick="fetchEndpoint('/query/propose-trades?league_id=991059191', 'PNA 2026 Winning Trade Proposals')">
+          💡 Propose Winning Trades
+        </button>
       </div>
 
       <!-- League 2 Card -->
@@ -234,6 +238,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </p>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=735288', 'Chips Ahoy Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
+        </button>
+        <button class="btn btn-secondary" style="margin-top: 8px;" onclick="fetchEndpoint('/query/propose-trades?league_id=735288', 'Chips Ahoy Winning Trade Proposals')">
+          💡 Propose Winning Trades
         </button>
       </div>
 
@@ -350,6 +357,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const resContent = document.getElementById('results-content');
       let html = '';
 
+      if (data.vacant_slots && data.vacant_slots.length > 0) {
+        html += `<div style="background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; border-radius: 6px; padding: 14px; margin-bottom: 14px;">
+          <h4 style="color: #ef4444; margin-bottom: 6px; font-size: 13px;">🚨 VACANT STARTING SLOTS DETECTED ON ESPN</h4>
+          <p style="font-size: 12px; color: #fca5a5; margin-bottom: 6px;">You have starting roster slots that are currently empty. Fill these spots before kickoff:</p>
+          <ul style="margin: 0; padding-left: 18px; color: #fecaca; font-size: 12px;">${data.vacant_slots.map(s => `<li>Slot <strong>${s}</strong> is UNFILLED</li>`).join('')}</ul>
+        </div>`;
+      }
+
+      if (data.actionable_swaps && data.actionable_swaps.length > 0) {
+        html += `<div style="background: rgba(234, 179, 8, 0.15); border-left: 4px solid #eab308; border-radius: 6px; padding: 14px; margin-bottom: 14px;">
+          <h4 style="color: #eab308; margin-bottom: 6px; font-size: 13px;">⚡ ACTIONABLE ROSTER ADJUSTMENTS NEEDED</h4>
+          <ul style="margin: 0; padding-left: 18px; color: #fef08a; font-size: 12px;">${data.actionable_swaps.map(s => `<li>${s}</li>`).join('')}</ul>
+        </div>`;
+      }
+
       if (data.game_theory_strategy) {
         html += `<span class="strategy-badge" style="background: #0284c7; color: white;">Strategy: ${data.game_theory_strategy}</span>`;
       }
@@ -359,13 +381,20 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
       if (data.recommended_starters && data.recommended_starters.length > 0) {
         html += '<h3 style="color: #22c55e; margin-top: 16px; margin-bottom: 8px;">🟢 START EM (Optimal Lineup)</h3>';
-        html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>Floor-Ceil</th><th>Conf</th><th>Rationale & Game Script</th></tr></thead><tbody>';
+        html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>ESPN Status</th><th>Floor-Ceil</th><th>Conf</th><th>Rationale & Game Script</th></tr></thead><tbody>';
         for (const p of data.recommended_starters) {
+          let statusBadge = p.current_slot || '-';
+          if (p.alignment === 'SWAP_TO_START') {
+            statusBadge = `<span style="color: #f59e0b; font-weight: bold; background: rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">⚠️ Bench (Swap In)</span>`;
+          } else if (p.alignment === 'ALIGNED') {
+            statusBadge = `<span style="color: #22c55e; background: rgba(34, 197, 94, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">🟢 Started (${p.current_slot})</span>`;
+          }
           html += `<tr>
             <td style="font-weight:bold; color: var(--accent);">${p.position}</td>
             <td style="font-weight:bold;">${p.player_name}</td>
             <td>${p.team}</td>
             <td style="color: var(--success); font-weight:bold;">${p.projected_points}</td>
+            <td>${statusBadge}</td>
             <td style="font-size: 11px; color: #94a3b8;">${p.floor} - ${p.ceiling}</td>
             <td style="font-size: 11px; color: #38bdf8;">${Math.round(p.confidence * 100)}%</td>
             <td style="font-size: 12px; color: #cbd5e1;">${p.reasoning} ${p.game_script_note ? '<em>(' + p.game_script_note + ')</em>' : ''}</td>
@@ -378,15 +407,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         let injuryAlerts = [];
         let benchRows = '';
         for (const p of data.bench_players) {
-          const rUpper = p.reasoning.toUpperCase();
+          const rUpper = (p.reasoning || '').toUpperCase();
           if (rUpper.includes('OUT') || rUpper.includes('IR') || rUpper.includes('DOUBTFUL') || rUpper.includes('INACTIVE') || rUpper.includes('SUSPENDED')) {
             injuryAlerts.push(`<strong>${p.player_name} (${p.position} - ${p.team})</strong>: ${p.reasoning}`);
+          }
+          let bStatusBadge = p.current_slot || '-';
+          if (p.alignment === 'MOVE_TO_BENCH') {
+            bStatusBadge = `<span style="color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">🚨 In Lineup (${p.current_slot}) (Bench Now)</span>`;
+          } else if (p.current_slot === 'Bench' || p.current_slot === 'BE') {
+            bStatusBadge = `<span style="color: #94a3b8; background: rgba(148, 163, 184, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">⏸️ On Bench</span>`;
           }
           benchRows += `<tr>
             <td style="font-weight:bold; color: #ef4444;">${p.position}</td>
             <td style="font-weight:bold;">${p.player_name}</td>
             <td>${p.team}</td>
             <td style="color: #94a3b8;">${p.projected_points}</td>
+            <td>${bStatusBadge}</td>
             <td style="font-size: 12px; color: #cbd5e1;">${p.reasoning}</td>
           </tr>`;
         }
@@ -399,7 +435,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         }
 
         html += '<h3 style="color: #ef4444; margin-top: 18px; margin-bottom: 8px;">🔴 SIT EM (Bench Options)</h3>';
-        html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>Why Sit</th></tr></thead><tbody>';
+        html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>ESPN Status</th><th>Why Sit</th></tr></thead><tbody>';
         html += benchRows + '</tbody></table>';
       }
 
@@ -408,6 +444,34 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <h4 style="color: #eab308; margin-bottom: 8px; font-size: 13px;">⚖️ KEY START/SIT DILEMMAS & FLEX CALLS</h4>
           <ul style="margin: 0; padding-left: 18px; color: #cbd5e1; font-size: 13px;">${data.key_flex_decisions.map(d => `<li style="margin-bottom: 4px;">${d}</li>`).join('')}</ul>
         </div>`;
+      }
+
+      if (data.proposals && data.proposals.length > 0) {
+        if (data.market_overview) {
+          html += `<div style="background: #090d16; padding: 12px 14px; border-radius: 6px; margin-bottom: 14px; border: 1px solid var(--border);"><p style="font-size: 14px; margin: 0; color: #cbd5e1;">📊 <strong>Market Analysis:</strong> <em>"${data.market_overview}"</em></p></div>`;
+        }
+        html += '<h3 style="color: #38bdf8; margin-top: 16px; margin-bottom: 10px;">💡 PROACTIVE WIN-WIN TRADE PROPOSALS</h3>';
+        for (const tp of data.proposals) {
+          const giving = (tp.giving_players || []).join(', ');
+          const recving = (tp.receiving_players || []).join(', ');
+          const mgrStr = tp.target_manager ? ` (${tp.target_manager})` : '';
+          html += `<div style="background: #090d16; border-left: 4px solid #38bdf8; border-radius: 6px; padding: 14px; margin-bottom: 12px; border: 1px solid var(--border); border-left-width: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong style="font-size: 15px; color: #f8fafc;">🤝 Trade with ${tp.target_team_name}${mgrStr}</strong>
+              <span style="color: #22c55e; font-weight: bold; font-size: 12px; background: rgba(34, 197, 94, 0.15); padding: 2px 8px; border-radius: 4px;">+${tp.net_vorp_gain > 0 ? tp.net_vorp_gain : 0} Weekly VORP</span>
+            </div>
+            <p style="margin-bottom: 6px; font-size: 13px;">
+              <span style="color: #ef4444; font-weight: bold;">Give:</span> <span style="color: #f8fafc;">${giving}</span>
+              <span style="color: #94a3b8; margin: 0 6px;">➔</span>
+              <span style="color: #22c55e; font-weight: bold;">Receive:</span> <span style="color: #f8fafc;">${recving}</span>
+            </p>
+            <p style="font-size: 12px; color: #cbd5e1; margin-bottom: 4px;"><strong style="color: #38bdf8;">Lineup Upgrade:</strong> ${tp.your_lineup_upgrade}</p>
+            <p style="font-size: 12px; color: #cbd5e1; margin-bottom: 8px;"><strong style="color: #a78bfa;">Why They Accept:</strong> ${tp.why_target_accepts}</p>
+            <div style="background: #1e293b; padding: 10px; border-radius: 4px; font-size: 12px; color: #38bdf8;">
+              💬 <strong>Negotiation Pitch:</strong> "${tp.negotiation_pitch}"
+            </div>
+          </div>`;
+        }
       }
 
       if (data.verdict) {
@@ -694,3 +758,35 @@ def query_trade(req: TradeRequest) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Error evaluating trade: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/query/propose-trades")
+def query_propose_trades(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
+    """On-demand proactive trade proposals scanning all teams across the league."""
+    league_config = ALL_LEAGUES.get(league_id)
+    if not league_config:
+        raise HTTPException(
+            status_code=404, detail=f"League {league_id} not found in configuration."
+        )
+
+    try:
+        espn = LeagueClient().get_league(league_config)
+        current_week = get_current_week(espn)
+
+        client = None
+        try:
+            client = GeminiIntelligenceClient()
+        except Exception:
+            pass
+
+        report = propose_league_trades(
+            league=league_config,
+            week=current_week,
+            espn_league=espn,
+            client=client,
+        )
+        return report.model_dump()
+    except Exception as e:
+        logger.error(f"Error proposing trades for league {league_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+

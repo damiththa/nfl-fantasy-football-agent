@@ -50,3 +50,10 @@ def test_query_trade_invalid_league(client):
         },
     )
     assert response.status_code == 404
+
+
+def test_query_propose_trades_invalid_league(client):
+    response = client.post("/query/propose-trades?league_id=99999999")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+

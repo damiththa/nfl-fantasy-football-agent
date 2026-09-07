@@ -87,15 +87,49 @@ def test_lineup_respects_roster_slots_pna_vs_chips():
 def test_starter_ordering_pna_and_chips():
     roster = _create_mock_roster()
 
-    # PNA 2026: QB, RB, RB, WR, WR, TE, FLEX, FLEX, D/ST
+    # PNA 2026: QB, RB, RB, WR, WR, TE, FLEX, FLEX, D/ST (D/ST is strictly last)
     rec_pna = optimize_lineup(PNA_2026, 1, roster)
     pna_positions = [p.position for p in rec_pna.recommended_starters]
     assert pna_positions == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "FLEX", "D/ST"]
+    assert pna_positions[-1] == "D/ST"
 
-    # Chips Ahoy: QB, RB, RB, WR, WR, TE, FLEX, D/ST, K
+    # Chips Ahoy: QB, RB, RB, WR, WR, TE, FLEX, K, D/ST (D/ST is strictly last)
     rec_chips = optimize_lineup(CHIPS_AHOY, 1, roster)
     chips_positions = [p.position for p in rec_chips.recommended_starters]
-    assert chips_positions == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "D/ST", "K"]
+    assert chips_positions == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "D/ST"]
+    assert chips_positions[-1] == "D/ST"
+
+
+def test_vacant_slots_and_actionable_swaps():
+    # Roster where starters are on bench and slots are vacant
+    players = [
+        RosterPlayer("Patrick Mahomes", "QB", "KC", "Bench", 22.0, 0.0, "NORMAL", 10, 99.0),
+        RosterPlayer("Travis Kelce", "TE", "KC", "Bench", 14.0, 0.0, "NORMAL", 10, 98.0),
+        RosterPlayer("SF Defense", "DST", "SF", "Bench", 8.0, 0.0, "NORMAL", 9, 90.0),
+        RosterPlayer("RB_0", "RB", "SF", "Bench", 18.0, 0.0, "NORMAL", 9, 80.0),
+        RosterPlayer("RB_1", "RB", "SF", "Bench", 15.0, 0.0, "NORMAL", 9, 80.0),
+        RosterPlayer("WR_0", "WR", "DAL", "Bench", 17.0, 0.0, "NORMAL", 7, 85.0),
+        RosterPlayer("WR_1", "WR", "DAL", "Bench", 14.5, 0.0, "NORMAL", 7, 85.0),
+        RosterPlayer("WR_2", "WR", "DAL", "Bench", 12.0, 0.0, "NORMAL", 7, 85.0),
+        RosterPlayer("WR_3", "WR", "DAL", "Bench", 9.5, 0.0, "NORMAL", 7, 85.0),
+        # Bad starter who is injured in starting slot
+        RosterPlayer("Injured Guy", "RB", "NYJ", "RB", 2.0, 0.0, "OUT", 5, 10.0),
+    ]
+    roster = ParsedRoster(team_name="Mad Dawg Team", players=players, starters=[players[-1]], bench=players[:-1])
+
+    rec = optimize_lineup(PNA_2026, 1, roster)
+
+    # Vacant slots must be detected
+    assert len(rec.vacant_slots) > 0
+    # Suboptimal starter (Injured Guy) must be flagged
+    assert any("Injured Guy" in s for s in rec.suboptimal_starters)
+    # Actionable swaps must be populated
+    assert len(rec.actionable_swaps) > 0
+    # Current slot of starters should reflect ESPN
+    mahomes_rec = next(s for s in rec.recommended_starters if s.player_name == "Patrick Mahomes")
+    assert mahomes_rec.current_slot == "Bench"
+    assert mahomes_rec.alignment == "SWAP_TO_START"
+
 
 
 def test_benches_injured_players():

@@ -73,13 +73,13 @@ def sort_starters_by_lineup_order(
     for s in flex_pool[: league.roster.flex]:
         ordered.append(s.model_copy(update={"position": "FLEX"}))
 
-    # 6. D/ST
-    for s in dsts[: league.roster.dst]:
-        ordered.append(s.model_copy(update={"position": "D/ST"}))
-
-    # 7. K (Chips Ahoy)
+    # 6. K (Chips Ahoy - placed before D/ST so D/ST is always the absolute last row)
     if league.roster.k:
         ordered.extend(kickers[: league.roster.k])
+
+    # 7. D/ST (ALWAYS the absolute last row in every league)
+    for s in dsts[: league.roster.dst]:
+        ordered.append(s.model_copy(update={"position": "D/ST"}))
 
     # In case any player was missed, append
     added_names = {s.player_name.lower() for s in ordered}
@@ -88,6 +88,88 @@ def sort_starters_by_lineup_order(
             ordered.append(s)
 
     return ordered
+
+
+def enrich_lineup_recommendation_with_espn_status(
+    rec: LineupRecommendation, roster: ParsedRoster, league: LeagueConfig
+) -> LineupRecommendation:
+    """Populate current ESPN slots, detect vacant starting slots, flag suboptimal starters,
+    and generate actionable swap instructions.
+    """
+    player_current_slots = {p.name.lower(): p.slot for p in roster.players}
+
+    # Update recommended starters
+    for s in rec.recommended_starters:
+        s.current_slot = player_current_slots.get(s.player_name.lower(), "Bench")
+        if s.current_slot == "Bench":
+            s.alignment = "SWAP_TO_START"
+        else:
+            s.alignment = "ALIGNED"
+
+    # Update bench players
+    for b in rec.bench_players:
+        b.current_slot = player_current_slots.get(b.player_name.lower(), "Bench")
+        if b.current_slot != "Bench":
+            b.alignment = "MOVE_TO_BENCH"
+        else:
+            b.alignment = "ALIGNED"
+
+    # Detect vacant starting slots on ESPN
+    current_starter_slots: dict[str, int] = {}
+    for p in roster.starters:
+        slot = p.slot.upper().replace("/", "")
+        if slot in ("DEF", "DST"):
+            slot = "DST"
+        elif slot in ("RBWRTE", "FLEX"):
+            slot = "FLEX"
+        current_starter_slots[slot] = current_starter_slots.get(slot, 0) + 1
+
+    vacant = []
+    if current_starter_slots.get("QB", 0) < league.roster.qb:
+        vacant.append(f"QB ({league.roster.qb - current_starter_slots.get('QB', 0)} empty)")
+    if current_starter_slots.get("RB", 0) < league.roster.rb:
+        vacant.append(f"RB ({league.roster.rb - current_starter_slots.get('RB', 0)} empty)")
+    if current_starter_slots.get("WR", 0) < league.roster.wr:
+        vacant.append(f"WR ({league.roster.wr - current_starter_slots.get('WR', 0)} empty)")
+    if current_starter_slots.get("TE", 0) < league.roster.te:
+        vacant.append(f"TE ({league.roster.te - current_starter_slots.get('TE', 0)} empty)")
+    if current_starter_slots.get("FLEX", 0) < league.roster.flex:
+        vacant.append(f"FLEX ({league.roster.flex - current_starter_slots.get('FLEX', 0)} empty)")
+    if league.roster.k and current_starter_slots.get("K", 0) < league.roster.k:
+        vacant.append(f"Kicker ({league.roster.k - current_starter_slots.get('K', 0)} empty)")
+    if current_starter_slots.get("DST", 0) < league.roster.dst:
+        vacant.append(f"D/ST ({league.roster.dst - current_starter_slots.get('DST', 0)} empty)")
+
+    rec.vacant_slots = vacant
+
+    # Detect suboptimal starters currently started on ESPN
+    suboptimal = []
+    for b in rec.bench_players:
+        if b.current_slot != "Bench":
+            suboptimal.append(
+                f"{b.player_name} ({b.position}) — currently in ESPN '{b.current_slot}' slot, but should BENCH: {b.reasoning}"
+            )
+    rec.suboptimal_starters = suboptimal
+
+    # Generate explicit actionable swap instructions
+    swaps = []
+    needs_bench = [b for b in rec.bench_players if b.alignment == "MOVE_TO_BENCH"]
+    needs_start = [s for s in rec.recommended_starters if s.alignment == "SWAP_TO_START"]
+
+    for ns, nb in zip(needs_start, needs_bench):
+        swaps.append(
+            f"⬇️ Bench {nb.player_name} ({nb.current_slot}) → ⬆️ Start {ns.player_name} ({ns.position})"
+        )
+
+    if len(needs_start) > len(needs_bench):
+        for ns in needs_start[len(needs_bench) :]:
+            swaps.append(f"⬆️ Insert {ns.player_name} ({ns.position}) into vacant starting slot")
+    elif len(needs_bench) > len(needs_start):
+        for nb in needs_bench[len(needs_start) :]:
+            swaps.append(f"⬇️ Move {nb.player_name} ({nb.current_slot}) to Bench")
+
+    rec.actionable_swaps = swaps
+    return rec
 
 
 def sort_bench_by_position(bench: list[StartSitDecision]) -> list[StartSitDecision]:
@@ -264,7 +346,7 @@ def optimize_lineup(
                     cleaned_starters.append(s)
             rec.recommended_starters = sort_starters_by_lineup_order(cleaned_starters, league)
             rec.bench_players = sort_bench_by_position(rec.bench_players)
-            return rec
+            return enrich_lineup_recommendation_with_espn_status(rec, roster, league)
         except Exception as e:
             logger.warning(
                 "Gemini lineup optimization call failed (%s). Falling back to deterministic optimization.",
@@ -341,7 +423,7 @@ def optimize_lineup(
         else:
             bench_players.append(decision)
 
-    return LineupRecommendation(
+    rec = LineupRecommendation(
         league_id=league.league_id,
         week=week,
         game_theory_strategy=strategy,
@@ -352,3 +434,5 @@ def optimize_lineup(
             f"Filled {slots_filled['FLEX']}/{slots_needed['FLEX']} flex slots with highest projection upside."
         ],
     )
+    return enrich_lineup_recommendation_with_espn_status(rec, roster, league)
+

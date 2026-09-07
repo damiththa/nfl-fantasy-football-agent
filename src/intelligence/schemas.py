@@ -27,6 +27,14 @@ class StartSitDecision(BaseModel):
     game_script_note: Optional[str] = Field(
         default=None, description="Note on Vegas total, weather, or matchup context"
     )
+    current_slot: str = Field(
+        default="Bench",
+        description="Where the player is currently placed on ESPN (e.g., QB, RB, WR, Bench, IR)",
+    )
+    alignment: str = Field(
+        default="ALIGNED",
+        description="Alignment with ESPN: ALIGNED, SWAP_TO_START, MOVE_TO_BENCH",
+    )
 
 
 class LineupRecommendation(BaseModel):
@@ -44,6 +52,18 @@ class LineupRecommendation(BaseModel):
     bench_players: list[StartSitDecision] = Field(description="Recommended bench players")
     key_flex_decisions: list[str] = Field(
         default_factory=list, description="Key toss-ups and flex selection explanations"
+    )
+    vacant_slots: list[str] = Field(
+        default_factory=list,
+        description="Starting slots that are currently empty on ESPN (e.g. TE, K, D/ST)",
+    )
+    suboptimal_starters: list[str] = Field(
+        default_factory=list,
+        description="Players currently starting on ESPN who are recommended to be benched",
+    )
+    actionable_swaps: list[str] = Field(
+        default_factory=list,
+        description="Explicit player swap instructions to make in ESPN app",
     )
 
 
@@ -123,4 +143,32 @@ class MatchupReport(BaseModel):
     )
     strategic_summary: str = Field(
         description="High-level scouting report and primary path to victory"
+    )
+
+
+class TradeProposal(BaseModel):
+    """Actionable trade proposal that user should initiate."""
+
+    target_team_id: int = Field(description="ESPN Team ID of the opposing team to trade with")
+    target_team_name: str = Field(description="Name of opposing team")
+    target_manager: str = Field(description="Owner/manager name of opposing team")
+    giving_players: list[str] = Field(description="Players you send from your surplus/depth")
+    receiving_players: list[str] = Field(description="Players you acquire to upgrade starting lineup")
+    net_vorp_gain: float = Field(description="Estimated net weekly VORP improvement for your team")
+    your_lineup_upgrade: str = Field(description="How this specifically improves your starting lineup")
+    why_target_accepts: str = Field(description="Why this trade solves a key deficiency for the opponent")
+    negotiation_pitch: str = Field(description="Ready-to-send message to pitch this trade in fantasy chat")
+
+
+class LeagueTradeReport(BaseModel):
+    """Collection of proactive trade proposals across the entire league."""
+
+    league_id: int = Field(description="ESPN League ID")
+    week: int = Field(description="Current NFL week")
+    proposals: list[TradeProposal] = Field(
+        default_factory=list,
+        description="Top recommended win-win trade proposals to initiate",
+    )
+    market_overview: str = Field(
+        description="Strategic analysis of your team's positional surpluses and market trade targets"
     )

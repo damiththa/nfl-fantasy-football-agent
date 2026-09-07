@@ -139,6 +139,25 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
         <span style="background: {color}; color: #0f172a; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: bold;">⚡ {strategy}</span>
       </div>"""
 
+    # Vacant starting slots alert
+    if data.get("vacant_slots"):
+        vacant_items = "".join(f"<li style='margin-bottom: 4px; font-weight: bold;'>Slot {s} is currently UNFILLED</li>" for s in data["vacant_slots"])
+        content_html += f"""
+      <div style="background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; border-radius: 0 6px 6px 0; padding: 12px 14px; margin-bottom: 14px;">
+        <h4 style="color: #ef4444; margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;">🚨 Vacant Starting Slots Detected on ESPN</h4>
+        <p style="color: #fca5a5; font-size: 12px; margin: 0 0 6px 0;">You have starting roster slots that are completely empty. Action is needed before kickoff:</p>
+        <ul style="margin: 0; padding-left: 18px; color: #fecaca; font-size: 12px;">{vacant_items}</ul>
+      </div>"""
+
+    # Actionable swaps alert
+    if data.get("actionable_swaps"):
+        swaps_items = "".join(f"<li style='margin-bottom: 4px;'>{swap}</li>" for swap in data["actionable_swaps"])
+        content_html += f"""
+      <div style="background: rgba(234, 179, 8, 0.15); border-left: 4px solid #eab308; border-radius: 0 6px 6px 0; padding: 12px 14px; margin-bottom: 14px;">
+        <h4 style="color: #eab308; margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;">⚡ Recommended Lineup Swaps on ESPN</h4>
+        <ul style="margin: 0; padding-left: 18px; color: #fef08a; font-size: 12px;">{swaps_items}</ul>
+      </div>"""
+
     # Strategy reasoning
     if data.get("strategy_reasoning"):
         content_html += f"""
@@ -155,12 +174,25 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             reasoning = p.get("reasoning", "")
             game_note = p.get("game_script_note", "")
             full_reason = f"{reasoning} ({game_note})" if game_note else reasoning
+            slot_display = p.get("current_slot", "")
+            alignment = p.get("alignment", "")
+
+            if alignment == "SWAP_TO_START":
+                status_badge = '<span style="color: #f59e0b; font-weight: bold; background: rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">⚠️ Bench (Swap In)</span>'
+            elif alignment == "ALIGNED":
+                status_badge = f'<span style="color: #22c55e; background: rgba(34, 197, 94, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">🟢 Started ({slot_display})</span>'
+            elif slot_display:
+                status_badge = f'<span style="color: #94a3b8; font-size: 11px;">{slot_display}</span>'
+            else:
+                status_badge = '<span style="color: #94a3b8; font-size: 11px;">-</span>'
+
             rows += f"""
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #38bdf8; font-weight: bold; font-size: 13px;">{pos}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #f8fafc; font-weight: bold; font-size: 13px;">{name}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{team}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #22c55e; font-weight: bold; font-size: 13px;">{proj}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;">{status_badge}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{full_reason}</td>
           </tr>"""
 
@@ -173,6 +205,7 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Team</th>
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
+            <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">ESPN Status</th>
             <th style="padding: 8px; border-bottom: 2px solid #22c55e; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Intel & Matchup</th>
           </tr>
         </thead>
@@ -190,6 +223,17 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             team = p.get("team", "?")
             proj = p.get("projected_points", 0)
             reasoning = p.get("reasoning", "")
+            slot_display = p.get("current_slot", "")
+            alignment = p.get("alignment", "")
+
+            if alignment == "MOVE_TO_BENCH":
+                status_badge = f'<span style="color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">🚨 In Lineup ({slot_display}) (Bench Now)</span>'
+            elif slot_display in ("Bench", "BE"):
+                status_badge = '<span style="color: #94a3b8; background: rgba(148, 163, 184, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">⏸️ On Bench</span>'
+            elif slot_display:
+                status_badge = f'<span style="color: #94a3b8; font-size: 11px;">{slot_display}</span>'
+            else:
+                status_badge = '<span style="color: #94a3b8; font-size: 11px;">-</span>'
 
             # Identify injured/inactive players
             upper_r = reasoning.upper()
@@ -202,6 +246,7 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">{name}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{team}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{proj}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;">{status_badge}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{reasoning}</td>
           </tr>"""
 
@@ -222,12 +267,14 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Team</th>
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">ESPN Status</th>
             <th style="padding: 8px; border-bottom: 2px solid #ef4444; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Why Sit</th>
           </tr>
         </thead>
         <tbody>{bench_rows}
         </tbody>
       </table>"""
+
 
     # Key start/sit dilemmas & flex calls
     if data.get("key_flex_decisions"):
@@ -257,6 +304,40 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
         content_html += f"""
       <h3 style="color: #eab308; font-size: 15px; margin: 14px 0 8px 0;">🔄 Waiver Wire Moves</h3>
       {claims_html}"""
+
+    # Proactive trade proposals
+    if data.get("proposals"):
+        proposals_html = ""
+        for tp in data["proposals"]:
+            tgt_team = tp.get("target_team_name", "Opponent")
+            tgt_mgr = tp.get("target_manager", "")
+            mgr_str = f" ({tgt_mgr})" if tgt_mgr else ""
+            giving = ", ".join(tp.get("giving_players", []))
+            recving = ", ".join(tp.get("receiving_players", []))
+            vorp_gain = tp.get("net_vorp_gain", 0.0)
+            upgrade = tp.get("your_lineup_upgrade", "")
+            why_opp = tp.get("why_target_accepts", "")
+            pitch = tp.get("negotiation_pitch", "")
+            proposals_html += f"""
+        <div style="background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 0 8px 8px 0; padding: 12px 14px; margin-bottom: 10px;">
+          <div style="margin-bottom: 6px;">
+            <strong style="color: #f8fafc; font-size: 14px;">🤝 Trade with {tgt_team}{mgr_str}</strong>
+            <span style="color: #22c55e; font-weight: bold; font-size: 12px; margin-left: 8px;">+{vorp_gain:+.1f} Weekly VORP</span>
+          </div>
+          <p style="margin: 4px 0; font-size: 13px;">
+            <span style="color: #ef4444; font-weight: bold;">Give:</span> <span style="color: #e2e8f0;">{giving}</span>
+            <span style="color: #94a3b8; margin: 0 6px;">➔</span>
+            <span style="color: #22c55e; font-weight: bold;">Receive:</span> <span style="color: #e2e8f0;">{recving}</span>
+          </p>
+          <p style="margin: 4px 0; color: #cbd5e1; font-size: 12px;"><strong style="color: #38bdf8;">Lineup Upgrade:</strong> {upgrade}</p>
+          <p style="margin: 4px 0; color: #cbd5e1; font-size: 12px;"><strong style="color: #a78bfa;">Why They Accept:</strong> {why_opp}</p>
+          <div style="background: #1e293b; padding: 8px 10px; border-radius: 4px; margin-top: 8px; font-size: 12px; color: #38bdf8; font-style: italic;">
+            💬 <strong>Pitch:</strong> "{pitch}"
+          </div>
+        </div>"""
+        content_html += f"""
+      <h3 style="color: #38bdf8; font-size: 14px; margin: 16px 0 8px 0; text-transform: uppercase;">💡 Proactive Win-Win Trade Proposals</h3>
+      {proposals_html}"""
 
     # Trade verdict
     if data.get("verdict"):
