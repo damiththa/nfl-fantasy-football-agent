@@ -221,7 +221,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
           12-Team Full PPR • 2 FLEX • 4pt Pass TD • No Kicker
         </p>
-        <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=991059191', 'PNA 2026 Start \'Em, Sit \'Em Report')">
+        <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=991059191', 'PNA 2026 Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
         </button>
       </div>
@@ -232,7 +232,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
           10-Team Full PPR • 1 FLEX • 6pt Pass TD • Has Kicker
         </p>
-        <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=735288', 'Chips Ahoy Start \'Em, Sit \'Em Report')">
+        <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=735288', 'Chips Ahoy Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
         </button>
       </div>
@@ -358,7 +358,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       }
 
       if (data.recommended_starters && data.recommended_starters.length > 0) {
-        html += '<h3 style="color: #22c55e; margin-top: 16px; margin-bottom: 8px;">🟢 START \'EM (Optimal Lineup)</h3>';
+        html += '<h3 style="color: #22c55e; margin-top: 16px; margin-bottom: 8px;">🟢 START EM (Optimal Lineup)</h3>';
         html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>Floor-Ceil</th><th>Conf</th><th>Rationale & Game Script</th></tr></thead><tbody>';
         for (const p of data.recommended_starters) {
           html += `<tr>
@@ -398,7 +398,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           </div>`;
         }
 
-        html += '<h3 style="color: #ef4444; margin-top: 18px; margin-bottom: 8px;">🔴 SIT \'EM (Bench Options)</h3>';
+        html += '<h3 style="color: #ef4444; margin-top: 18px; margin-bottom: 8px;">🔴 SIT EM (Bench Options)</h3>';
         html += '<table class="starters-table"><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th>Proj</th><th>Why Sit</th></tr></thead><tbody>';
         html += benchRows + '</tbody></table>';
       }

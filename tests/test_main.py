@@ -34,6 +34,12 @@ def test_query_lineup_invalid_league(client):
     assert "not found" in response.json()["detail"].lower()
 
 
+def test_query_start_sit_invalid_league(client):
+    response = client.post("/query/start-sit?league_id=99999999")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
 def test_query_trade_invalid_league(client):
     response = client.post(
         "/query/trade",
