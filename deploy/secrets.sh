@@ -38,10 +38,13 @@ upsert_secret() {
     local secret_val="${!secret_name:-}"
 
     if [[ -z "${secret_val}" ]]; then
-        echo "⚠️  Variable ${secret_name} is empty in your environment."
-        read -r -s -p "   Please enter ${secret_name}: " secret_val
-        echo ""
+        echo "--> Please paste ${secret_name} below and press Enter:"
+        read -r -s secret_val
+        echo "    (Received ${#secret_val} characters)"
     fi
+
+    # Trim any accidental leading/trailing whitespace
+    secret_val="$(echo -n "${secret_val}" | xargs)"
 
     if [[ -z "${secret_val}" ]]; then
         echo "❌ Skipped ${secret_name} (no value provided)."
