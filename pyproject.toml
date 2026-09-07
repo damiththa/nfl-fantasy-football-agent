@@ -1,0 +1,50 @@
+[project]
+name = "nfl-fantasy-football-agent"
+version = "0.1.0"
+description = "AI-powered Fantasy Football analyst for ESPN leagues, powered by Gemini"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Mad Dawg"},
+]
+
+dependencies = [
+    "espn-api>=0.38.0",
+    "python-dotenv>=1.1.0",
+    "pydantic>=2.11.0",
+    "httpx>=0.28.0",
+    "nflreadpy>=0.1.4",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+gcp = [
+    "google-genai>=2.12.0",
+    "google-cloud-secret-manager>=2.22.0",
+    "google-cloud-firestore>=2.20.0",
+]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]

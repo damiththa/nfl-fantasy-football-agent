@@ -1,0 +1,12 @@
+# Pinned dependencies for Cloud Run deployment.
+# Generated from pyproject.toml — keep in sync.
+espn-api>=0.38.0
+python-dotenv>=1.1.0
+pydantic>=2.11.0
+httpx>=0.28.0
+nflreadpy>=0.1.4
+fastapi>=0.115.0
+uvicorn>=0.34.0
+google-genai>=2.12.0
+google-cloud-secret-manager>=2.22.0
+google-cloud-firestore>=2.20.0

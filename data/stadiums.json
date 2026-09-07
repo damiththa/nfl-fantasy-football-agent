@@ -1,0 +1,302 @@
+[
+  {
+    "stadium_name": "State Farm Stadium",
+    "city": "Glendale",
+    "state": "AZ",
+    "team": ["ARI"],
+    "latitude": 33.5277,
+    "longitude": -112.2626,
+    "is_dome": true,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Mercedes-Benz Stadium",
+    "city": "Atlanta",
+    "state": "GA",
+    "team": ["ATL"],
+    "latitude": 33.7554,
+    "longitude": -84.4006,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "M&T Bank Stadium",
+    "city": "Baltimore",
+    "state": "MD",
+    "team": ["BAL"],
+    "latitude": 39.278,
+    "longitude": -76.6227,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Highmark Stadium",
+    "city": "Orchard Park",
+    "state": "NY",
+    "team": ["BUF"],
+    "latitude": 42.7738,
+    "longitude": -78.787,
+    "is_dome": false,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Bank of America Stadium",
+    "city": "Charlotte",
+    "state": "NC",
+    "team": ["CAR"],
+    "latitude": 35.2258,
+    "longitude": -80.8528,
+    "is_dome": false,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Soldier Field",
+    "city": "Chicago",
+    "state": "IL",
+    "team": ["CHI"],
+    "latitude": 41.8623,
+    "longitude": -87.6167,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Paycor Stadium",
+    "city": "Cincinnati",
+    "state": "OH",
+    "team": ["CIN"],
+    "latitude": 39.0955,
+    "longitude": -84.5161,
+    "is_dome": false,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Cleveland Browns Stadium",
+    "city": "Cleveland",
+    "state": "OH",
+    "team": ["CLE"],
+    "latitude": 41.5061,
+    "longitude": -81.6995,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "AT&T Stadium",
+    "city": "Arlington",
+    "state": "TX",
+    "team": ["DAL"],
+    "latitude": 32.7473,
+    "longitude": -97.0945,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Empower Field at Mile High",
+    "city": "Denver",
+    "state": "CO",
+    "team": ["DEN"],
+    "latitude": 39.7439,
+    "longitude": -105.02,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Ford Field",
+    "city": "Detroit",
+    "state": "MI",
+    "team": ["DET"],
+    "latitude": 42.340,
+    "longitude": -83.0456,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Lambeau Field",
+    "city": "Green Bay",
+    "state": "WI",
+    "team": ["GB"],
+    "latitude": 44.5013,
+    "longitude": -88.0622,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "NRG Stadium",
+    "city": "Houston",
+    "state": "TX",
+    "team": ["HOU"],
+    "latitude": 29.6847,
+    "longitude": -95.4107,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Lucas Oil Stadium",
+    "city": "Indianapolis",
+    "state": "IN",
+    "team": ["IND"],
+    "latitude": 39.7601,
+    "longitude": -86.1639,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "EverBank Stadium",
+    "city": "Jacksonville",
+    "state": "FL",
+    "team": ["JAX"],
+    "latitude": 30.3239,
+    "longitude": -81.6373,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "GEHA Field at Arrowhead Stadium",
+    "city": "Kansas City",
+    "state": "MO",
+    "team": ["KC"],
+    "latitude": 39.0489,
+    "longitude": -94.4839,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Allegiant Stadium",
+    "city": "Paradise",
+    "state": "NV",
+    "team": ["LV"],
+    "latitude": 36.0909,
+    "longitude": -115.1833,
+    "is_dome": true,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "SoFi Stadium",
+    "city": "Inglewood",
+    "state": "CA",
+    "team": ["LAC", "LAR"],
+    "latitude": 33.9535,
+    "longitude": -118.339,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Hard Rock Stadium",
+    "city": "Miami Gardens",
+    "state": "FL",
+    "team": ["MIA"],
+    "latitude": 25.958,
+    "longitude": -80.2389,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "U.S. Bank Stadium",
+    "city": "Minneapolis",
+    "state": "MN",
+    "team": ["MIN"],
+    "latitude": 44.9735,
+    "longitude": -93.2575,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Gillette Stadium",
+    "city": "Foxborough",
+    "state": "MA",
+    "team": ["NE"],
+    "latitude": 42.0909,
+    "longitude": -71.2643,
+    "is_dome": false,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Caesars Superdome",
+    "city": "New Orleans",
+    "state": "LA",
+    "team": ["NO"],
+    "latitude": 29.9511,
+    "longitude": -90.0812,
+    "is_dome": true,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "MetLife Stadium",
+    "city": "East Rutherford",
+    "state": "NJ",
+    "team": ["NYG", "NYJ"],
+    "latitude": 40.8128,
+    "longitude": -74.0745,
+    "is_dome": false,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Lincoln Financial Field",
+    "city": "Philadelphia",
+    "state": "PA",
+    "team": ["PHI"],
+    "latitude": 39.9008,
+    "longitude": -75.1675,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Acrisure Stadium",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "team": ["PIT"],
+    "latitude": 40.4468,
+    "longitude": -80.0158,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Levi's Stadium",
+    "city": "Santa Clara",
+    "state": "CA",
+    "team": ["SF"],
+    "latitude": 37.4032,
+    "longitude": -121.9697,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Lumen Field",
+    "city": "Seattle",
+    "state": "WA",
+    "team": ["SEA"],
+    "latitude": 47.5952,
+    "longitude": -122.3316,
+    "is_dome": false,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Raymond James Stadium",
+    "city": "Tampa",
+    "state": "FL",
+    "team": ["TB"],
+    "latitude": 27.9759,
+    "longitude": -82.5033,
+    "is_dome": false,
+    "surface": "grass"
+  },
+  {
+    "stadium_name": "Nissan Stadium",
+    "city": "Nashville",
+    "state": "TN",
+    "team": ["TEN"],
+    "latitude": 36.1665,
+    "longitude": -86.7713,
+    "is_dome": false,
+    "surface": "turf"
+  },
+  {
+    "stadium_name": "Northwest Stadium",
+    "city": "Landover",
+    "state": "MD",
+    "team": ["WAS"],
+    "latitude": 38.9076,
+    "longitude": -76.8645,
+    "is_dome": false,
+    "surface": "grass"
+  }
+]
