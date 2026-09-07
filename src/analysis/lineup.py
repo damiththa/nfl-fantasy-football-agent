@@ -20,6 +20,98 @@ from src.intelligence.schemas import LineupRecommendation, StartSitDecision
 logger = logging.getLogger(__name__)
 
 
+def sort_starters_by_lineup_order(
+    starters: list[StartSitDecision], league: LeagueConfig
+) -> list[StartSitDecision]:
+    """Sort recommended starters strictly into standard fantasy roster order:
+    QB, RB, RB, WR, WR, TE, FLEX, [FLEX], D/ST, [K].
+    """
+    qbs = [
+        s for s in starters if s.position.upper() in ("QB", "TQB") or "QB" in s.position.upper()
+    ]
+    rbs = [s for s in starters if s.position.upper() == "RB"]
+    wrs = [s for s in starters if s.position.upper() == "WR"]
+    tes = [s for s in starters if s.position.upper() == "TE"]
+    dsts = [
+        s
+        for s in starters
+        if s.position.upper() in ("DST", "D/ST", "DEF") or "DEF" in s.position.upper()
+    ]
+    kickers = [s for s in starters if s.position.upper() in ("K", "PK")]
+
+    others = [
+        s
+        for s in starters
+        if s not in qbs
+        and s not in rbs
+        and s not in wrs
+        and s not in tes
+        and s not in dsts
+        and s not in kickers
+    ]
+
+    ordered: list[StartSitDecision] = []
+
+    # 1. QB
+    ordered.extend(qbs[: league.roster.qb])
+    remaining_qbs = qbs[league.roster.qb :]
+
+    # 2. RB, RB
+    ordered.extend(rbs[: league.roster.rb])
+    remaining_rbs = rbs[league.roster.rb :]
+
+    # 3. WR, WR
+    ordered.extend(wrs[: league.roster.wr])
+    remaining_wrs = wrs[league.roster.wr :]
+
+    # 4. TE
+    ordered.extend(tes[: league.roster.te])
+    remaining_tes = tes[league.roster.te :]
+
+    # 5. FLEX, FLEX (Remaining RBs, WRs, TEs, Others)
+    flex_pool = remaining_rbs + remaining_wrs + remaining_tes + remaining_qbs + others
+    for s in flex_pool[: league.roster.flex]:
+        ordered.append(s.model_copy(update={"position": "FLEX"}))
+
+    # 6. D/ST
+    for s in dsts[: league.roster.dst]:
+        ordered.append(s.model_copy(update={"position": "D/ST"}))
+
+    # 7. K (Chips Ahoy)
+    if league.roster.k:
+        ordered.extend(kickers[: league.roster.k])
+
+    # In case any player was missed, append
+    added_names = {s.player_name.lower() for s in ordered}
+    for s in starters:
+        if s.player_name.lower() not in added_names:
+            ordered.append(s)
+
+    return ordered
+
+
+def sort_bench_by_position(bench: list[StartSitDecision]) -> list[StartSitDecision]:
+    """Sort bench players logically: QB -> RB -> WR -> TE -> D/ST -> K."""
+    pos_priority = {
+        "QB": 1,
+        "TQB": 1,
+        "RB": 2,
+        "WR": 3,
+        "TE": 4,
+        "DST": 5,
+        "D/ST": 5,
+        "K": 6,
+        "PK": 6,
+    }
+    return sorted(
+        bench,
+        key=lambda p: (
+            pos_priority.get(p.position.upper(), 99),
+            -p.projected_points,
+        ),
+    )
+
+
 def optimize_lineup(
     league: LeagueConfig,
     week: int,
@@ -170,7 +262,8 @@ def optimize_lineup(
                     rec.bench_players.append(s)
                 else:
                     cleaned_starters.append(s)
-            rec.recommended_starters = cleaned_starters
+            rec.recommended_starters = sort_starters_by_lineup_order(cleaned_starters, league)
+            rec.bench_players = sort_bench_by_position(rec.bench_players)
             return rec
         except Exception as e:
             logger.warning(
@@ -251,8 +344,8 @@ def optimize_lineup(
         week=week,
         game_theory_strategy=strategy,
         strategy_reasoning=strategy_reasoning,
-        recommended_starters=recommended_starters,
-        bench_players=bench_players,
+        recommended_starters=sort_starters_by_lineup_order(recommended_starters, league),
+        bench_players=sort_bench_by_position(bench_players),
         key_flex_decisions=[
             f"Filled {slots_filled['FLEX']}/{slots_needed['FLEX']} flex slots with highest projection upside."
         ],

@@ -84,6 +84,20 @@ def test_lineup_respects_roster_slots_pna_vs_chips():
     assert any(p.position == "K" for p in starters_chips)
 
 
+def test_starter_ordering_pna_and_chips():
+    roster = _create_mock_roster()
+
+    # PNA 2026: QB, RB, RB, WR, WR, TE, FLEX, FLEX, D/ST
+    rec_pna = optimize_lineup(PNA_2026, 1, roster)
+    pna_positions = [p.position for p in rec_pna.recommended_starters]
+    assert pna_positions == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "FLEX", "D/ST"]
+
+    # Chips Ahoy: QB, RB, RB, WR, WR, TE, FLEX, D/ST, K
+    rec_chips = optimize_lineup(CHIPS_AHOY, 1, roster)
+    chips_positions = [p.position for p in rec_chips.recommended_starters]
+    assert chips_positions == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "D/ST", "K"]
+
+
 def test_benches_injured_players():
     # RB_0 is marked OUT
     roster = _create_mock_roster(injured_rb=True)
