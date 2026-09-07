@@ -4,6 +4,7 @@ Applies game theory (floor vs ceiling) depending on matchup point margins,
 cross-referencing injuries, Vegas totals, and weather conditions.
 """
 
+import logging
 from typing import Optional
 
 from src.config import LeagueConfig
@@ -15,6 +16,8 @@ from src.espn.roster import ParsedRoster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_lineup_prompt
 from src.intelligence.schemas import LineupRecommendation, StartSitDecision
+
+logger = logging.getLogger(__name__)
 
 
 def optimize_lineup(
@@ -142,7 +145,13 @@ def optimize_lineup(
             injuries=injury_data,
         )
 
-        return client.generate_structured(prompt=prompt, response_schema=LineupRecommendation)
+        try:
+            return client.generate_structured(prompt=prompt, response_schema=LineupRecommendation)
+        except Exception as e:
+            logger.warning(
+                "Gemini lineup optimization call failed (%s). Falling back to deterministic optimization.",
+                e,
+            )
 
     # Deterministic fallback algorithm when LLM client is not passed (e.g. testing/offline)
     recommended_starters = []

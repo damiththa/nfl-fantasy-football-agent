@@ -53,6 +53,7 @@ $GCLOUD run deploy "${SERVICE_NAME}" \
     --max-instances=1 \
     --memory=512Mi \
     --cpu=1 \
+    --quiet \
     --set-secrets="ESPN_S2=ESPN_S2:latest,ESPN_SWID=ESPN_SWID:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest" \
     --set-env-vars="NFL_SEASON=2026,GEMINI_MODEL=gemini-2.5-pro"
 

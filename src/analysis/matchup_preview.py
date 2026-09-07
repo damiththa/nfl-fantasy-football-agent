@@ -3,6 +3,7 @@ Weekly Matchup Preview and Scouting Report Builder.
 Compiles user and opponent rosters, Vegas lines, and game weather into a full scouting report.
 """
 
+import logging
 import math
 from typing import Optional
 
@@ -13,6 +14,8 @@ from src.espn.matchup import MatchupData
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_matchup_prompt
 from src.intelligence.schemas import MatchupReport
+
+logger = logging.getLogger(__name__)
 
 
 def _calculate_win_probability(margin: float) -> float:
@@ -99,7 +102,13 @@ def generate_matchup_preview(
             weather_reports=weather_data,
         )
 
-        return client.generate_structured(prompt=prompt, response_schema=MatchupReport)
+        try:
+            return client.generate_structured(prompt=prompt, response_schema=MatchupReport)
+        except Exception as e:
+            logger.warning(
+                "Gemini matchup preview call failed (%s). Falling back to deterministic scouting breakdown.",
+                e,
+            )
 
     # Deterministic fallback algorithm when LLM client is None
     advantages = []

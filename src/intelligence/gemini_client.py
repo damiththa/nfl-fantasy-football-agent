@@ -5,6 +5,7 @@ with native Pydantic structured output support and zero-cost test mockability.
 """
 
 import logging
+import os
 from typing import Any, Optional, Type, TypeVar
 
 from google import genai
@@ -40,6 +41,16 @@ class GeminiIntelligenceClient:
 
         if mock_client is not None:
             self._client = mock_client
+        elif os.environ.get("USE_VERTEX_AI", "false").lower() == "true" or os.environ.get(
+            "K_SERVICE"
+        ):
+            # On Cloud Run (K_SERVICE is set automatically), use Vertex AI with IAM credentials
+            project = os.environ.get("GCP_PROJECT", "gen-lang-client-0581555372")
+            region = os.environ.get("GCP_REGION", "us-central1")
+            logger.info(
+                "Connecting to Gemini Pro via Vertex AI in project %s (%s)", project, region
+            )
+            self._client = genai.Client(vertexai=True, project=project, location=region)
         else:
             resolved_key = api_key or get_gemini_api_key()
             self._client = genai.Client(api_key=resolved_key)

@@ -4,6 +4,7 @@ Ranks waiver pickup targets and identifies declining roster drop candidates,
 cross-referencing Sleeper trending surges and positional scarcity.
 """
 
+import logging
 from typing import Any, Optional
 
 from src.config import LeagueConfig
@@ -13,6 +14,8 @@ from src.espn.roster import ParsedRoster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_waiver_prompt
 from src.intelligence.schemas import WaiverRecommendation, WaiverReport
+
+logger = logging.getLogger(__name__)
 
 
 def evaluate_waivers(
@@ -86,7 +89,13 @@ def evaluate_waivers(
             injuries=injury_data[:20],
         )
 
-        return client.generate_structured(prompt=prompt, response_schema=WaiverReport)
+        try:
+            return client.generate_structured(prompt=prompt, response_schema=WaiverReport)
+        except Exception as e:
+            logger.warning(
+                "Gemini waiver evaluation call failed (%s). Falling back to deterministic evaluation.",
+                e,
+            )
 
     # Deterministic fallback algorithm when LLM client is None
     drop_candidates = []

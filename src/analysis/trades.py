@@ -3,6 +3,7 @@ Trade Value and VORP (Value Over Replacement Player) Engine.
 Evaluates proposed trades based on net impact to starting lineup and ROS/playoff strength.
 """
 
+import logging
 from typing import Optional
 
 from src.config import LeagueConfig
@@ -10,6 +11,8 @@ from src.espn.roster import ParsedRoster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_trade_prompt
 from src.intelligence.schemas import TradeEvaluation
+
+logger = logging.getLogger(__name__)
 
 # Positional replacement baselines (approximate weekly points of top free agent)
 # Adjusted for league size and PPR scoring
@@ -92,7 +95,13 @@ def evaluate_trade(
             opponent_roster={"players": opp_data} if opp_data else None,
         )
 
-        return client.generate_structured(prompt=prompt, response_schema=TradeEvaluation)
+        try:
+            return client.generate_structured(prompt=prompt, response_schema=TradeEvaluation)
+        except Exception as e:
+            logger.warning(
+                "Gemini trade evaluation call failed (%s). Falling back to deterministic VORP evaluation.",
+                e,
+            )
 
     # Deterministic mathematical VORP calculation
     proj_map = player_projections or {}
