@@ -7,6 +7,8 @@ win-win trades that upgrade the user's starting lineup by leveraging bench depth
 from __future__ import annotations
 
 import logging
+import zoneinfo
+from datetime import datetime
 from typing import Any, Optional
 
 from src.analysis.trades import calculate_vorp
@@ -113,6 +115,8 @@ def propose_league_trades(
             report = client.generate_structured(prompt=prompt, response_schema=LeagueTradeReport)
             report.league_id = league.league_id
             report.week = week
+            eastern = zoneinfo.ZoneInfo("America/New_York")
+            report.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
             return report
         except Exception as e:
             logger.warning(
@@ -181,6 +185,7 @@ def propose_league_trades(
                     if len(proposals) >= 3:
                         break
 
+    eastern = zoneinfo.ZoneInfo("America/New_York")
     return LeagueTradeReport(
         league_id=league.league_id,
         week=week,
@@ -189,4 +194,5 @@ def propose_league_trades(
             f"Roster depth analysis identified top surplus at {[p.name for p in viable_bench[:2]]}. "
             f"Primary upgrade target is starting {upgradable_starters[0].position if upgradable_starters else 'FLEX'}."
         ),
+        generated_at=datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
     )

@@ -5,6 +5,8 @@ cross-referencing injuries, Vegas totals, and weather conditions.
 """
 
 import logging
+import zoneinfo
+from datetime import datetime
 from typing import Optional
 
 from src.config import LeagueConfig
@@ -271,6 +273,9 @@ def enrich_lineup_recommendation_with_espn_status(
         current_bench_items,
         key=lambda p: (pos_priority.get(p.position.upper(), 99), -p.projected_points),
     )
+
+    eastern = zoneinfo.ZoneInfo("America/New_York")
+    rec.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
 
     return rec
 

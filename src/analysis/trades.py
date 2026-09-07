@@ -4,6 +4,8 @@ Evaluates proposed trades based on net impact to starting lineup and ROS/playoff
 """
 
 import logging
+import zoneinfo
+from datetime import datetime
 from typing import Optional
 
 from src.config import LeagueConfig
@@ -96,7 +98,10 @@ def evaluate_trade(
         )
 
         try:
-            return client.generate_structured(prompt=prompt, response_schema=TradeEvaluation)
+            verdict_obj = client.generate_structured(prompt=prompt, response_schema=TradeEvaluation)
+            eastern = zoneinfo.ZoneInfo("America/New_York")
+            verdict_obj.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
+            return verdict_obj
         except Exception as e:
             logger.warning(
                 "Gemini trade evaluation call failed (%s). Falling back to deterministic VORP evaluation.",
@@ -143,6 +148,7 @@ def evaluate_trade(
         )
         counter = "Offer a lower-tier bench asset instead of your primary starter."
 
+    eastern = zoneinfo.ZoneInfo("America/New_York")
     return TradeEvaluation(
         verdict=verdict,
         your_vorp_change=net_vorp,
@@ -156,4 +162,5 @@ def evaluate_trade(
         ),
         reasoning=reasoning,
         counter_suggestion=counter,
+        generated_at=datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
     )

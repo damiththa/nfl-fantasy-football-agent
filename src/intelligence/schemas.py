@@ -96,6 +96,10 @@ class LineupRecommendation(BaseModel):
         default_factory=list,
         description="Explicit player swap instructions to make in ESPN app",
     )
+    generated_at: str = Field(
+        default="",
+        description="Date and time when this report was generated (e.g. 'Monday, Sep 7, 2026 at 3:15 PM EDT')",
+    )
 
 
 class WaiverRecommendation(BaseModel):
@@ -148,6 +152,10 @@ class TradeEvaluation(BaseModel):
     counter_suggestion: Optional[str] = Field(
         default=None,
         description="Suggested counter-offer if trade has promise but is currently unbalanced",
+    )
+    generated_at: str = Field(
+        default="",
+        description="Date and time when trade evaluation was generated",
     )
 
 
@@ -202,4 +210,8 @@ class LeagueTradeReport(BaseModel):
     )
     market_overview: str = Field(
         description="Strategic analysis of your team's positional surpluses and market trade targets"
+    )
+    generated_at: str = Field(
+        default="",
+        description="Date and time when trade proposals were generated",
     )

@@ -81,9 +81,10 @@ def _build_email_html(
   <div style="max-width: 640px; margin: 0 auto; padding: 24px 16px;">
 
     <!-- Header -->
-    <div style="text-align: center; padding: 24px 0; border-bottom: 2px solid #d9381e;">
+    <div style="text-align: center; padding: 24px 0 16px 0; border-bottom: 2px solid #d9381e;">
       <h1 style="color: #d9381e; font-size: 26px; margin: 0 0 4px 0;">🏈 Mad Dawg's Fantasy Intel</h1>
-      <p style="color: #94a3b8; font-size: 13px; margin: 0;">{subject}</p>
+      <p style="color: #94a3b8; font-size: 13px; margin: 0 0 8px 0;">{subject}</p>
+      <span style="display: inline-block; background: #1e293b; color: #38bdf8; font-size: 11px; padding: 4px 12px; border-radius: 9999px; border: 1px solid #334155;">🕒 Generated: {timestamp}</span>
     </div>
 
     <!-- Tagline -->

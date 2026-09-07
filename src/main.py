@@ -566,6 +566,31 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const resContent = document.getElementById('results-content');
       let html = '';
 
+      // Prominent Date / Time Stamp Banner
+      const now = new Date();
+      const localTimeStr = now.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }) + ' at ' + now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+        timeZoneName: 'short'
+      });
+      const displayTimestamp = data.generated_at || localTimeStr;
+
+      html += `<div style="display: flex; justify-content: space-between; align-items: center; background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+        <span style="font-size: 13px; color: var(--accent); font-weight: 600; display: flex; align-items: center; gap: 6px;">
+          🕒 Report Generated: <strong>${displayTimestamp}</strong>
+        </span>
+        <span style="font-size: 11px; color: var(--text-muted); background: #1e293b; padding: 3px 10px; border-radius: 9999px; border: 1px solid #334155;">
+          ● Live Data (ESPN & Vegas)
+        </span>
+      </div>`;
+
       // Section 1: Immediate Action Plan Banner
       if (data.vacant_slots && data.vacant_slots.length > 0) {
         html += `<div class="alert-box alert-danger">
@@ -870,6 +895,7 @@ def run_weekly_analysis() -> dict[str, Any]:
         "job": "weekly_analysis",
         "day": day_name,
         "results": results,
+        "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -929,9 +955,13 @@ def run_sunday_pregame() -> dict[str, Any]:
     # Send game-day digest email
     send_digest_email("sunday_pregame", results)
 
+    import zoneinfo
+    eastern = zoneinfo.ZoneInfo("America/New_York")
+
     return {
         "job": "sunday_pregame",
         "results": results,
+        "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
         "timestamp": datetime.now().isoformat(),
     }
 
