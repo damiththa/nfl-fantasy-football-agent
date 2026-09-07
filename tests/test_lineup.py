@@ -1,5 +1,8 @@
-from src.analysis.lineup import optimize_lineup
+from datetime import datetime, timezone
+
+from src.analysis.lineup import get_player_matchup_info, optimize_lineup
 from src.config import CHIPS_AHOY, PNA_2026
+from src.data.vegas import GameOdds
 from src.espn.matchup import MatchupData
 from src.espn.roster import ParsedRoster, RosterPlayer
 from src.intelligence.gemini_client import GeminiIntelligenceClient
@@ -222,3 +225,119 @@ def test_optimize_lineup_with_gemini_client():
     rec = optimize_lineup(PNA_2026, 1, roster, client=client)
     assert rec.league_id == 991059191
     assert rec.recommended_starters[0].player_name == "Patrick Mahomes"
+
+
+def test_get_player_matchup_info():
+    # 2026-09-13 20:25 UTC = Sun 4:25 PM EDT
+    kickoff = datetime(2026, 9, 13, 20, 25, tzinfo=timezone.utc)
+    odds = [
+        GameOdds(
+            game_id="401671789",
+            home_team="KC",
+            away_team="BAL",
+            spread=-3.0,
+            over_under=46.5,
+            home_implied_total=24.8,
+            away_implied_total=21.8,
+            game_time=kickoff,
+            status="pre",
+        )
+    ]
+
+    # Home team
+    opp, ha, m_disp, g_time = get_player_matchup_info("KC", odds, bye_week=10, current_week=1)
+    assert opp == "BAL"
+    assert ha == "HOME"
+    assert m_disp == "vs. BAL"
+    assert g_time == "Sun 4:25 PM ET"
+
+    # Away team
+    opp, ha, m_disp, g_time = get_player_matchup_info("BAL", odds, bye_week=10, current_week=1)
+    assert opp == "KC"
+    assert ha == "AWAY"
+    assert m_disp == "@ KC"
+    assert g_time == "Sun 4:25 PM ET"
+
+    # Bye week
+    opp, ha, m_disp, g_time = get_player_matchup_info("SF", odds, bye_week=9, current_week=9)
+    assert opp is None
+    assert ha is None
+    assert m_disp == "BYE"
+    assert g_time == "Bye Week"
+
+    # Unknown / Free agent
+    opp, ha, m_disp, g_time = get_player_matchup_info("FA", odds)
+    assert opp is None
+    assert ha is None
+    assert m_disp is None
+    assert g_time is None
+
+
+def test_player_cards_include_matchup_and_game_time():
+    mahomes = RosterPlayer("Patrick Mahomes", "QB", "KC", "QB", 22.0, 0.0, "NORMAL", 10, 99.0)
+    kelce = RosterPlayer("Travis Kelce", "TE", "KC", "TE", 14.0, 0.0, "NORMAL", 10, 98.0)
+    rb_sf = RosterPlayer("Christian McCaffrey", "RB", "SF", "RB", 19.0, 0.0, "NORMAL", 9, 99.0)
+    wr_dal = RosterPlayer("CeeDee Lamb", "WR", "DAL", "WR", 18.0, 0.0, "NORMAL", 7, 98.0)
+    dst_sf = RosterPlayer("SF Defense", "DST", "SF", "D/ST", 8.0, 0.0, "NORMAL", 9, 90.0)
+    bench_rb = RosterPlayer("Jordan Mason", "RB", "SF", "BE", 11.0, 0.0, "NORMAL", 9, 70.0)
+
+    players = [mahomes, kelce, rb_sf, wr_dal, dst_sf, bench_rb]
+    roster = ParsedRoster(
+        team_name="Mad Dawg Team",
+        players=players,
+        starters=[mahomes, kelce, rb_sf, wr_dal, dst_sf],
+        bench=[bench_rb],
+    )
+
+    kickoff_kc = datetime(2026, 9, 13, 20, 25, tzinfo=timezone.utc)  # Sun 4:25 PM ET
+    kickoff_sf = datetime(2026, 9, 13, 17, 0, tzinfo=timezone.utc)   # Sun 1:00 PM ET
+
+    odds = [
+        GameOdds(
+            game_id="401671789",
+            home_team="KC",
+            away_team="BAL",
+            spread=-3.0,
+            over_under=46.5,
+            home_implied_total=24.8,
+            away_implied_total=21.8,
+            game_time=kickoff_kc,
+            status="pre",
+        ),
+        GameOdds(
+            game_id="401671790",
+            home_team="SF",
+            away_team="LAR",
+            spread=-4.5,
+            over_under=44.0,
+            home_implied_total=24.2,
+            away_implied_total=19.8,
+            game_time=kickoff_sf,
+            status="pre",
+        ),
+    ]
+
+    rec = optimize_lineup(PNA_2026, 1, roster, odds=odds)
+
+    # Starters on current_lineup
+    mahomes_card = next(p for p in rec.current_lineup if p.player_name == "Patrick Mahomes")
+    assert mahomes_card.opponent == "BAL"
+    assert mahomes_card.home_away == "HOME"
+    assert mahomes_card.matchup_display == "vs. BAL"
+    assert mahomes_card.game_time == "Sun 4:25 PM ET"
+
+    # Recommended starters
+    mahomes_starter = next(s for s in rec.recommended_starters if s.player_name == "Patrick Mahomes")
+    assert mahomes_starter.opponent == "BAL"
+    assert mahomes_starter.home_away == "HOME"
+    assert mahomes_starter.matchup_display == "vs. BAL"
+    assert mahomes_starter.game_time == "Sun 4:25 PM ET"
+
+    # Bench players
+    bench_sf = [p for p in rec.current_bench if p.team == "SF"]
+    if bench_sf:
+        p = bench_sf[0]
+        assert p.opponent == "LAR"
+        assert p.home_away == "HOME"
+        assert p.matchup_display == "vs. LAR"
+        assert p.game_time == "Sun 1:00 PM ET"

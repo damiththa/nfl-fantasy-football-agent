@@ -1,4 +1,5 @@
 from src.intelligence.schemas import (
+    CurrentRosterPlayer,
     LineupRecommendation,
     MatchupReport,
     StartSitDecision,
@@ -20,15 +21,51 @@ def test_start_sit_decision_schema():
         projected_points=24.2,
         reasoning="Elite matchup at home against vulnerable secondary.",
         game_script_note="Vegas total: 51.5 (highest of the week)",
+        opponent="BAL",
+        home_away="HOME",
+        matchup_display="vs. BAL",
+        game_time="Sun 4:25 PM ET",
     )
     assert decision.player_name == "Patrick Mahomes"
     assert decision.confidence == 0.92
     assert decision.action == "START"
+    assert decision.opponent == "BAL"
+    assert decision.home_away == "HOME"
+    assert decision.matchup_display == "vs. BAL"
+    assert decision.game_time == "Sun 4:25 PM ET"
 
     # Verify JSON serialization round-trip
     json_data = decision.model_dump_json()
     reconstructed = StartSitDecision.model_validate_json(json_data)
     assert reconstructed == decision
+
+
+def test_current_roster_player_schema():
+    player = CurrentRosterPlayer(
+        player_name="Amon-Ra St. Brown",
+        position="WR",
+        team="DET",
+        current_slot="WR",
+        projected_points=17.8,
+        action="KEEP_STARTING",
+        action_label="✅ KEEP STARTING",
+        action_detail="Confirmed alpha WR1 starter",
+        floor=12.5,
+        ceiling=26.0,
+        opponent="LAR",
+        home_away="AWAY",
+        matchup_display="@ LAR",
+        game_time="Sun 8:20 PM ET",
+    )
+    assert player.player_name == "Amon-Ra St. Brown"
+    assert player.opponent == "LAR"
+    assert player.home_away == "AWAY"
+    assert player.matchup_display == "@ LAR"
+    assert player.game_time == "Sun 8:20 PM ET"
+
+    json_data = player.model_dump_json()
+    reconstructed = CurrentRosterPlayer.model_validate_json(json_data)
+    assert reconstructed == player
 
 
 def test_lineup_recommendation_schema():

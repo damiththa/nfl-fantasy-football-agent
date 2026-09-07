@@ -109,6 +109,20 @@ def _build_email_html(
 </html>"""
 
 
+def _format_matchup_str(p: dict[str, Any]) -> str:
+    """Format matchup, home/away, and kickoff date/time string for emails."""
+    m_disp = p.get("matchup_display")
+    g_time = p.get("game_time")
+    ha = p.get("home_away")
+    if not m_disp and not g_time:
+        return ""
+    if m_disp == "BYE" or g_time == "Bye Week":
+        return "BYE WEEK"
+    ha_str = f" ({'Home' if ha == 'HOME' else 'Away'})" if ha else ""
+    parts = [f"{m_disp}{ha_str}" if m_disp else "", g_time or ""]
+    return " • ".join(part for part in parts if part)
+
+
 def _render_league_section(league_name: str, data: dict[str, Any], job_type: str) -> str:
     """Render a single league's results as an HTML section."""
 
@@ -178,12 +192,13 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             act = p.get("action", "")
             act_label = p.get("action_label", "START")
             act_detail = p.get("action_detail", "")
+            m_str = _format_matchup_str(p)
 
             badge_style = "color: #22c55e; background: rgba(34, 197, 94, 0.15);" if act == "KEEP_STARTING" else "color: #ef4444; background: rgba(239, 68, 68, 0.2); font-weight: bold;"
             lineup_rows += f"""
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #38bdf8; font-weight: bold; font-size: 13px;">{slot}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #f8fafc; font-weight: bold; font-size: 13px;">{name} <span style="color:#94a3b8; font-weight:normal; font-size:11px;">({team})</span></td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #f8fafc; font-weight: bold; font-size: 13px;">{name} <span style="color:#94a3b8; font-weight:normal; font-size:11px;">({team})</span>{f'<br><span style="color:#38bdf8; font-size:11px; font-weight:normal;">🗓️ {m_str}</span>' if m_str else ''}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #22c55e; font-weight: bold; font-size: 13px;">{proj}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;"><span style="{badge_style} padding: 2px 6px; border-radius: 4px;">{act_label}</span></td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 12px;">{act_detail}</td>
@@ -214,12 +229,13 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             act = p.get("action", "")
             act_label = p.get("action_label", "BENCH")
             act_detail = p.get("action_detail", "")
+            m_str = _format_matchup_str(p)
 
             badge_style = "color: #f59e0b; background: rgba(245, 158, 11, 0.2); font-weight: bold;" if act == "PROMOTE_TO_START" else "color: #94a3b8; background: rgba(148, 163, 184, 0.15);"
             bench_rows += f"""
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-weight: bold; font-size: 13px;">{pos}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">{name} <span style="color:#64748b; font-size:11px;">({team})</span></td>
+            <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">{name} <span style="color:#64748b; font-size:11px;">({team})</span>{f'<br><span style="color:#94a3b8; font-size:11px; font-weight:normal;">🗓️ {m_str}</span>' if m_str else ''}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{proj}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;"><span style="{badge_style} padding: 2px 6px; border-radius: 4px;">{act_label}</span></td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{act_detail}</td>

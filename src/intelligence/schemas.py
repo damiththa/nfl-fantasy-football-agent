@@ -35,6 +35,18 @@ class StartSitDecision(BaseModel):
         default="ALIGNED",
         description="Alignment with ESPN: ALIGNED, SWAP_TO_START, MOVE_TO_BENCH",
     )
+    opponent: Optional[str] = Field(
+        default=None, description="Opponent team abbreviation (e.g. 'ARI', 'KC')"
+    )
+    home_away: Optional[str] = Field(
+        default=None, description="Home or Away status: 'HOME' or 'AWAY'"
+    )
+    matchup_display: Optional[str] = Field(
+        default=None, description="Formatted matchup string (e.g. 'vs. ARI', '@ KC')"
+    )
+    game_time: Optional[str] = Field(
+        default=None, description="Formatted kickoff date and time in ET (e.g. 'Sun 1:00 PM ET')"
+    )
 
 
 class CurrentRosterPlayer(BaseModel):
@@ -58,6 +70,18 @@ class CurrentRosterPlayer(BaseModel):
     floor: float = Field(default=0.0, description="Conservative floor projection")
     ceiling: float = Field(default=0.0, description="Optimistic ceiling projection")
     game_script_note: Optional[str] = Field(default=None, description="Game script note")
+    opponent: Optional[str] = Field(
+        default=None, description="Opponent team abbreviation (e.g. 'ARI', 'KC')"
+    )
+    home_away: Optional[str] = Field(
+        default=None, description="Home or Away status: 'HOME' or 'AWAY'"
+    )
+    matchup_display: Optional[str] = Field(
+        default=None, description="Formatted matchup string (e.g. 'vs. ARI', '@ KC')"
+    )
+    game_time: Optional[str] = Field(
+        default=None, description="Formatted kickoff date and time in ET (e.g. 'Sun 1:00 PM ET')"
+    )
 
 
 class LineupRecommendation(BaseModel):

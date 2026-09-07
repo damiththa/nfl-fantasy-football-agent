@@ -255,6 +255,24 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       font-size: 12px;
       color: var(--text-muted);
     }
+    .matchup-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.12);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      line-height: 1.3;
+    }
+    .matchup-badge.bye {
+      background: rgba(148, 163, 184, 0.12);
+      color: #94a3b8;
+      border-color: rgba(148, 163, 184, 0.28);
+    }
     .player-proj {
       font-size: 14px;
       font-weight: 700;
@@ -626,6 +644,20 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>`;
       }
 
+      // Helper for player matchup & schedule badge
+      const getMatchupBadge = (p) => {
+        if (!p.matchup_display && !p.game_time) return '';
+        const isBye = p.matchup_display === 'BYE' || p.game_time === 'Bye Week';
+        if (isBye) {
+          return '<span class="matchup-badge bye">BYE WEEK</span>';
+        }
+        const ha = p.home_away ? ` (${p.home_away === 'HOME' ? 'Home' : 'Away'})` : '';
+        const m = p.matchup_display ? `${p.matchup_display}${ha}` : '';
+        const t = p.game_time || '';
+        const label = [m, t].filter(Boolean).join(' • ');
+        return `<span class="matchup-badge">🗓️ ${label}</span>`;
+      };
+
       // Section 3: Current Starting Lineup (On ESPN As-Is)
       if (data.current_lineup && data.current_lineup.length > 0) {
         html += `<h3 style="font-size: 16px; color: #f8fafc; margin-top: 18px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
@@ -645,6 +677,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <span class="slot-badge">${p.current_slot || p.position}</span>
                 <span class="player-name">${p.player_name}</span>
                 <span class="player-meta">${p.position} • ${p.team}</span>
+                ${getMatchupBadge(p)}
                 ${injuryBadge}
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -670,6 +703,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <span class="slot-badge">${p.position}</span>
                 <span class="player-name">${p.player_name}</span>
                 <span class="player-meta">${p.team}</span>
+                ${getMatchupBadge(p)}
               </div>
               <span class="player-proj">${p.projected_points ? p.projected_points.toFixed(1) : '0.0'} pts</span>
             </div>
@@ -697,6 +731,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <span class="slot-badge">${p.position}</span>
                 <span class="player-name">${p.player_name}</span>
                 <span class="player-meta">${p.team}</span>
+                ${getMatchupBadge(p)}
                 ${injuryBadge}
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">

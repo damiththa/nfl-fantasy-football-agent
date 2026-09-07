@@ -1,8 +1,12 @@
 from datetime import datetime
+from unittest.mock import MagicMock
+
+import httpx
 
 from src.data.vegas import (
     GameOdds,
     _calculate_implied_totals,
+    fetch_week_odds,
     get_player_game_odds,
     normalize_team_abbr,
 )
@@ -90,3 +94,47 @@ def test_get_player_game_odds():
     # Team not playing this week
     mia_odds = get_player_game_odds("MIA", odds_list)
     assert mia_odds is None
+
+
+def test_fetch_week_odds_with_empty_odds(monkeypatch):
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "events": [
+            {
+                "id": "401671800",
+                "date": "2026-09-13T17:00Z",
+                "status": {"type": {"state": "pre"}},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {"homeAway": "home", "team": {"abbreviation": "DET"}},
+                            {"homeAway": "away", "team": {"abbreviation": "LAR"}},
+                        ],
+                        "odds": [],  # Odds not yet published
+                    }
+                ],
+            }
+        ]
+    }
+    mock_resp.raise_for_status.return_value = None
+
+    class MockClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, *args, **kwargs):
+            return mock_resp
+
+    monkeypatch.setattr(httpx, "Client", MockClient)
+    odds = fetch_week_odds()
+    assert len(odds) == 1
+    assert odds[0].home_team == "DET"
+    assert odds[0].away_team == "LAR"
+    assert odds[0].spread == 0.0
+    assert odds[0].over_under == 0.0

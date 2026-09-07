@@ -11,7 +11,7 @@ from typing import Optional
 
 from src.config import LeagueConfig
 from src.data.injuries import PlayerInjuryInfo
-from src.data.vegas import GameOdds, get_player_game_odds
+from src.data.vegas import GameOdds, get_player_game_odds, normalize_team_abbr
 from src.data.weather import GameWeather
 from src.espn.matchup import MatchupData
 from src.espn.roster import ParsedRoster
@@ -92,13 +92,66 @@ def sort_starters_by_lineup_order(
     return ordered
 
 
+def get_player_matchup_info(
+    team: str,
+    odds: Optional[list[GameOdds]] = None,
+    bye_week: int = 0,
+    current_week: int = 0,
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    """Determine opponent, home_away, matchup_display, and game_time for a player.
+
+    Returns:
+        (opponent, home_away, matchup_display, game_time)
+    """
+    if not team or team.upper() in ("UNK", "FA", "FREE AGENT", "NONE"):
+        return None, None, None, None
+
+    if odds:
+        game = get_player_game_odds(team, odds)
+        if game:
+            norm_team = normalize_team_abbr(team)
+            norm_home = normalize_team_abbr(game.home_team)
+            is_home = norm_team == norm_home
+            home_away = "HOME" if is_home else "AWAY"
+            opponent = game.away_team if is_home else game.home_team
+            prefix = "vs." if is_home else "@"
+            matchup_display = f"{prefix} {opponent}"
+
+            # Format game_time in Eastern Time
+            eastern = zoneinfo.ZoneInfo("America/New_York")
+            if game.game_time.tzinfo is None:
+                game_time_dt = game.game_time.replace(tzinfo=eastern)
+            else:
+                game_time_dt = game.game_time.astimezone(eastern)
+
+            time_str = game_time_dt.strftime("%I:%M %p").lstrip("0")
+            day_str = game_time_dt.strftime("%a")
+            game_time_display = f"{day_str} {time_str} ET"
+
+            return opponent, home_away, matchup_display, game_time_display
+
+        # If odds list has full week schedule (>= 10 games) and team is not in it, it's on Bye
+        if len(odds) >= 10:
+            return None, None, "BYE", "Bye Week"
+
+    if bye_week and current_week and bye_week == current_week:
+        return None, None, "BYE", "Bye Week"
+
+    return None, None, None, None
+
+
 def enrich_lineup_recommendation_with_espn_status(
-    rec: LineupRecommendation, roster: ParsedRoster, league: LeagueConfig
+    rec: LineupRecommendation,
+    roster: ParsedRoster,
+    league: LeagueConfig,
+    odds: Optional[list[GameOdds]] = None,
+    current_week: int = 0,
 ) -> LineupRecommendation:
     """Populate current ESPN slots, detect vacant starting slots, flag suboptimal starters,
-    and generate actionable swap instructions.
+    generate actionable swap instructions, and populate game date, kickoff time, and home/away status.
     """
     player_current_slots = {p.name.lower(): p.slot for p in roster.players}
+    roster_map = {p.name.lower(): p for p in roster.players}
 
     # Update recommended starters
     for s in rec.recommended_starters:
@@ -107,6 +160,13 @@ def enrich_lineup_recommendation_with_espn_status(
             s.alignment = "SWAP_TO_START"
         else:
             s.alignment = "ALIGNED"
+        p_obj = roster_map.get(s.player_name.lower())
+        bye = getattr(p_obj, "bye_week", 0) if p_obj else 0
+        opp, ha, m_disp, g_time = get_player_matchup_info(s.team, odds, bye, current_week)
+        s.opponent = opp
+        s.home_away = ha
+        s.matchup_display = m_disp
+        s.game_time = g_time
 
     # Update bench players
     for b in rec.bench_players:
@@ -115,6 +175,13 @@ def enrich_lineup_recommendation_with_espn_status(
             b.alignment = "MOVE_TO_BENCH"
         else:
             b.alignment = "ALIGNED"
+        p_obj = roster_map.get(b.player_name.lower())
+        bye = getattr(p_obj, "bye_week", 0) if p_obj else 0
+        opp, ha, m_disp, g_time = get_player_matchup_info(b.team, odds, bye, current_week)
+        b.opponent = opp
+        b.home_away = ha
+        b.matchup_display = m_disp
+        b.game_time = g_time
 
     # Detect vacant starting slots on ESPN
     current_starter_slots: dict[str, int] = {}
@@ -179,6 +246,9 @@ def enrich_lineup_recommendation_with_espn_status(
     current_lineup_items: list[CurrentRosterPlayer] = []
     for p in roster.starters:
         p_lower = p.name.lower()
+        opp, ha, m_disp, g_time = get_player_matchup_info(
+            p.team, odds, getattr(p, "bye_week", 0), current_week
+        )
         if p_lower in rec_starters_map:
             s_rec = rec_starters_map[p_lower]
             current_lineup_items.append(
@@ -195,6 +265,10 @@ def enrich_lineup_recommendation_with_espn_status(
                     floor=s_rec.floor,
                     ceiling=s_rec.ceiling,
                     game_script_note=s_rec.game_script_note,
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
                 )
             )
         else:
@@ -221,6 +295,10 @@ def enrich_lineup_recommendation_with_espn_status(
                     floor=round(p.projected_points * 0.7, 1),
                     ceiling=round(p.projected_points * 1.3, 1),
                     game_script_note=None,
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
                 )
             )
 
@@ -230,6 +308,9 @@ def enrich_lineup_recommendation_with_espn_status(
     current_bench_items: list[CurrentRosterPlayer] = []
     for p in roster.bench:
         p_lower = p.name.lower()
+        opp, ha, m_disp, g_time = get_player_matchup_info(
+            p.team, odds, getattr(p, "bye_week", 0), current_week
+        )
         if p_lower in rec_starters_map:
             s_rec = rec_starters_map[p_lower]
             current_bench_items.append(
@@ -246,6 +327,10 @@ def enrich_lineup_recommendation_with_espn_status(
                     floor=s_rec.floor,
                     ceiling=s_rec.ceiling,
                     game_script_note=s_rec.game_script_note,
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
                 )
             )
         else:
@@ -265,6 +350,10 @@ def enrich_lineup_recommendation_with_espn_status(
                     floor=round(p.projected_points * 0.7, 1),
                     ceiling=round(p.projected_points * 1.3, 1),
                     game_script_note=None,
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
                 )
             )
 
@@ -512,7 +601,9 @@ def optimize_lineup(
                     cleaned_starters.append(s)
             rec.recommended_starters = sort_starters_by_lineup_order(cleaned_starters, league)
             rec.bench_players = sort_bench_by_position(rec.bench_players)
-            return enrich_lineup_recommendation_with_espn_status(rec, roster, league)
+            return enrich_lineup_recommendation_with_espn_status(
+                rec, roster, league, odds=odds, current_week=week
+            )
         except Exception as e:
             logger.warning(
                 "Gemini lineup optimization call failed (%s). Falling back to deterministic optimization.",
@@ -604,5 +695,7 @@ def optimize_lineup(
             f"Filled {slots_filled['FLEX']}/{slots_needed['FLEX']} flex slots with highest projection upside."
         ],
     )
-    return enrich_lineup_recommendation_with_espn_status(rec, roster, league)
+    return enrich_lineup_recommendation_with_espn_status(
+        rec, roster, league, odds=odds, current_week=week
+    )
 

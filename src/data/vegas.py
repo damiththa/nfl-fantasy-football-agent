@@ -107,14 +107,14 @@ def fetch_week_odds() -> list[GameOdds]:
                         else:
                             away_team = abbr
 
-                    # Parse odds
+                    # Parse odds (default to 0.0 if not yet published)
                     odds_data = comp.get("odds", [])
-                    if not odds_data:
-                        continue
-
-                    primary_odds = odds_data[0]
-                    spread = float(primary_odds.get("spread", 0.0))
-                    over_under = float(primary_odds.get("overUnder", 0.0))
+                    spread = 0.0
+                    over_under = 0.0
+                    if odds_data:
+                        primary_odds = odds_data[0]
+                        spread = float(primary_odds.get("spread", 0.0))
+                        over_under = float(primary_odds.get("overUnder", 0.0))
 
                     # Calculate implied totals
                     home_total, away_total = _calculate_implied_totals(spread, over_under)
