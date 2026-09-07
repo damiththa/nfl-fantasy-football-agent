@@ -293,7 +293,9 @@ def optimize_lineup(
     flex_eligible = ("RB", "WR", "TE")
 
     for p in sorted_players:
-        pos = p.position.upper()
+        pos = p.position.upper().replace("/", "")
+        if pos == "DEF":
+            pos = "DST"
         is_injured = p.injury_status.upper() in ("OUT", "IR", "DOUBTFUL")
 
         action = "BENCH"
