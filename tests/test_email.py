@@ -144,6 +144,55 @@ class TestEmailHtmlBuilder:
         assert "James Cook" in html
         assert "100% Optimal" not in html
 
+    def test_renders_waiver_stand_pat(self):
+        results = {
+            "PNA": {
+                "coach_verdict": "STAND_PAT",
+                "stand_pat_reasoning": "Starting roster is set. Preserving top rolling waiver priority.",
+                "targets": [],
+            }
+        }
+        html = _build_email_html("Test", "weekly_analysis", results, "now")
+        assert "Stand Pat (No Moves Recommended)" in html
+        assert "Starting roster is set" in html
+        assert "Preserving rolling waiver priority" in html
+
+    def test_renders_waiver_targets_with_coaching_reasons(self):
+        results = {
+            "PNA": {
+                "coach_verdict": "EXECUTE_CLAIMS",
+                "overall_waiver_strategy": "Aggressively target Jordan Mason due to CMC injury.",
+                "targets": [
+                    {
+                        "player_name": "Jordan Mason",
+                        "position": "RB",
+                        "recommended_drop": "Reserve Kicker",
+                        "priority": "MUST_ADD",
+                        "reasoning": "Immediate RB1 workload with CMC sidelined.",
+                    }
+                ],
+            }
+        }
+        html = _build_email_html("Test", "weekly_analysis", results, "now")
+        assert "Waiver Wire Moves" in html
+        assert "Jordan Mason" in html
+        assert "Reserve Kicker" in html
+        assert "MUST_ADD" in html
+        assert "Aggressively target Jordan Mason" in html
+
+    def test_renders_trade_hold_roster(self):
+        results = {
+            "PNA": {
+                "coach_verdict": "HOLD_ROSTER",
+                "hold_roster_reasoning": "Roster depth is pristine. No lateral moves that surrender depth.",
+                "proposals": [],
+            }
+        }
+        html = _build_email_html("Test", "weekly_analysis", results, "now")
+        assert "Hold Roster (Stand Pat on Trades)" in html
+        assert "Roster depth is pristine" in html
+
+
 
 
 class TestSendDigestEmail:

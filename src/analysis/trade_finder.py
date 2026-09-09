@@ -115,6 +115,18 @@ def propose_league_trades(
             report = client.generate_structured(prompt=prompt, response_schema=LeagueTradeReport)
             report.league_id = league.league_id
             report.week = week
+            if report.coach_verdict == "HOLD_ROSTER" or not report.proposals:
+                report.coach_verdict = "HOLD_ROSTER"
+                report.is_trade_recommended = False
+                report.proposals = []
+                if not report.hold_roster_reasoning:
+                    report.hold_roster_reasoning = (
+                        "Your starting lineup is strong and your bench provides crucial positional depth. "
+                        "No opposing teams currently offer a trade package that improves your starting lineup "
+                        "without compromising essential depth. Hold your roster."
+                    )
+            else:
+                report.is_trade_recommended = True
             eastern = zoneinfo.ZoneInfo("America/New_York")
             report.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
             return report
@@ -154,13 +166,16 @@ def propose_league_trades(
                 if p.position == target_pos and (p.injury_status or "").upper() not in ("OUT", "IR")
             ]
 
-            # If opponent has a weak starter at bench_asset's position and bench surplus at target_pos
+            # Only propose if opponent has a weak starter at bench_asset's pos AND surplus at target_pos
             if opp_starters_at_bench_pos and opp_bench_at_target_pos:
                 weakest_opp_starter = min(opp_starters_at_bench_pos, key=lambda p: p.projected_points)
                 best_opp_bench = max(opp_bench_at_target_pos, key=lambda p: p.projected_points)
 
-                if (bench_asset.projected_points > weakest_opp_starter.projected_points and
-                        best_opp_bench.projected_points > upgradable_starters[0].projected_points):
+                # Require a meaningful upgrade threshold (>= 1.5 pts) for starting lineup
+                points_upgrade = best_opp_bench.projected_points - upgradable_starters[0].projected_points
+                opp_upgrade = bench_asset.projected_points - weakest_opp_starter.projected_points
+
+                if points_upgrade >= 1.5 and opp_upgrade >= 1.0:
                     net_gain = round(
                         calculate_vorp(best_opp_bench.projected_points, target_pos, league.num_teams)
                         - calculate_vorp(upgradable_starters[0].projected_points, target_pos, league.num_teams),
@@ -176,23 +191,47 @@ def propose_league_trades(
                         target_manager=manager_name,
                         giving_players=[bench_asset.name],
                         receiving_players=[best_opp_bench.name],
-                        net_vorp_gain=max(net_gain, 1.2),
+                        net_vorp_gain=max(net_gain, 1.5),
                         your_lineup_upgrade=f"Upgrades our starting {target_pos} from {upgradable_starters[0].name} ({upgradable_starters[0].projected_points:.1f} pts) to {best_opp_bench.name} ({best_opp_bench.projected_points:.1f} pts).",
-                        why_target_accepts=f"{opp_team_name} is weak at {bench_asset.position} with {weakest_opp_starter.name} ({weakest_opp_starter.projected_points:.1f} pts); {bench_asset.name} ({bench_asset.projected_points:.1f} pts) steps right in as their starter.",
+                        why_target_accepts=f"{opp_team_name} is thin at {bench_asset.position} starting {weakest_opp_starter.name} ({weakest_opp_starter.projected_points:.1f} pts); {bench_asset.name} ({bench_asset.projected_points:.1f} pts) steps right in as an immediate starter.",
                         negotiation_pitch=f"Hey {manager_name}, noticed you're a bit thin at {bench_asset.position} starting {weakest_opp_starter.name}. I've got extra {bench_asset.position} depth and could use a {target_pos}. Would you do {bench_asset.name} for {best_opp_bench.name}?",
                     )
                     proposals.append(proposal)
-                    if len(proposals) >= 3:
+                    if len(proposals) >= 2:
                         break
 
     eastern = zoneinfo.ZoneInfo("America/New_York")
+    gen_time = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
+
+    if not proposals:
+        return LeagueTradeReport(
+            league_id=league.league_id,
+            week=week,
+            is_trade_recommended=False,
+            coach_verdict="HOLD_ROSTER",
+            hold_roster_reasoning=(
+                "🛡️ Roster balance is optimal. Your current starting lineup is strong and no opposing managers "
+                "possess the necessary surplus to offer a deal that genuinely improves your weekly scoring without "
+                "compromising your bench depth. Stand pat and do not force trades for the sake of deal-making."
+            ),
+            proposals=[],
+            market_overview=(
+                "🛡️ COACH'S VERDICT: HOLD ROSTER. League-wide market scan found no high-leverage trade opportunities "
+                "that warrant parting with your bench depth. Hold your current assets."
+            ),
+            generated_at=gen_time,
+        )
+
     return LeagueTradeReport(
         league_id=league.league_id,
         week=week,
+        is_trade_recommended=True,
+        coach_verdict="PROPOSE_TRADES",
+        hold_roster_reasoning=None,
         proposals=proposals,
         market_overview=(
-            f"Roster depth analysis identified top surplus at {[p.name for p in viable_bench[:2]]}. "
-            f"Primary upgrade target is starting {upgradable_starters[0].position if upgradable_starters else 'FLEX'}."
+            f"High-conviction market scan identified {len(proposals)} targeted upgrade opportunity. "
+            f"Leveraging surplus depth at {viable_bench[0].position} to upgrade starting {upgradable_starters[0].position}."
         ),
-        generated_at=datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
+        generated_at=gen_time,
     )

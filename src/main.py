@@ -416,6 +416,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=991059191', 'PNA 2026 Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
         </button>
+        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/waivers?league_id=991059191', 'PNA 2026 Waiver Wire Intel')">
+          🔄 Waiver Wire Intel
+        </button>
         <button class="btn btn-secondary" onclick="fetchEndpoint('/query/propose-trades?league_id=991059191', 'PNA 2026 Winning Trade Proposals')">
           💡 Propose Winning Trades
         </button>
@@ -429,6 +432,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </p>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=735288', 'Chips Ahoy Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
+        </button>
+        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/waivers?league_id=735288', 'Chips Ahoy Waiver Wire Intel')">
+          🔄 Waiver Wire Intel
         </button>
         <button class="btn btn-secondary" onclick="fetchEndpoint('/query/propose-trades?league_id=735288', 'Chips Ahoy Winning Trade Proposals')">
           💡 Propose Winning Trades
@@ -851,6 +857,46 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>`;
       }
 
+      // Section 5.5: Waiver Wire Analysis (WaiverReport)
+      if (data.overall_waiver_strategy !== undefined || data.targets !== undefined) {
+        if (data.coach_verdict === 'STAND_PAT' || (!data.targets || data.targets.length === 0)) {
+          html += `<div style="background: rgba(34, 197, 94, 0.1); border: 2px solid #22c55e; border-radius: 10px; padding: 18px; margin-top: 20px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span style="font-size: 26px;">🛡️</span>
+              <div>
+                <h3 style="color: #22c55e; margin: 0; font-size: 17px; text-transform: uppercase; font-weight: 800;">
+                  COACH'S VERDICT: STAND PAT (NO WAIVER MOVES RECOMMENDED)
+                </h3>
+                <span style="background: #22c55e; color: #0f172a; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">ROSTER STATUS: HEALTHY & OPTIMAL</span>
+              </div>
+            </div>
+            <p style="font-size: 14px; color: #e2e8f0; line-height: 1.5; margin: 10px 0 6px 0;">
+              ${data.stand_pat_reasoning || data.overall_waiver_strategy || 'Your active starters are locked in and healthy, and your bench provides crucial high-upside depth. None of the available waiver options represent a meaningful upgrade over your current assets.'}
+            </p>
+            <div style="background: #090d16; border: 1px solid rgba(34, 197, 94, 0.3); padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #86efac; margin-top: 10px;">
+              💡 <strong>Coach's Golden Rule:</strong> Churning the bottom of your roster for marginal sidegrades burns rolling waiver priority and forfeits valuable backup stashes. Hold your bench depth!
+            </div>
+          </div>`;
+        } else {
+          html += `<h3 style="color: #eab308; margin-top: 20px; margin-bottom: 12px; font-size: 16px;">🔄 RECOMMENDED WAIVER WIRE TARGETS</h3>`;
+          if (data.overall_waiver_strategy) {
+            html += `<div style="background: var(--card-subtle); padding: 12px 14px; border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border);"><p style="font-size: 13px; margin: 0; color: #cbd5e1;">📋 <strong>Waiver Strategy:</strong> ${data.overall_waiver_strategy}</p></div>`;
+          }
+          data.targets.forEach(t => {
+            const prioColor = t.priority === 'MUST_ADD' ? '#ef4444' : (t.priority === 'HIGH' ? '#f59e0b' : '#38bdf8');
+            html += `<div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                <strong style="font-size: 15px; color: #f8fafc;">⬆️ ADD ${t.player_name} <span style="font-size: 12px; color: var(--text-muted);">(${t.position} - ${t.team})</span></strong>
+                <span style="background: ${prioColor}; color: #0f172a; font-weight: bold; font-size: 11px; padding: 2px 8px; border-radius: 4px;">${t.priority}</span>
+              </div>
+              ${t.recommended_drop ? `<p style="font-size: 13px; color: #f87171; margin-bottom: 6px;"><strong>Suggested Drop:</strong> ${t.recommended_drop}</p>` : ''}
+              <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 4px;"><strong>Why Claim:</strong> ${t.reasoning}</p>
+              ${t.upside_summary ? `<p style="font-size: 12px; color: #94a3b8; margin: 0;"><strong>Upside:</strong> ${t.upside_summary}</p>` : ''}
+            </div>`;
+          });
+        }
+      }
+
       // Section 6: Proactive Trade Proposals with 1-tap Copy Pitch
       if (data.proposals && data.proposals.length > 0) {
         if (data.market_overview) {
@@ -883,6 +929,24 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             </div>
           </div>`;
         });
+      } else if (data.coach_verdict === 'HOLD_ROSTER' || (data.market_overview && (!data.proposals || data.proposals.length === 0))) {
+        html += `<div style="background: rgba(56, 189, 248, 0.1); border: 2px solid #38bdf8; border-radius: 10px; padding: 18px; margin-top: 20px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span style="font-size: 26px;">🛡️</span>
+            <div>
+              <h3 style="color: #38bdf8; margin: 0; font-size: 17px; text-transform: uppercase; font-weight: 800;">
+                COACH'S VERDICT: HOLD ROSTER (NO TRADES RECOMMENDED)
+              </h3>
+              <span style="background: #38bdf8; color: #0f172a; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">STAND PAT ON TRADE MARKET</span>
+            </div>
+          </div>
+          <p style="font-size: 14px; color: #e2e8f0; line-height: 1.5; margin: 10px 0 6px 0;">
+            ${data.hold_roster_reasoning || data.market_overview || 'Your starting lineup is strong and your bench provides crucial positional depth. No opposing teams currently offer a trade package that improves your starting lineup without compromising essential depth. Hold your assets.'}
+          </p>
+          <div style="background: #090d16; border: 1px solid rgba(56, 189, 248, 0.3); padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #7dd3fc; margin-top: 10px;">
+            💡 <strong>Coach's Golden Rule:</strong> Never force a trade for the sake of deal-making. Only trade when the incoming asset legitimately upgrades your starting lineup points without creating a dangerous positional hole.
+          </div>
+        </div>`;
       }
 
       // Section 7: Trade Evaluator Verdict
@@ -1297,4 +1361,60 @@ def query_propose_trades(league_id: int = Query(..., description="ESPN League ID
     except Exception as e:
         logger.error(f"Error proposing trades for league {league_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/query/waivers")
+def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
+    """On-demand waiver wire analysis with veteran head-coach discipline."""
+    league_config = ALL_LEAGUES.get(league_id)
+    if not league_config:
+        raise HTTPException(
+            status_code=404, detail=f"League {league_id} not found in configuration."
+        )
+
+    try:
+        espn = LeagueClient().get_league(league_config)
+        current_week = get_current_week(espn)
+        my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
+        if not my_team:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Team {league_config.team_id} not found in league {league_id}",
+            )
+
+        parsed_roster = parse_roster(my_team, league_config)
+        free_agents = [
+            {
+                "name": p.name,
+                "position": p.position,
+                "team": p.proTeam,
+                "projected_points": getattr(p, "projected_points", 0.0),
+                "percent_owned": getattr(p, "percent_owned", 0.0),
+            }
+            for p in espn.free_agents(size=30)
+        ]
+        trending = fetch_trending_adds(lookback_hours=24, limit=20)
+        roster_names = [p.name for p in parsed_roster.players]
+        injuries = get_injury_report(roster_names)
+
+        client = None
+        try:
+            client = GeminiIntelligenceClient()
+        except Exception:
+            pass
+
+        report = evaluate_waivers(
+            league=league_config,
+            week=current_week,
+            roster=parsed_roster,
+            free_agents=free_agents,
+            trending_adds=trending,
+            injuries=injuries,
+            client=client,
+        )
+        return report.model_dump()
+    except Exception as e:
+        logger.error(f"Error querying waivers for league {league_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 

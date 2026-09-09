@@ -398,40 +398,97 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
         <ul style="margin: 0; padding-left: 18px;">{dilemma_items}</ul>
       </div>"""
 
-    # Waiver wire picks
-    if data.get("priority_claims"):
-        claims_html = ""
-        for claim in data["priority_claims"]:
-            add_name = claim.get("add_player", "?")
-            drop_name = claim.get("drop_player", "?")
-            reason = claim.get("reasoning", "")
-            claims_html += f"""
-        <div style="background: #0f172a; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px;">
-          <p style="margin: 0; font-size: 14px;">
-            <span style="color: #22c55e; font-weight: bold;">⬆️ ADD {add_name}</span>
+    # Waiver wire picks (or Stand Pat verdict)
+    is_waiver_data = (
+        data.get("coach_verdict") in ("STAND_PAT", "EXECUTE_CLAIMS")
+        or "targets" in data
+        or "priority_claims" in data
+        or "overall_waiver_strategy" in data
+    )
+    if is_waiver_data:
+        is_stand_pat = (
+            data.get("coach_verdict") == "STAND_PAT"
+            or ("targets" in data and not data.get("targets"))
+            or ("overall_waiver_strategy" in data and not data.get("targets") and not data.get("priority_claims"))
+        )
+        if is_stand_pat:
+            reason = (
+                data.get("stand_pat_reasoning")
+                or data.get("overall_waiver_strategy")
+                or "Your active starters are locked in and your bench provides crucial high-upside depth. None of the available waiver options represent a meaningful upgrade."
+            )
+            content_html += f"""
+      <div style="background: rgba(34, 197, 94, 0.12); border-left: 4px solid #22c55e; border-radius: 0 6px 6px 0; padding: 12px 14px; margin: 14px 0;">
+        <h4 style="color: #22c55e; margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;">🛡️ Coach's Verdict: Stand Pat (No Moves Recommended)</h4>
+        <p style="color: #e2e8f0; font-size: 12px; margin: 0 0 6px 0; line-height: 1.4;">{reason}</p>
+        <p style="color: #86efac; font-size: 11px; margin: 0;">💡 Preserving rolling waiver priority for high-impact injury breakouts later in the season.</p>
+      </div>"""
+        else:
+            claims_html = ""
+            if data.get("overall_waiver_strategy"):
+                claims_html += f"""<p style="color: #cbd5e1; font-size: 12px; margin: 0 0 8px 0;"><em>{data['overall_waiver_strategy']}</em></p>"""
+
+            # Handle either targets or priority_claims
+            claims_list = data.get("targets") or data.get("priority_claims") or []
+            for claim in claims_list:
+                add_name = claim.get("player_name") or claim.get("add_player", "?")
+                drop_name = claim.get("recommended_drop") or claim.get("drop_player", "None")
+                reason = claim.get("reasoning", "")
+                prio = claim.get("priority", "CLAIM")
+                pos = claim.get("position", "")
+                pos_str = f" ({pos})" if pos else ""
+                claims_html += f"""
+        <div style="background: #0f172a; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #eab308;">
+          <p style="margin: 0; font-size: 13px;">
+            <span style="color: #22c55e; font-weight: bold;">⬆️ ADD {add_name}{pos_str}</span>
             <span style="color: #94a3b8;"> → </span>
             <span style="color: #ef4444; font-weight: bold;">⬇️ DROP {drop_name}</span>
+            <span style="color: #eab308; font-size: 11px; margin-left: 6px; font-weight: bold;">[{prio}]</span>
           </p>
           <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 12px;">{reason}</p>
         </div>"""
-        content_html += f"""
+            content_html += f"""
       <h3 style="color: #eab308; font-size: 15px; margin: 14px 0 8px 0;">🔄 Waiver Wire Moves</h3>
       {claims_html}"""
 
-    # Proactive trade proposals
-    if data.get("proposals"):
-        proposals_html = ""
-        for tp in data["proposals"]:
-            tgt_team = tp.get("target_team_name", "Opponent")
-            tgt_mgr = tp.get("target_manager", "")
-            mgr_str = f" ({tgt_mgr})" if tgt_mgr else ""
-            giving = ", ".join(tp.get("giving_players", []))
-            recving = ", ".join(tp.get("receiving_players", []))
-            vorp_gain = tp.get("net_vorp_gain", 0.0)
-            upgrade = tp.get("your_lineup_upgrade", "")
-            why_opp = tp.get("why_target_accepts", "")
-            pitch = tp.get("negotiation_pitch", "")
-            proposals_html += f"""
+    # Proactive trade proposals (or Hold Roster verdict)
+    is_trade_finder_data = (
+        data.get("coach_verdict") in ("HOLD_ROSTER", "PROPOSE_TRADES")
+        or "proposals" in data
+        or "market_overview" in data
+    )
+    if is_trade_finder_data:
+        is_hold_roster = (
+            data.get("coach_verdict") == "HOLD_ROSTER"
+            or ("market_overview" in data and not data.get("proposals"))
+        )
+        if is_hold_roster:
+            reason = (
+                data.get("hold_roster_reasoning")
+                or data.get("market_overview")
+                or "Your starting lineup is strong and your bench provides crucial positional depth. No opposing teams currently offer a trade package that improves your starting lineup without compromising essential depth."
+            )
+            content_html += f"""
+      <div style="background: rgba(56, 189, 248, 0.12); border-left: 4px solid #38bdf8; border-radius: 0 6px 6px 0; padding: 12px 14px; margin: 14px 0;">
+        <h4 style="color: #38bdf8; margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;">🛡️ Coach's Verdict: Hold Roster (Stand Pat on Trades)</h4>
+        <p style="color: #e2e8f0; font-size: 12px; margin: 0 0 6px 0; line-height: 1.4;">{reason}</p>
+        <p style="color: #7dd3fc; font-size: 11px; margin: 0;">💡 Your starting lineup is strong and depth is preserved. No lateral moves.</p>
+      </div>"""
+        elif data.get("proposals"):
+            proposals_html = ""
+            if data.get("market_overview"):
+                proposals_html += f"""<p style="color: #cbd5e1; font-size: 12px; margin: 0 0 10px 0;"><em>{data['market_overview']}</em></p>"""
+            for tp in data["proposals"]:
+                tgt_team = tp.get("target_team_name", "Opponent")
+                tgt_mgr = tp.get("target_manager", "")
+                mgr_str = f" ({tgt_mgr})" if tgt_mgr else ""
+                giving = ", ".join(tp.get("giving_players", []))
+                recving = ", ".join(tp.get("receiving_players", []))
+                vorp_gain = tp.get("net_vorp_gain", 0.0)
+                upgrade = tp.get("your_lineup_upgrade", "")
+                why_opp = tp.get("why_target_accepts", "")
+                pitch = tp.get("negotiation_pitch", "")
+                proposals_html += f"""
         <div style="background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 0 8px 8px 0; padding: 12px 14px; margin-bottom: 10px;">
           <div style="margin-bottom: 6px;">
             <strong style="color: #f8fafc; font-size: 14px;">🤝 Trade with {tgt_team}{mgr_str}</strong>
@@ -448,7 +505,7 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             💬 <strong>Pitch:</strong> "{pitch}"
           </div>
         </div>"""
-        content_html += f"""
+            content_html += f"""
       <h3 style="color: #38bdf8; font-size: 14px; margin: 16px 0 8px 0; text-transform: uppercase;">💡 Proactive Win-Win Trade Proposals</h3>
       {proposals_html}"""
 

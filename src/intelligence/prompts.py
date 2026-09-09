@@ -140,13 +140,23 @@ SLEEPER LEAGUE-WIDE 24H TRENDING ADDS:
 CURRENT INJURY ENVIRONMENT:
 {injuries}
 
-TASK:
-Identify priority waiver claims. Suggest specific players on your roster who should be dropped (e.g. low snap counts, loss of role, buried on depth chart).
+VETERAN HEAD COACH MANDATE — CONDITIONAL DISCIPLINE (DO NOT CHURN FOR THE SAKE OF CHURN):
+You are a veteran, championship-winning fantasy head coach fiercely protecting this team.
+- NEVER suggest waiver pickups just for the sake of suggesting moves. Roster churn burns waiver priority and drops valuable high-upside bench stashes (like backup RBs with contingent league-winning upside) for mediocre, low-ceiling replacement-level players.
+- ONLY recommend an add if:
+  1. It fills an active starting hole (due to OUT/IR/SUS or Bye Week) that our bench cannot cover.
+  2. Or the available free agent is a GENUINE, obvious upgrade in talent, target volume, or backfield touches over a player on our bench who is truly a droppable liability (e.g. reserve kicker/defense, buried #4 RB, or zero-snap player).
+  3. Or there is an undeniable high-priority breakout / injury replacement.
+- IF our roster is healthy, structurally balanced, and the available free agents are merely low-ceiling sidegrades or inferior to our bench stashes:
+  - Set `coach_verdict: "STAND_PAT"`
+  - Set `is_move_recommended: false`
+  - Set `targets: []`
+  - Set `roster_drop_candidates: []`
+  - Provide a thorough, authoritative `stand_pat_reasoning` and `overall_waiver_strategy` praising the roster's health and depth, and explaining why preserving waiver priority/capital and keeping our bench stashes is the winning championship play.
 
-CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
-For each waiver target (`reasoning` and `upside_summary`) and drop candidate:
-- Build the expert case for why this player must be claimed now (usage trends, high-value touches, injury fill-in role).
-- For drop candidates: make the case why holding them is a roster-clogging trap.
+CRITICAL WRITE-UP MANDATE:
+- If recommending claims (`coach_verdict: "EXECUTE_CLAIMS"`), make the sharp, analytical case for why the add is essential and why the dropped player is dead weight.
+- If recommending `STAND_PAT`, clearly explain why holding our bench depth is vastly superior to any waiver player available.
 """
 
 
@@ -256,7 +266,7 @@ def format_league_trade_prompt(
     other_teams: list[dict[str, Any]],
 ) -> str:
     """Format prompt for scanning the entire league to find proactive, winning trade proposals."""
-    return f"""Analyze the entire league rosters in '{league.name}' (Week {week}) to discover win-win trades that WE should initiate.
+    return f"""Analyze the entire league rosters in '{league.name}' (Week {week}) as a veteran fantasy strategist looking after our team.
 
 LEAGUE FORMAT:
 - Teams: {league.num_teams}
@@ -269,15 +279,19 @@ OUR ROSTER (Mad Dawg):
 OTHER TEAMS IN THE LEAGUE (Rosters and key starters/bench):
 {other_teams}
 
-GOAL:
-Find 2-3 realistic, high-leverage trade proposals that we should propose to other managers right now.
-REQUIREMENTS:
-1. MUST BENEFIT US: The trade MUST upgrade our starting lineup by trading away bench depth or a positional surplus (e.g., trading an extra RB to acquire an elite WR, or a 2-for-1 consolidation trade).
-2. MUST MAKE SENSE FOR THE OTHER TEAM: The other manager must have an obvious hole or injury at the position we are offering, and surplus at the position we are requesting.
-3. INCLUDE NEGOTIATION PITCH: Provide an empathetic, persuasive, ready-to-copy chat message explaining why it helps their team win this week and ROS.
-4. Calculate net weekly VORP gain for our team.
-
-CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
-For each proposal (`your_lineup_upgrade` and `why_target_accepts`), write as a veteran fantasy strategist making the case for why this deal shifts the championship odds in our favor.
+VETERAN HEAD COACH MANDATE — CONDITIONAL DISCIPLINE (ONLY TRADE IF IT CLEARLY UPGRADES THE TEAM):
+You are a seasoned, elite fantasy football coach. You do NOT make trades just to be active.
+- A good trade MUST create a tangible upgrade in our weekly starting lineup points without sacrificing critical positional depth.
+- Do NOT propose marginal sidegrades, lateral moves, or trades that give away valuable depth for bench stashes.
+- EVALUATE THE MARKET HONESTLY:
+  - If you find 1 to 3 realistic, high-leverage win-win trades where an opponent has an obvious hole we can fill and a surplus we can acquire to upgrade our starters:
+    - Set `coach_verdict: "PROPOSE_TRADES"`
+    - Set `is_trade_recommended: true`
+    - Include the proposals with net VORP gains, lineup upgrades, why the opponent accepts, and a persuasive negotiation pitch.
+  - IF our roster is in great shape, or other teams lack pieces that genuinely upgrade our starting lineup, or trade values don't make sense:
+    - Set `coach_verdict: "HOLD_ROSTER"`
+    - Set `is_trade_recommended: false`
+    - Set `proposals: []`
+    - In `hold_roster_reasoning` and `market_overview`, provide an authoritative coaching evaluation explaining that our roster is well-constructed, no opposing teams present favorable trade packages, and holding our assets is the disciplined, winning move.
 """
 

@@ -180,7 +180,22 @@ class WaiverReport(BaseModel):
 
     league_id: int = Field(description="ESPN League ID")
     week: int = Field(description="Current week")
-    targets: list[WaiverRecommendation] = Field(description="Ranked waiver targets")
+    is_move_recommended: bool = Field(
+        default=True,
+        description="Whether any waiver moves are actively recommended this week",
+    )
+    coach_verdict: Literal["STAND_PAT", "EXECUTE_CLAIMS"] = Field(
+        default="EXECUTE_CLAIMS",
+        description="Head coach verdict: STAND_PAT if no moves are warranted, or EXECUTE_CLAIMS",
+    )
+    stand_pat_reasoning: Optional[str] = Field(
+        default=None,
+        description="Detailed coaching reasoning if standing pat is the recommended move",
+    )
+    targets: list[WaiverRecommendation] = Field(
+        default_factory=list,
+        description="Ranked waiver targets, empty if standing pat",
+    )
     roster_drop_candidates: list[str] = Field(
         default_factory=list,
         description="Players on roster whose opportunity/snap share is declining",
@@ -291,9 +306,21 @@ class LeagueTradeReport(BaseModel):
 
     league_id: int = Field(description="ESPN League ID")
     week: int = Field(description="Current NFL week")
+    is_trade_recommended: bool = Field(
+        default=True,
+        description="Whether any trades are actively recommended this week",
+    )
+    coach_verdict: Literal["HOLD_ROSTER", "PROPOSE_TRADES"] = Field(
+        default="PROPOSE_TRADES",
+        description="Head coach verdict: HOLD_ROSTER if no trades are warranted, or PROPOSE_TRADES",
+    )
+    hold_roster_reasoning: Optional[str] = Field(
+        default=None,
+        description="Detailed coaching reasoning if holding the roster is recommended",
+    )
     proposals: list[TradeProposal] = Field(
         default_factory=list,
-        description="Top recommended win-win trade proposals to initiate",
+        description="Top recommended win-win trade proposals to initiate, empty if holding roster",
     )
     market_overview: str = Field(
         description="Strategic analysis of your team's positional surpluses and market trade targets"

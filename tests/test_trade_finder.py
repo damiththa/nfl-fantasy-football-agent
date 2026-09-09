@@ -94,3 +94,74 @@ def test_propose_league_trades_gemini():
     assert len(report.proposals) == 1
     assert report.proposals[0].target_team_id == 2
     assert report.proposals[0].net_vorp_gain == 2.5
+
+
+def test_propose_league_trades_hold_roster_deterministic():
+    # User team is completely dominant at all positions
+    user_team = MagicMock()
+    user_team.team_id = PNA_2026.team_id
+    user_team.team_name = "Mad Dawg"
+    user_team.roster = [
+        _make_mock_player("Josh Allen", "QB", "QB", 25.0),
+        _make_mock_player("Christian McCaffrey", "RB", "RB", 22.0),
+        _make_mock_player("Justin Jefferson", "WR", "WR", 20.0),
+    ]
+
+    # Opponent team has weaker players across the board, no upgrades possible
+    opp_team = MagicMock()
+    opp_team.team_id = 2
+    opp_team.team_name = "Weak Squad"
+    opp_team.owners = [{"firstName": "Jane", "lastName": "Smith"}]
+    opp_team.roster = [
+        _make_mock_player("Average QB", "QB", "QB", 15.0),
+        _make_mock_player("Average RB", "RB", "RB", 10.0),
+        _make_mock_player("Average WR", "WR", "WR", 9.0),
+    ]
+
+    mock_league = MagicMock()
+    mock_league.teams = [user_team, opp_team]
+
+    report = propose_league_trades(PNA_2026, 1, mock_league)
+    assert report.coach_verdict == "HOLD_ROSTER"
+    assert report.is_trade_recommended is False
+    assert len(report.proposals) == 0
+    assert "HOLD ROSTER" in report.market_overview
+    assert "Stand pat" in report.hold_roster_reasoning
+
+
+def test_propose_league_trades_gemini_hold_roster():
+    user_team = MagicMock()
+    user_team.team_id = PNA_2026.team_id
+    user_team.team_name = "Mad Dawg"
+    user_team.roster = [_make_mock_player("Josh Allen", "QB", "QB", 22.0)]
+
+    opp_team = MagicMock()
+    opp_team.team_id = 2
+    opp_team.team_name = "Opponent"
+    opp_team.roster = [_make_mock_player("Lamar Jackson", "QB", "QB", 21.0)]
+
+    mock_league = MagicMock()
+    mock_league.teams = [user_team, opp_team]
+
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            class Response:
+                text = (
+                    '{"league_id": 991059191, "week": 1, "is_trade_recommended": false, '
+                    '"coach_verdict": "HOLD_ROSTER", '
+                    '"hold_roster_reasoning": "Roster has no holes, trading would only be lateral churn.", '
+                    '"market_overview": "Market is stagnant.", "proposals": []}'
+                )
+
+            return Response()
+
+    class MockSdk:
+        models = MockModels()
+
+    client = GeminiIntelligenceClient(mock_client=MockSdk())
+    report = propose_league_trades(PNA_2026, 1, mock_league, client=client)
+    assert report.coach_verdict == "HOLD_ROSTER"
+    assert report.is_trade_recommended is False
+    assert len(report.proposals) == 0
+    assert "lateral churn" in report.hold_roster_reasoning
+
