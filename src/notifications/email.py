@@ -154,12 +154,79 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
         <span style="background: {color}; color: #0f172a; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: bold;">⚡ {strategy}</span>
       </div>"""
 
+    # 0. Critical Starting Lineup Holes & Multi-Pathway Fixes
+    hole_alerts = data.get("lineup_hole_alerts") or []
+    if hole_alerts:
+        hole_cards = ""
+        for h in hole_alerts:
+            slot = h.get("slot") if isinstance(h, dict) else getattr(h, "slot", "SLOT")
+            status = h.get("current_status") if isinstance(h, dict) else getattr(h, "current_status", "UNKNOWN")
+            player = h.get("current_player_name") if isinstance(h, dict) else getattr(h, "current_player_name", None)
+            player_str = f"{player} ({status})" if player else f"EMPTY / UNFILLED ({status})"
+
+            bench = h.get("bench_recommendation") if isinstance(h, dict) else getattr(h, "bench_recommendation", None)
+            waiver = h.get("waiver_recommendation") if isinstance(h, dict) else getattr(h, "waiver_recommendation", None)
+            trade = h.get("trade_recommendation") if isinstance(h, dict) else getattr(h, "trade_recommendation", None)
+
+            bench_html = ""
+            if bench:
+                bench_str = bench if isinstance(bench, str) else bench.get("action_note", str(bench))
+                is_exhausted = "exhausted" in bench_str.lower() or "no healthy" in bench_str.lower()
+                border_color = "#ef4444" if is_exhausted else "#22c55e"
+                bg_color = "rgba(239, 68, 68, 0.12)" if is_exhausted else "rgba(34, 197, 94, 0.12)"
+                label_color = "#ef4444" if is_exhausted else "#22c55e"
+                label_text = "⚠️ Tier 1 (Bench Depth Exhausted):" if is_exhausted else "🟢 Tier 1 (Internal Bench Fix):"
+                bench_html = f"""
+            <div style="background: {bg_color}; border-left: 3px solid {border_color}; padding: 8px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px;">
+              <span style="color: {label_color}; font-weight: bold; font-size: 11px; text-transform: uppercase;">{label_text}</span>
+              <div style="color: #f8fafc; font-size: 12px; margin-top: 2px;">{bench_str}</div>
+            </div>"""
+
+            waiver_html = ""
+            if waiver:
+                waiver_str = waiver if isinstance(waiver, str) else waiver.get("action_note", str(waiver))
+                waiver_html = f"""
+            <div style="background: rgba(56, 189, 248, 0.12); border-left: 3px solid #38bdf8; padding: 8px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px;">
+              <span style="color: #38bdf8; font-weight: bold; font-size: 11px; text-transform: uppercase;">🔵 Tier 2 (Waiver Wire Pickup):</span>
+              <div style="color: #f8fafc; font-size: 12px; margin-top: 2px;">{waiver_str}</div>
+            </div>"""
+
+            trade_html = ""
+            if trade:
+                trade_str = trade if isinstance(trade, str) else trade.get("rationale", str(trade))
+                trade_html = f"""
+            <div style="background: rgba(168, 85, 247, 0.12); border-left: 3px solid #a855f7; padding: 8px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px;">
+              <span style="color: #c084fc; font-weight: bold; font-size: 11px; text-transform: uppercase;">🟣 Tier 3 (Proactive Trade Solution):</span>
+              <div style="color: #f8fafc; font-size: 12px; margin-top: 2px;">{trade_str}</div>
+            </div>"""
+
+            hole_cards += f"""
+          <div style="background: #0f172a; border: 1px solid #ef4444; border-radius: 6px; padding: 12px; margin-bottom: 10px;">
+            <div style="margin-bottom: 8px;">
+              <span style="background: #ef4444; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 3px;">HOLE DETECTED</span>
+              <span style="color: #f87171; font-weight: bold; font-size: 13px; margin-left: 6px;">Slot {slot}: {player_str}</span>
+            </div>
+            {bench_html}
+            {waiver_html}
+            {trade_html}
+          </div>"""
+
+        content_html += f"""
+      <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+        <h3 style="color: #ef4444; margin: 0 0 6px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">🚨 Emergency Starting Lineup Alert — Action Required!</h3>
+        <p style="color: #fecaca; font-size: 12px; margin: 0 0 10px 0;">
+          The following starting slots have no active/healthy starter due to injury, suspension, or bye week. Here are your 3-tier solutions:
+        </p>
+        {hole_cards}
+      </div>"""
+
     # 1. Action Checklist & Lineup Status
     if data.get("current_lineup"):
         has_swaps = bool(data.get("actionable_swaps"))
         has_vacant = bool(data.get("vacant_slots"))
+        has_holes = bool(data.get("lineup_hole_alerts"))
 
-        if not has_swaps and not has_vacant:
+        if not has_swaps and not has_vacant and not has_holes:
             content_html += """
       <div style="background: rgba(34, 197, 94, 0.15); border-left: 4px solid #22c55e; border-radius: 0 6px 6px 0; padding: 12px 14px; margin-bottom: 14px;">
         <h4 style="color: #22c55e; margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase;">✅ Lineup Status: 100% Optimal</h4>

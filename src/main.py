@@ -661,6 +661,53 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </span>
       </div>`;
 
+      // Section 0: Emergency Starting Hole Alert Banner
+      if (data.lineup_hole_alerts && data.lineup_hole_alerts.length > 0) {
+        html += `<div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 10px; padding: 18px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <span style="font-size: 26px;">🚨</span>
+            <div>
+              <h3 style="color: #ef4444; margin: 0; font-size: 17px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">
+                EMERGENCY STARTING HOLE DETECTED (${data.lineup_hole_alerts.length} SLOTS AT RISK)
+              </h3>
+              <p style="font-size: 13px; color: #fca5a5; margin: 2px 0 0 0;">
+                Immediate action required before kickoff! You have starting slots that are currently unplayable (OUT, IR, SUS, or Bye Week) or unfilled on ESPN.
+              </p>
+            </div>
+          </div>`;
+
+        data.lineup_hole_alerts.forEach(alert => {
+          html += `<div style="background: #090d16; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+              <strong style="color: #f87171; font-size: 15px;">Slot: ${alert.slot}</strong>
+              <span style="background: #ef4444; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${alert.current_status}</span>
+            </div>
+            ${alert.current_player_name ? `<p style="font-size: 13px; color: #cbd5e1; margin-bottom: 10px;">Current Starter: <strong style="color: #f87171;">${alert.current_player_name}</strong> is unplayable.</p>` : ''}
+
+            <!-- 3-Tier Multi-Option Recommendations -->
+            <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px;">
+              ${alert.bench_recommendation ? `
+                <div style="background: rgba(34, 197, 94, 0.08); border-left: 3px solid #22c55e; padding: 8px 12px; border-radius: 4px; font-size: 13px; color: #86efac; line-height: 1.4;">
+                  <strong>🔄 1. Internal Bench Fix:</strong> ${alert.bench_recommendation}
+                </div>
+              ` : ''}
+              ${alert.waiver_recommendation ? `
+                <div style="background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 4px; font-size: 13px; color: #7dd3fc; line-height: 1.4;">
+                  <strong>🎯 2. Free Agency / Waiver Pickup:</strong> ${alert.waiver_recommendation}
+                </div>
+              ` : ''}
+              ${alert.trade_recommendation ? `
+                <div style="background: rgba(168, 85, 247, 0.08); border-left: 3px solid #a855f7; padding: 8px 12px; border-radius: 4px; font-size: 13px; color: #d8b4fe; line-height: 1.4;">
+                  <strong>🤝 3. Trade Market Solution:</strong> ${alert.trade_recommendation}
+                </div>
+              ` : ''}
+            </div>
+          </div>`;
+        });
+
+        html += `</div>`;
+      }
+
       // Section 1: Immediate Action Plan Banner
       if (data.vacant_slots && data.vacant_slots.length > 0) {
         html += `<div class="alert-box alert-danger">
@@ -676,7 +723,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <p style="font-size: 13px; margin-bottom: 6px;">Execute these swaps in your ESPN app:</p>
           <ul style="margin: 0; padding-left: 20px; font-size: 13px; font-weight: 600;">${data.actionable_swaps.map(s => `<li style="margin-bottom: 4px;">${s}</li>`).join('')}</ul>
         </div>`;
-      } else if (!data.vacant_slots || data.vacant_slots.length === 0) {
+      } else if ((!data.vacant_slots || data.vacant_slots.length === 0) && (!data.lineup_hole_alerts || data.lineup_hole_alerts.length === 0)) {
         if (data.current_lineup && data.current_lineup.length > 0) {
           html += `<div class="alert-box alert-success">
             <h4 style="color: #22c55e; margin-bottom: 4px; font-size: 14px;">✅ LINEUP 100% OPTIMAL</h4>
@@ -1011,6 +1058,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                     injuries=injuries,
                     odds=odds,
                     client=client,
+                    espn_league=espn,
                 )
                 results[league_config.short_name] = lineup.model_dump()
 
@@ -1088,6 +1136,7 @@ def run_sunday_pregame() -> dict[str, Any]:
                 odds=odds,
                 weather_map=weather_map,
                 client=client,
+                espn_league=espn,
             )
             results[league_config.short_name] = lineup.model_dump()
 
@@ -1148,6 +1197,7 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
             injuries=injuries,
             odds=odds,
             client=client,
+            espn_league=espn,
         )
         return lineup.model_dump()
     except Exception as e:

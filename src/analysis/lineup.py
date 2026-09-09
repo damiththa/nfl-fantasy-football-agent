@@ -7,17 +7,22 @@ cross-referencing injuries, Vegas totals, and weather conditions.
 import logging
 import zoneinfo
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from src.config import LeagueConfig
 from src.data.injuries import PlayerInjuryInfo
 from src.data.vegas import GameOdds, get_player_game_odds, normalize_team_abbr
 from src.data.weather import GameWeather
 from src.espn.matchup import MatchupData
-from src.espn.roster import ParsedRoster
+from src.espn.roster import ParsedRoster, RosterPlayer
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_lineup_prompt
-from src.intelligence.schemas import CurrentRosterPlayer, LineupRecommendation, StartSitDecision
+from src.intelligence.schemas import (
+    CurrentRosterPlayer,
+    LineupHoleAlert,
+    LineupRecommendation,
+    StartSitDecision,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,14 +145,244 @@ def get_player_matchup_info(
     return None, None, None, None
 
 
+def detect_lineup_holes_and_solutions(
+    roster: ParsedRoster,
+    league: LeagueConfig,
+    current_week: int = 0,
+    espn_league: Optional[Any] = None,
+    injuries: Optional[list[PlayerInjuryInfo]] = None,
+    odds: Optional[list[GameOdds]] = None,
+) -> list[LineupHoleAlert]:
+    """Detect unplayable starters (OUT, IR, SUS, Bye) or vacant slots,
+    and generate 3-tier solutions: 1. Bench Option, 2. Waiver Pickup, 3. Trade Target.
+    """
+    alerts: list[LineupHoleAlert] = []
+
+    # Map injuries by player name
+    injury_map = {}
+    if injuries:
+        for inj in injuries:
+            injury_map[inj.full_name.lower()] = inj
+
+    # 1. Inspect all current starters on ESPN for unplayable status
+    unplayable_starters: list[tuple[str, str, Optional[str], str]] = []  # (slot, pos, name, reason)
+    accounted_unplayable_slots: dict[str, int] = {}
+
+    for p in roster.starters:
+        slot_name = (p.slot or "").upper().replace("/", "")
+        if slot_name in ("DEF", "DST"):
+            slot_name = "DST"
+        elif slot_name in ("RBWRTE", "FLEX"):
+            slot_name = "FLEX"
+        elif slot_name not in ("QB", "RB", "WR", "TE", "FLEX", "K", "DST"):
+            slot_name = p.position.upper()
+
+        is_out = (p.injury_status or "").upper() in ("OUT", "IR", "SUS", "SUSPENSION", "SUSPENDED", "DOUBTFUL")
+        is_bye = getattr(p, "bye_week", 0) == current_week and current_week > 0
+
+        inj_info = injury_map.get(p.name.lower())
+        if inj_info and (inj_info.injury_status or "").upper() in ("OUT", "IR", "DOUBTFUL"):
+            is_out = True
+
+        if is_out or is_bye:
+            if is_bye:
+                reason = f"BYE WEEK (Week {current_week})"
+            elif (p.injury_status or "").upper() in ("SUS", "SUSPENSION", "SUSPENDED"):
+                reason = "SUSPENDED"
+            elif inj_info and inj_info.injury_status:
+                reason = f"{inj_info.injury_status}: {inj_info.injury_notes or 'Out for game'}"
+            else:
+                reason = f"{p.injury_status or 'OUT'}: Inactive / Injured"
+
+            unplayable_starters.append((slot_name, p.position.upper(), p.name, reason))
+            accounted_unplayable_slots[slot_name] = accounted_unplayable_slots.get(slot_name, 0) + 1
+
+    # 2. Check for physically vacant slots on ESPN
+    required_counts = {
+        "QB": league.roster.qb,
+        "RB": league.roster.rb,
+        "WR": league.roster.wr,
+        "TE": league.roster.te,
+        "FLEX": league.roster.flex,
+        "K": league.roster.k,
+        "DST": league.roster.dst,
+    }
+
+    # Count how many slots are filled on ESPN
+    total_filled_slots: dict[str, int] = {}
+    for p in roster.starters:
+        s_norm = (p.slot or "").upper().replace("/", "")
+        if s_norm in ("DEF", "DST"):
+            s_norm = "DST"
+        elif s_norm in ("RBWRTE", "FLEX"):
+            s_norm = "FLEX"
+        elif s_norm not in required_counts:
+            s_norm = p.position.upper()
+        total_filled_slots[s_norm] = total_filled_slots.get(s_norm, 0) + 1
+
+    vacant_holes: list[tuple[str, str, Optional[str], str]] = []
+    for slot_name, req_count in required_counts.items():
+        filled = total_filled_slots.get(slot_name, 0)
+        if filled < req_count:
+            for _ in range(req_count - filled):
+                pos_target = "WR" if slot_name == "FLEX" else slot_name
+                vacant_holes.append((slot_name, pos_target, None, "VACANT ON ESPN: Slot is currently unfilled"))
+
+    all_holes = unplayable_starters + vacant_holes
+    if not all_holes:
+        return []
+
+    # Build free agent lookup if espn_league available
+    free_agents_by_pos: dict[str, list[Any]] = {}
+    if espn_league and hasattr(espn_league, "free_agents"):
+        try:
+            fa_list = espn_league.free_agents(size=50)
+            for fa in fa_list:
+                pos = (getattr(fa, "position", "") or "FLEX").upper()
+                free_agents_by_pos.setdefault(pos, []).append(fa)
+        except Exception:
+            pass
+
+    # Build league teams for trade surplus lookup
+    other_teams_by_surplus: dict[str, list[tuple[Any, Any]]] = {}  # pos -> [(team, player)]
+    if espn_league and hasattr(espn_league, "teams"):
+        try:
+            for t in espn_league.teams:
+                if getattr(t, "team_id", None) == league.team_id:
+                    continue
+                team_players_by_pos: dict[str, list[Any]] = {}
+                for p in getattr(t, "roster", []):
+                    pos = (getattr(p, "position", "") or "").upper()
+                    pts = float(getattr(p, "projected_points", 0.0) or 0.0)
+                    if pts >= 8.0:
+                        team_players_by_pos.setdefault(pos, []).append(p)
+                for pos, pl_list in team_players_by_pos.items():
+                    if len(pl_list) >= 2:
+                        for p in pl_list:
+                            other_teams_by_surplus.setdefault(pos, []).append((t, p))
+        except Exception:
+            pass
+
+    # Find candidate drop from user's bench (lowest projected healthy player not on IR)
+    bench_candidates = [
+        b for b in roster.bench
+        if (b.injury_status or "").upper() not in ("IR",)
+    ]
+    bench_candidates.sort(key=lambda b: getattr(b, "projected_points", 0.0) or 0.0)
+    drop_candidate = bench_candidates[0] if bench_candidates else None
+
+    # Track already recommended bench promotions
+    used_bench_names: set[str] = set()
+
+    for slot_name, pos_target, starter_name, reason in all_holes:
+        # Tier 1: Bench Promotion
+        eligible_bench: list[RosterPlayer] = []
+        for b in roster.bench:
+            if b.name.lower() in used_bench_names:
+                continue
+            b_pos = (b.position or "").upper().replace("/", "")
+            if b_pos in ("DEF", "DST"):
+                b_pos = "DST"
+
+            is_eligible = False
+            if slot_name == "FLEX" and b_pos in ("RB", "WR", "TE"):
+                is_eligible = True
+            elif slot_name == b_pos:
+                is_eligible = True
+            elif pos_target == b_pos:
+                is_eligible = True
+
+            b_out = (b.injury_status or "").upper() in ("OUT", "IR", "SUS", "SUSPENSION", "SUSPENDED", "DOUBTFUL")
+            b_bye = getattr(b, "bye_week", 0) == current_week and current_week > 0
+            if is_eligible and not b_out and not b_bye:
+                eligible_bench.append(b)
+
+        eligible_bench.sort(key=lambda b: getattr(b, "projected_points", 0.0) or 0.0, reverse=True)
+
+        if eligible_bench:
+            best_bench = eligible_bench[0]
+            used_bench_names.add(best_bench.name.lower())
+            bench_rec = (
+                f"⬆️ Promote {best_bench.name} ({best_bench.position}, {best_bench.projected_points:.1f} pts) "
+                f"from your bench into starting {slot_name} slot."
+            )
+        else:
+            bench_rec = (
+                f"⚠️ No healthy, eligible bench replacement on your roster for {slot_name}. "
+                "Bench depth is exhausted; external roster acquisition required."
+            )
+
+        # Tier 2: Waiver Wire Pickup
+        pos_for_fa = ["RB", "WR", "TE"] if slot_name == "FLEX" else [pos_target]
+        fa_options: list[Any] = []
+        for p_fa in pos_for_fa:
+            fa_options.extend(free_agents_by_pos.get(p_fa, []))
+        fa_options.sort(key=lambda fa: float(getattr(fa, "projected_points", 0.0) or 0.0), reverse=True)
+
+        if fa_options:
+            top_fa = fa_options[0]
+            top_fa_pts = float(getattr(top_fa, "projected_points", 0.0) or 0.0)
+            top_fa_team = getattr(top_fa, "proTeam", "FA")
+            top_fa_pos = getattr(top_fa, "position", pos_target)
+            if drop_candidate and (starter_name is None or drop_candidate.name.lower() != starter_name.lower()):
+                waiver_rec = (
+                    f"🎯 Claim {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts). "
+                    f"Suggested Drop: {drop_candidate.name} ({drop_candidate.position}, {drop_candidate.projected_points:.1f} pts)."
+                )
+            else:
+                waiver_rec = f"🎯 Claim {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts) from free agency."
+        else:
+            if drop_candidate:
+                waiver_rec = (
+                    f"🎯 Scan waiver wire for top available {pos_target}. "
+                    f"Suggested Drop: {drop_candidate.name} ({drop_candidate.position}, {drop_candidate.projected_points:.1f} pts)."
+                )
+            else:
+                waiver_rec = f"🎯 Scan waiver wire for top available {pos_target} streaming starter."
+
+        # Tier 3: Trade Target Solution
+        trade_candidates = other_teams_by_surplus.get(pos_target, [])
+        if slot_name == "FLEX" and not trade_candidates:
+            trade_candidates = other_teams_by_surplus.get("RB", []) + other_teams_by_surplus.get("WR", [])
+
+        if trade_candidates:
+            target_team, target_player = trade_candidates[0]
+            t_pts = float(getattr(target_player, "projected_points", 0.0) or 0.0)
+            t_name = getattr(target_team, "team_name", "Manager")
+            trade_rec = (
+                f"🤝 Target {target_player.name} ({target_player.position}, {t_pts:.1f} pts) from '{t_name}' "
+                f"(they carry surplus at {pos_target}); offer your bench depth to secure an immediate starter."
+            )
+        else:
+            trade_rec = (
+                f"🤝 Propose trade targeting rival managers carrying surplus {pos_target} depth "
+                "in exchange for your bench assets."
+            )
+
+        alerts.append(
+            LineupHoleAlert(
+                slot=slot_name,
+                current_status=reason,
+                current_player_name=starter_name,
+                bench_recommendation=bench_rec,
+                waiver_recommendation=waiver_rec,
+                trade_recommendation=trade_rec,
+            )
+        )
+
+    return alerts
+
+
 def enrich_lineup_recommendation_with_espn_status(
     rec: LineupRecommendation,
     roster: ParsedRoster,
     league: LeagueConfig,
     odds: Optional[list[GameOdds]] = None,
     current_week: int = 0,
+    espn_league: Optional[Any] = None,
+    injuries: Optional[list[PlayerInjuryInfo]] = None,
 ) -> LineupRecommendation:
-    """Populate current ESPN slots, detect vacant starting slots, flag suboptimal starters,
+    """Populate current ESPN slots, detect vacant starting slots, detect starting lineup holes (injuries/bye),
     generate actionable swap instructions, and populate game date, kickoff time, and home/away status.
     """
     player_current_slots = {p.name.lower(): p.slot for p in roster.players}
@@ -182,6 +417,16 @@ def enrich_lineup_recommendation_with_espn_status(
         b.home_away = ha
         b.matchup_display = m_disp
         b.game_time = g_time
+
+    # Detect emergency lineup holes (injuries, OUT, IR, SUS, Bye weeks, Vacant)
+    rec.lineup_hole_alerts = detect_lineup_holes_and_solutions(
+        roster=roster,
+        league=league,
+        current_week=current_week,
+        espn_league=espn_league,
+        injuries=injuries,
+        odds=odds,
+    )
 
     # Detect vacant starting slots on ESPN
     current_starter_slots: dict[str, int] = {}
@@ -462,18 +707,20 @@ def optimize_lineup(
     odds: Optional[list[GameOdds]] = None,
     weather_map: Optional[dict[str, GameWeather]] = None,
     client: Optional[GeminiIntelligenceClient] = None,
+    espn_league: Optional[Any] = None,
 ) -> LineupRecommendation:
-    """Optimize starting lineup for a league and week using game-theory and Gemini Pro.
+    """Optimize starting lineup using game theory, Vegas totals, weather, and injury news.
 
     Args:
         league: League configuration.
         week: Current NFL week.
-        roster: Parsed roster for user team.
-        matchup: Weekly matchup data (optional).
-        injuries: List of relevant player injuries (optional).
-        odds: List of week's game odds (optional).
-        weather_map: Map of team abbr to GameWeather (optional).
+        roster: Parsed roster of the user.
+        matchup: Current week matchup data (optional).
+        injuries: List of active injury reports (optional).
+        odds: List of Vegas game odds (optional).
+        weather_map: Dict of team -> weather condition (optional).
         client: Gemini intelligence client (optional).
+        espn_league: Connected ESPN league instance (optional).
 
     Returns:
         LineupRecommendation with complete start/sit plan.
@@ -499,6 +746,16 @@ def optimize_lineup(
             f"Projected in a tight matchup ({projected_margin:+.1f} pts). "
             "Balancing floor and ceiling with priority on favorable red-zone and Vegas game scripts."
         )
+
+    # Detect lineup holes (unplayable starters, bye weeks, vacant slots)
+    detected_holes = detect_lineup_holes_and_solutions(
+        roster=roster,
+        league=league,
+        current_week=week,
+        espn_league=espn_league,
+        injuries=injuries,
+        odds=odds,
+    )
 
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
@@ -576,6 +833,7 @@ def optimize_lineup(
             vegas_odds=odds_data,
             weather_reports=weather_data,
             injuries=injury_data,
+            lineup_hole_alerts=[h.model_dump() for h in detected_holes],
         )
 
         try:
@@ -606,7 +864,13 @@ def optimize_lineup(
             rec.recommended_starters = sort_starters_by_lineup_order(cleaned_starters, league)
             rec.bench_players = sort_bench_by_position(rec.bench_players)
             return enrich_lineup_recommendation_with_espn_status(
-                rec, roster, league, odds=odds, current_week=week
+                rec,
+                roster,
+                league,
+                odds=odds,
+                current_week=week,
+                espn_league=espn_league,
+                injuries=injuries,
             )
         except Exception as e:
             logger.warning(
@@ -700,6 +964,12 @@ def optimize_lineup(
         ],
     )
     return enrich_lineup_recommendation_with_espn_status(
-        rec, roster, league, odds=odds, current_week=week
+        rec,
+        roster,
+        league,
+        odds=odds,
+        current_week=week,
+        espn_league=espn_league,
+        injuries=injuries,
     )
 

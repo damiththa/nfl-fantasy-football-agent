@@ -86,6 +86,31 @@ class CurrentRosterPlayer(BaseModel):
     )
 
 
+class LineupHoleAlert(BaseModel):
+    """Urgent alert for a vacant, injured, or bye-week starting slot with 3-tier solutions."""
+
+    slot: str = Field(description="Starting slot affected (e.g. 'TE', 'RB2', 'FLEX', 'K')")
+    current_status: str = Field(
+        description="Reason for alert (e.g. 'VACANT ON ESPN', 'OUT: Knee injury', 'BYE WEEK (Week 7)', 'SUSPENDED')"
+    )
+    current_player_name: Optional[str] = Field(
+        default=None,
+        description="Name of the unplayable starter if slot is not completely vacant",
+    )
+    bench_recommendation: Optional[str] = Field(
+        default=None,
+        description="Internal bench fix: Top eligible healthy bench player to promote, or warning if bench is exhausted",
+    )
+    waiver_recommendation: Optional[str] = Field(
+        default=None,
+        description="Free agency fix: Top available waiver targets to claim and suggested drop candidate",
+    )
+    trade_recommendation: Optional[str] = Field(
+        default=None,
+        description="Trade market fix: Opposing manager with surplus at this position to target",
+    )
+
+
 class LineupRecommendation(BaseModel):
     """Complete starting lineup recommendation tailored to matchup game theory."""
 
@@ -95,6 +120,10 @@ class LineupRecommendation(BaseModel):
         description="Lineup approach: PROTECT_LEAD (high-floor), SEEK_VARIANCE (high-ceiling underdog), or BALANCED"
     )
     strategy_reasoning: str = Field(description="Why this game-theory approach was selected")
+    lineup_hole_alerts: list[LineupHoleAlert] = Field(
+        default_factory=list,
+        description="Emergency alerts for vacant slots, injuries, or bye weeks with bench, waiver, and trade solutions",
+    )
     current_lineup: list[CurrentRosterPlayer] = Field(
         default_factory=list,
         description="User's exact ESPN starting lineup as-is, each with an explicit start/bench verdict",

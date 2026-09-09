@@ -113,6 +113,38 @@ class TestEmailHtmlBuilder:
         assert "72%" in html
         assert "WIN PROBABILITY" in html
 
+    def test_renders_lineup_hole_alerts_and_suppresses_optimal_status(self):
+        results = {
+            "PNA": {
+                "current_lineup": [
+                    {"player_name": "Patrick Mahomes", "position": "QB", "action": "KEEP_STARTING", "action_label": "START"}
+                ],
+                "actionable_swaps": [],
+                "vacant_slots": [],
+                "lineup_hole_alerts": [
+                    {
+                        "slot": "WR",
+                        "current_status": "OUT: Knee injury",
+                        "current_player_name": "Puka Nacua",
+                        "bench_recommendation": "⬆️ Promote Jordan Mason (RB, 12.0 pts) from your bench into starting FLEX slot.",
+                        "waiver_recommendation": "🎯 Claim Rico Dowdle (RB - DAL, 10.5 pts). Suggested Drop: Tyler Allgeier (RB, 4.2 pts).",
+                        "trade_recommendation": "🤝 Target James Cook (RB, 14.2 pts) from 'Team B' (they carry surplus at RB); offer bench assets.",
+                    }
+                ],
+            }
+        }
+        html = _build_email_html("Test", "weekly_analysis", results, "now")
+        assert "Emergency Starting Lineup Alert" in html
+        assert "Puka Nacua (OUT: Knee injury)" in html
+        assert "Tier 1 (Internal Bench Fix)" in html
+        assert "Jordan Mason" in html
+        assert "Tier 2 (Waiver Wire Pickup)" in html
+        assert "Rico Dowdle" in html
+        assert "Tier 3 (Proactive Trade Solution)" in html
+        assert "James Cook" in html
+        assert "100% Optimal" not in html
+
+
 
 class TestSendDigestEmail:
     """Tests for the synchronous email sending function."""

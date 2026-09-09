@@ -57,8 +57,21 @@ def format_lineup_prompt(
     vegas_odds: list[dict[str, Any]],
     weather_reports: list[dict[str, Any]],
     injuries: list[dict[str, Any]],
+    lineup_hole_alerts: list[dict[str, Any]] | None = None,
 ) -> str:
     """Format prompt for starting lineup and start/sit decisions."""
+    hole_section = ""
+    if lineup_hole_alerts:
+        hole_section = "\n🚨 CRITICAL STARTING LINEUP HOLES DETECTED (MUST BE ADDRESSED WITH PRIORITY):\n"
+        for h in lineup_hole_alerts:
+            hole_section += f"- Slot {h.get('slot')}: {h.get('current_status')} (Current Starter: {h.get('current_player_name') or 'VACANT'})\n"
+            if h.get('bench_recommendation'):
+                hole_section += f"  * Bench Fix: {h['bench_recommendation']}\n"
+            if h.get('waiver_recommendation'):
+                hole_section += f"  * Waiver Option: {h['waiver_recommendation']}\n"
+            if h.get('trade_recommendation'):
+                hole_section += f"  * Trade Option: {h['trade_recommendation']}\n"
+
     return f"""Analyze Week {week} lineup decisions for league '{league.name}'.
 
 LEAGUE SCORING & SETUP:
@@ -72,7 +85,7 @@ MATCHUP & OPPONENT OVERVIEW:
 
 YOUR CURRENT ROSTER:
 {your_roster}
-
+{hole_section}
 OPPONENT LINEUP:
 {opponent_roster or "Opponent lineup not yet set or unavailable"}
 
@@ -90,6 +103,7 @@ TASK - DELIVER A COMPLETE START 'EM / SIT 'EM MASTER REPORT:
 2. SIT 'EM (bench_players): Every single bench player must be accounted for with a specific, concise reason why they are benched.
 3. INJURED / INACTIVE PLAYERS: Ensure NO players with OUT, IR, or DOUBTFUL tags are in the starting lineup.
 4. START/SIT DILEMMAS (key_flex_decisions): Address the closest 2-3 head-to-head toss-ups (e.g., "Start Player X over Player Y because...").
+5. EMERGENCY STARTING HOLES: If any starting holes are detected above, ensure `lineup_hole_alerts` is populated with clear bench, waiver, and trade recommendations.
 
 CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
 In the `reasoning` field for each player, write as a seasoned fantasy expert making the definitive case:
