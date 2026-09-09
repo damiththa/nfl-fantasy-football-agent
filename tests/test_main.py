@@ -65,3 +65,10 @@ def test_query_propose_trades_invalid_league(client):
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
+
+def test_query_roster_players_invalid_league(client):
+    response = client.get("/query/roster-players?league_id=99999999")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+

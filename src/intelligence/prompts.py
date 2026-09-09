@@ -142,8 +142,27 @@ def format_trade_prompt(
     giving_players: list[str],
     receiving_players: list[str],
     opponent_roster: dict[str, Any] | None = None,
+    simulated_impact: dict[str, Any] | None = None,
 ) -> str:
-    """Format prompt for evaluating a prospective trade."""
+    """Format prompt for evaluating a prospective trade against the current roster."""
+    sim_info = ""
+    if simulated_impact:
+        pre_pts = simulated_impact.get("pre_trade_starting_points", 0.0)
+        post_pts = simulated_impact.get("post_trade_starting_points", 0.0)
+        net_pts = simulated_impact.get("net_starting_points_change", 0.0)
+        changes = "\n".join(f"  * {c}" for c in simulated_impact.get("lineup_changes", []))
+        depth = simulated_impact.get("positional_depth_impact", "N/A")
+        sim_info = f"""
+ROSTER-CONTEXTUAL STARTING LINEUP SIMULATION:
+- Pre-Trade Optimal Starters Total: {pre_pts:.1f} pts/wk
+- Post-Trade Optimal Starters Total: {post_pts:.1f} pts/wk
+- Net Weekly Starting Lineup Delta: {net_pts:+.1f} pts/wk
+- Specific Lineup Displacements:
+{changes}
+- Positional Depth & Construction Impact:
+  {depth}
+"""
+
     return f"""Evaluate a proposed trade for league '{league.name}'.
 
 LEAGUE CONTEXT:
@@ -159,20 +178,25 @@ PLAYERS YOU WOULD RECEIVE:
 
 YOUR CURRENT ROSTER:
 {your_roster}
-
+{sim_info}
 OPPONENT ROSTER (If known):
 {opponent_roster or "Not provided"}
 
-TASK:
-Evaluate this trade strictly on the NET CHANGE to your STARTING LINEUP value and ROS (Rest-of-Season) / Playoff impact (Weeks 15-17).
-Provide a clear verdict: ACCEPT, REJECT, or COUNTER.
+CRITICAL EVALUATION MANDATE (ROSTER-CONTEXTUAL, NOT 1-TO-1):
+Do NOT evaluate this trade as an isolated 1-to-1 player comparison in a vacuum.
+A trade is only good if it is OVERALL GOOD FOR OUR TEAM AND STARTING LINEUP.
+1. Check the starting lineup delta: Does acquiring these players actually increase our weekly starting points, or do they merely sit on our bench behind already superior starters?
+2. Check positional sacrifice: Does trading away our starter create a gaping hole at that position that damages our weekly floor more than the incoming player helps?
+3. Check depth risk: Does the trade dangerously deplete our depth at RB or WR, leaving us vulnerable to injury or bye weeks?
+4. Verdict must be ACCEPT (if decisive starting upgrade without breaking roster balance), REJECT (if starting points decline, incoming players sit on bench, or depth is gutted), or COUNTER (if close or requires adjustment).
 
 CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
 In the `reasoning` and impact fields, write as a shrewd, battle-tested fantasy veteran:
-- Break down the exact structural advantage or risk to our starting lineup.
+- Break down the exact structural advantage or risk to our starting lineup and roster balance.
 - Explain market timing (e.g. selling high on touchdown outliers, buying low on volume-secure alpha assets).
 - Factor in Weeks 15-17 fantasy playoff schedules.
 """
+
 
 
 def format_matchup_prompt(

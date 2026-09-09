@@ -453,17 +453,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <!-- Trade Evaluator Card -->
     <div class="card" style="margin-bottom: 20px;">
       <h2>🤝 Instant Trade Evaluator</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+        Evaluates proposed trades against your <strong>exact roster & starting lineup</strong>, preventing unowned/duplicate player errors and revealing true net weekly starting points impact.
+      </p>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
         <div class="form-group">
           <label>League</label>
-          <select id="trade-league">
+          <select id="trade-league" onchange="loadTradeRoster()">
             <option value="991059191">PNA 2026 (12-Team)</option>
             <option value="735288">Chips Ahoy (10-Team)</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Players You Give (comma separated)</label>
+          <label>Players You Give (must be on your roster)</label>
           <input type="text" id="trade-give" placeholder="e.g. D'Andre Swift, Tyjae Spears">
+          <div id="trade-give-roster-tags" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;"></div>
         </div>
         <div class="form-group">
           <label>Players You Receive (comma separated)</label>
@@ -543,6 +547,51 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         resContent.innerHTML = '<p style="color: #ef4444;">❌ Error: ' + err.message + '</p>';
       }
     }
+
+    async function loadTradeRoster() {
+      const leagueSelect = document.getElementById('trade-league');
+      const tagContainer = document.getElementById('trade-give-roster-tags');
+      if (!leagueSelect || !tagContainer) return;
+      const leagueId = leagueSelect.value;
+      tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">Loading your roster...</span>';
+      try {
+        const resp = await fetch(`/query/roster-players?league_id=${leagueId}`);
+        const data = await resp.json();
+        if (data.players && data.players.length > 0) {
+          tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted); width: 100%; margin-bottom: 3px;">Your Roster (click to add/remove):</span>';
+          data.players.forEach(p => {
+            const pill = document.createElement('button');
+            pill.type = 'button';
+            pill.style.cssText = 'background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; padding: 2px 7px; border-radius: 12px; font-size: 11px; cursor: pointer; transition: all 0.15s; margin-right: 4px; margin-bottom: 4px;';
+            pill.textContent = `${p.name} (${p.pos})`;
+            pill.onmouseover = () => { pill.style.borderColor = 'var(--accent)'; };
+            pill.onmouseout = () => { pill.style.borderColor = 'rgba(255,255,255,0.15)'; };
+            pill.onclick = () => togglePlayerToGive(p.name);
+            tagContainer.appendChild(pill);
+          });
+        } else {
+          tagContainer.innerHTML = '';
+        }
+      } catch (e) {
+        tagContainer.innerHTML = '';
+      }
+    }
+
+    function togglePlayerToGive(playerName) {
+      const input = document.getElementById('trade-give');
+      let current = input.value.split(',').map(s => s.trim()).filter(Boolean);
+      const idx = current.findIndex(n => n.toLowerCase() === playerName.toLowerCase());
+      if (idx >= 0) {
+        current.splice(idx, 1);
+      } else {
+        current.push(playerName);
+      }
+      input.value = current.join(', ');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadTradeRoster();
+    });
 
     function copyPitch(text, btnId) {
       if (navigator.clipboard && window.isSecureContext) {
@@ -791,13 +840,57 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
       // Section 7: Trade Evaluator Verdict
       if (data.verdict) {
-        const color = data.verdict === 'ACCEPT' ? '#22c55e' : (data.verdict === 'REJECT' ? '#ef4444' : '#eab308');
-        html += `<div style="padding: 14px; background: rgba(255,255,255,0.05); border-left: 4px solid ${color}; border-radius: 8px; margin-bottom: 14px;">
-          <h3 style="color: ${color}; margin-bottom: 6px; font-size: 16px;">VERDICT: ${data.verdict} (Net VORP: ${data.your_vorp_change > 0 ? '+' : ''}${data.your_vorp_change})</h3>
-          <p style="font-size: 14px; color: #cbd5e1; line-height: 1.4;">${data.reasoning}</p>
-          <p style="font-size: 13px; color: #94a3b8; margin-top: 6px;"><strong>Starting Lineup Impact:</strong> ${data.starting_lineup_impact}</p>
-          ${data.counter_suggestion ? '<p style="font-size: 13px; color: #eab308; margin-top: 4px;"><strong>Counter Idea:</strong> ' + data.counter_suggestion + '</p>' : ''}
-        </div>`;
+        if (data.verdict === 'INVALID' || data.is_valid_trade === false) {
+          html += `<div style="padding: 16px; background: rgba(239, 68, 68, 0.12); border-left: 4px solid #ef4444; border-radius: 8px; margin-bottom: 14px;">
+            <h3 style="color: #ef4444; margin-bottom: 8px; font-size: 17px;">🚨 VERDICT: INVALID TRADE PROPOSAL</h3>
+            <p style="font-size: 14px; color: #fca5a5; line-height: 1.5; margin-bottom: 10px;">${data.reasoning ? data.reasoning.replace(/\\n/g, '<br>') : 'Trade failed roster ownership verification.'}</p>
+            ${data.roster_validation_errors && data.roster_validation_errors.length > 0 ? `
+              <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(239, 68, 68, 0.35); padding: 10px 12px; border-radius: 6px; margin-bottom: 8px;">
+                <strong style="color: #f87171; font-size: 13px;">Roster Ownership Violations:</strong>
+                <ul style="margin: 6px 0 0 16px; color: #cbd5e1; font-size: 13px; line-height: 1.4;">
+                  ${data.roster_validation_errors.map(err => `<li>${err}</li>`).join('')}
+                </ul>
+              </div>
+            ` : ''}
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">💡 <em>Tip: You can only trade away players currently rostered on your team, and you cannot trade for players you already own.</em></p>
+          </div>`;
+        } else {
+          const color = data.verdict === 'ACCEPT' ? '#22c55e' : (data.verdict === 'REJECT' ? '#ef4444' : '#eab308');
+          const delta = data.net_starting_points_change !== null && data.net_starting_points_change !== undefined ? data.net_starting_points_change : null;
+          const deltaSign = delta !== null && delta > 0 ? '+' : '';
+
+          html += `<div style="padding: 16px; background: rgba(255,255,255,0.05); border-left: 4px solid ${color}; border-radius: 8px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+              <h3 style="color: ${color}; margin: 0; font-size: 18px;">VERDICT: ${data.verdict}</h3>
+              ${delta !== null ? `<span style="font-size: 14px; font-weight: bold; color: ${delta > 0 ? '#22c55e' : (delta < 0 ? '#ef4444' : '#eab308')};">Net Starting Lineup: ${deltaSign}${delta} pts/wk</span>` : ''}
+            </div>
+
+            <!-- Pre vs Post Starting Points Summary Box -->
+            ${data.pre_trade_starting_points !== null && data.pre_trade_starting_points !== undefined ? `
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); padding: 10px; border-radius: 6px; margin: 10px 0;">
+                <div><span style="font-size: 11px; color: var(--text-muted); display: block;">Pre-Trade Starters</span><strong style="color: #cbd5e1; font-size: 15px;">${data.pre_trade_starting_points} pts</strong></div>
+                <div><span style="font-size: 11px; color: var(--text-muted); display: block;">Post-Trade Starters</span><strong style="color: #cbd5e1; font-size: 15px;">${data.post_trade_starting_points} pts</strong></div>
+                <div><span style="font-size: 11px; color: var(--text-muted); display: block;">Weekly Net Delta</span><strong style="color: ${delta > 0 ? '#22c55e' : (delta < 0 ? '#ef4444' : '#eab308')}; font-size: 15px;">${deltaSign}${delta} pts</strong></div>
+                <div><span style="font-size: 11px; color: var(--text-muted); display: block;">Net VORP</span><strong style="color: #38bdf8; font-size: 15px;">${data.your_vorp_change > 0 ? '+' : ''}${data.your_vorp_change}</strong></div>
+              </div>
+            ` : ''}
+
+            <p style="font-size: 14px; color: #cbd5e1; line-height: 1.5; margin: 8px 0;">${data.reasoning}</p>
+
+            ${data.starting_lineup_changes && data.starting_lineup_changes.length > 0 ? `
+              <div style="margin: 10px 0; padding: 10px; background: #090d16; border-radius: 6px; border: 1px solid var(--border);">
+                <strong style="font-size: 12px; color: var(--accent); text-transform: uppercase;">Lineup & Depth Movements:</strong>
+                <ul style="margin: 6px 0 0 16px; color: #cbd5e1; font-size: 13px; line-height: 1.4;">
+                  ${data.starting_lineup_changes.map(c => `<li>${c}</li>`).join('')}
+                </ul>
+              </div>
+            ` : ''}
+
+            ${data.positional_depth_impact ? `<p style="font-size: 13px; color: #94a3b8; margin-top: 6px;"><strong>Positional Depth:</strong> ${data.positional_depth_impact}</p>` : ''}
+            ${data.counter_suggestion ? `<p style="font-size: 13px; color: #eab308; margin-top: 6px;"><strong>Strategic Counter:</strong> ${data.counter_suggestion}</p>` : ''}
+            ${data.playoff_schedule_impact ? `<p style="font-size: 12px; color: #64748b; margin-top: 6px;"><strong>Playoff Weeks 15-17:</strong> ${data.playoff_schedule_impact}</p>` : ''}
+          </div>`;
+        }
       }
 
       html += '<details style="margin-top: 18px;"><summary style="cursor: pointer; color: var(--text-muted); font-size: 12px;">🔍 View Raw Technical Data (JSON)</summary><pre>' + JSON.stringify(data, null, 2) + '</pre></details>';
@@ -1062,9 +1155,40 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/query/roster-players")
+def query_roster_players(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
+    """Fetch current roster players for quick-select in trade evaluator."""
+    league_config = ALL_LEAGUES.get(league_id)
+    if not league_config:
+        raise HTTPException(status_code=404, detail=f"League {league_id} not found in configuration.")
+
+    try:
+        espn = LeagueClient().get_league(league_config)
+        my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
+        parsed_roster = parse_roster(my_team, league_config) if my_team else None
+        players = []
+        if parsed_roster:
+            for p in parsed_roster.players:
+                players.append({
+                    "name": p.name,
+                    "pos": p.position,
+                    "team": p.team,
+                    "pts": p.projected_points,
+                    "slot": p.slot,
+                })
+        return {
+            "league_id": league_id,
+            "team_name": getattr(parsed_roster, "team_name", "My Team"),
+            "players": players,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching roster players: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/query/trade")
 def query_trade(req: TradeRequest) -> dict[str, Any]:
-    """On-demand trade evaluation."""
+    """On-demand trade evaluation evaluated against your current roster."""
     league_config = ALL_LEAGUES.get(req.league_id)
     if not league_config:
         raise HTTPException(status_code=404, detail=f"League {req.league_id} not found.")
@@ -1086,6 +1210,7 @@ def query_trade(req: TradeRequest) -> dict[str, Any]:
             giving_players=req.giving_players,
             receiving_players=req.receiving_players,
             client=client,
+            espn_league=espn,
         )
         return verdict.model_dump()
     except Exception as e:

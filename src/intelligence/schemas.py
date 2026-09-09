@@ -162,17 +162,49 @@ class WaiverReport(BaseModel):
 
 
 class TradeEvaluation(BaseModel):
-    """Analysis and verdict on a proposed trade."""
+    """Analysis and verdict on a proposed trade evaluated against the current roster."""
 
-    verdict: Literal["ACCEPT", "REJECT", "COUNTER"] = Field(description="Verdict on the trade")
+    verdict: Literal["ACCEPT", "REJECT", "COUNTER", "INVALID"] = Field(
+        description="Verdict on the trade. Must be INVALID if player ownership checks fail."
+    )
+    is_valid_trade: bool = Field(
+        default=True,
+        description="Whether the trade is structurally valid based on roster ownership",
+    )
+    roster_validation_errors: list[str] = Field(
+        default_factory=list,
+        description="List of roster ownership errors if invalid (e.g. giving unowned player or receiving already owned player)",
+    )
+    pre_trade_starting_points: Optional[float] = Field(
+        default=None,
+        description="Projected optimal weekly starting lineup points before the trade",
+    )
+    post_trade_starting_points: Optional[float] = Field(
+        default=None,
+        description="Projected optimal weekly starting lineup points after the trade",
+    )
+    net_starting_points_change: Optional[float] = Field(
+        default=None,
+        description="Net weekly starting lineup impact (positive = starting upgrade)",
+    )
+    starting_lineup_changes: list[str] = Field(
+        default_factory=list,
+        description="Specific lineup slot changes (who enters, exits, or is benched)",
+    )
+    positional_depth_impact: Optional[str] = Field(
+        default=None,
+        description="How the trade alters positional depth and roster construction balance",
+    )
     your_vorp_change: float = Field(
-        description="Estimated net change in Value Over Replacement Player for your roster"
+        default=0.0,
+        description="Estimated net change in Value Over Replacement Player for your roster",
     )
     starting_lineup_impact: str = Field(
         description="How the trade specifically alters your weekly starting lineup quality"
     )
     playoff_schedule_impact: str = Field(
-        description="Evaluation of Weeks 15-17 schedule for acquired vs traded players"
+        default="",
+        description="Evaluation of Weeks 15-17 schedule for acquired vs traded players",
     )
     reasoning: str = Field(description="Complete analytical justification for the verdict")
     counter_suggestion: Optional[str] = Field(
