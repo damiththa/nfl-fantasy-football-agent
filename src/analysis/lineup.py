@@ -381,6 +381,7 @@ def enrich_lineup_recommendation_with_espn_status(
     current_week: int = 0,
     espn_league: Optional[Any] = None,
     injuries: Optional[list[PlayerInjuryInfo]] = None,
+    matchup: Optional[MatchupData] = None,
 ) -> LineupRecommendation:
     """Populate current ESPN slots, detect vacant starting slots, detect starting lineup holes (injuries/bye),
     generate actionable swap instructions, and populate game date, kickoff time, and home/away status.
@@ -692,6 +693,31 @@ def enrich_lineup_recommendation_with_espn_status(
         key=lambda p: (pos_priority.get(p.position.upper(), 99), -p.projected_points),
     )
 
+    # Populate opponent matchup details
+    if matchup and matchup.opponent_team:
+        opp_name = matchup.opponent_team.team_name or "Opponent"
+        rec.opponent_name = opp_name
+        rec.opponent_projected_total = matchup.opp_projected
+        rec.opponent_actual_total = matchup.opp_score
+
+        if not rec.opponent_matchup_breakdown:
+            my_proj = rec.projected_total_points or roster.total_projected
+            margin = round(my_proj - matchup.opp_projected, 1)
+            edge_desc = (
+                f"We hold a commanding projected margin (+{margin:.1f} pts) vs {opp_name}. "
+                "Our veteran game plan deploys high-floor, touch-guaranteed volume starters to eliminate variance, "
+                "protect the lead, and shut the door on any upset bid."
+                if margin > 12.0
+                else f"Projected as an underdog ({margin:.1f} pts) against {opp_name}. "
+                "Our coaching staff has strategically aligned high-ceiling variance plays and red-zone equity "
+                "to engineer the explosive upside required to secure the victory."
+                if margin < -12.0
+                else f"Deadlocked in a high-stakes, competitive contest ({margin:+.1f} pt projected margin) vs {opp_name}. "
+                "The tactical advantage hinges on touchdown conversion rates, favorable red-zone game scripts, "
+                "and superior Vegas implied team totals."
+            )
+            rec.opponent_matchup_breakdown = f"Scouting Report vs {opp_name}: {edge_desc}"
+
     eastern = zoneinfo.ZoneInfo("America/New_York")
     rec.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
 
@@ -951,6 +977,7 @@ def optimize_lineup(
                 current_week=week,
                 espn_league=espn_league,
                 injuries=injuries,
+                matchup=matchup,
             )
         except Exception as e:
             logger.warning(
@@ -1051,5 +1078,6 @@ def optimize_lineup(
         current_week=week,
         espn_league=espn_league,
         injuries=injuries,
+        matchup=matchup,
     )
 

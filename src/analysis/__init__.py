@@ -6,6 +6,7 @@ trade evaluation, and weekly matchup previews.
 
 from src.analysis.lineup import optimize_lineup
 from src.analysis.matchup_preview import generate_matchup_preview
+from src.analysis.recap import generate_weekly_recap
 from src.analysis.scoring import (
     calculate_player_score,
     compare_scoring,
@@ -23,4 +24,5 @@ __all__ = [
     "calculate_vorp",
     "evaluate_trade",
     "generate_matchup_preview",
+    "generate_weekly_recap",
 ]

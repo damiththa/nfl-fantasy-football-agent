@@ -79,3 +79,9 @@ def test_query_waivers_invalid_league(client):
     assert "not found" in response.json()["detail"].lower()
 
 
+def test_query_weekly_recap_invalid_league(client):
+    response = client.post("/query/weekly-recap?league_id=99999999")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+

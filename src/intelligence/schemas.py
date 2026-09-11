@@ -143,6 +143,19 @@ class LineupRecommendation(BaseModel):
     projected_total_points: Optional[float] = Field(
         default=None, description="Total projected points for active starters"
     )
+    opponent_name: Optional[str] = Field(
+        default=None, description="Name of opposing matchup team"
+    )
+    opponent_projected_total: Optional[float] = Field(
+        default=None, description="Total projected points for opponent starting lineup"
+    )
+    opponent_actual_total: Optional[float] = Field(
+        default=None, description="Total actual points scored so far by opponent starting lineup"
+    )
+    opponent_matchup_breakdown: Optional[str] = Field(
+        default=None,
+        description="Seasoned veteran coach breakdown analyzing how this lineup counters the specific opponent roster and exploits matchup edges",
+    )
     current_lineup: list[CurrentRosterPlayer] = Field(
         default_factory=list,
         description="User's exact ESPN starting lineup as-is, each with an explicit start/bench verdict",
@@ -347,4 +360,86 @@ class LeagueTradeReport(BaseModel):
     generated_at: str = Field(
         default="",
         description="Date and time when trade proposals were generated",
+    )
+
+
+class RecapPlayerPerformance(BaseModel):
+    """Player performance entry in the weekly recap."""
+
+    player_name: str = Field(description="Player full name")
+    position: str = Field(description="Position (QB, RB, WR, TE, K, D/ST)")
+    team: str = Field(description="NFL team abbreviation")
+    slot: str = Field(description="Lineup slot (e.g. QB, RB, WR, FLEX, BE)")
+    actual_points: float = Field(description="Actual points scored")
+    projected_points: float = Field(description="Projected points before game")
+    point_differential: float = Field(description="Actual minus projected points")
+    verdict_comment: str = Field(
+        description="Veteran coach commentary analyzing why the player performed this way"
+    )
+
+
+class MissedOpportunity(BaseModel):
+    """Suboptimal start decision or points left on the bench."""
+
+    bench_player: str = Field(description="Bench player who overperformed")
+    bench_points: float = Field(description="Points scored by bench player")
+    started_player: str = Field(description="Starter at same position/flex who scored less")
+    starter_points: float = Field(description="Points scored by starter")
+    points_differential: float = Field(description="Points left on bench (bench minus starter)")
+    lesson: str = Field(description="Actionable coaching takeaway for future lineup setting")
+
+
+class WeeklyRecapReport(BaseModel):
+    """Post-game weekly recap, film room review, and lessons learned."""
+
+    league_id: int = Field(description="ESPN League ID")
+    league_name: str = Field(description="League name")
+    week: int = Field(description="NFL Week number")
+    matchup_status: Literal["FINAL", "IN_PROGRESS"] = Field(
+        default="FINAL", description="Whether the matchup is final or in progress"
+    )
+    result: Literal["WIN", "LOSS", "TIE", "IN_PROGRESS"] = Field(
+        description="Matchup outcome for the user team"
+    )
+    user_team_name: str = Field(description="User team name")
+    user_score: float = Field(description="User team actual points scored")
+    user_projected: float = Field(description="User team projected points")
+    opponent_team_name: str = Field(description="Opponent team name")
+    opponent_score: float = Field(description="Opponent team actual points scored")
+    opponent_projected: float = Field(description="Opponent team projected points")
+    score_margin: float = Field(description="User score minus opponent score")
+
+    optimal_lineup_points: float = Field(
+        description="Highest possible score user could have achieved with optimal starter choices"
+    )
+    points_left_on_bench: float = Field(
+        description="Optimal lineup points minus actual user score"
+    )
+
+    coach_game_summary: str = Field(
+        description="Seasoned veteran coach post-game press conference / film room summary"
+    )
+    game_balls: list[RecapPlayerPerformance] = Field(
+        default_factory=list,
+        description="Top performers / MVP choices that delivered big wins",
+    )
+    missed_opportunities: list[MissedOpportunity] = Field(
+        default_factory=list,
+        description="Points left on the bench and suboptimal start/sit decisions",
+    )
+    busts: list[RecapPlayerPerformance] = Field(
+        default_factory=list,
+        description="Starters who drastically underperformed projections and reasons why",
+    )
+    lessons_learned: list[str] = Field(
+        default_factory=list,
+        description="Tactical coaching lessons learned to apply to future weeks",
+    )
+    next_week_priorities: list[str] = Field(
+        default_factory=list,
+        description="Immediate priorities for Tuesday night waiver claims and trades",
+    )
+    generated_at: str = Field(
+        default="",
+        description="Date and time when recap was generated",
     )

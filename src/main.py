@@ -5,7 +5,7 @@ Exposes endpoints for Cloud Scheduler cron triggers and on-demand analysis queri
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from src.analysis.lineup import optimize_lineup
 from src.analysis.matchup_preview import generate_matchup_preview
+from src.analysis.recap import generate_weekly_recap
 from src.analysis.trade_finder import propose_league_trades
 from src.analysis.trades import evaluate_trade
 from src.analysis.waivers import evaluate_waivers
@@ -416,6 +417,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=991059191', 'PNA 2026 Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
         </button>
+        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/weekly-recap?league_id=991059191', 'PNA 2026 Film Room & Weekly Recap')">
+          🎬 Weekly Recap (Film Room)
+        </button>
         <button class="btn btn-secondary" onclick="fetchEndpoint('/query/waivers?league_id=991059191', 'PNA 2026 Waiver Wire Intel')">
           🔄 Waiver Wire Intel
         </button>
@@ -432,6 +436,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </p>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=735288', 'Chips Ahoy Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
+        </button>
+        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/weekly-recap?league_id=735288', 'Chips Ahoy Film Room & Weekly Recap')">
+          🎬 Weekly Recap (Film Room)
         </button>
         <button class="btn btn-secondary" onclick="fetchEndpoint('/query/waivers?league_id=735288', 'Chips Ahoy Waiver Wire Intel')">
           🔄 Waiver Wire Intel
@@ -667,6 +674,138 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </span>
       </div>`;
 
+      // Section: Weekly Post-Game Film Room & Recap
+      if (data.coach_game_summary) {
+        const isWin = data.result === 'WIN';
+        const isLoss = data.result === 'LOSS';
+        const outcomeColor = isWin ? '#22c55e' : (isLoss ? '#ef4444' : '#38bdf8');
+        const outcomeBadge = isWin ? '🏆 VICTORY' : (isLoss ? '📉 SETBACK' : (data.result === 'TIE' ? '⚖️ TIE' : '⚡ IN PROGRESS'));
+
+        html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 20px;">
+          <!-- Scoreboard Header -->
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 14px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 22px;">🎬</span>
+                <h3 style="margin: 0; color: var(--accent); font-size: 18px;">Week ${data.week} Film Room & Weekly Recap</h3>
+              </div>
+              <p style="font-size: 13px; color: var(--text-muted); margin: 4px 0 0 0;">${data.league_name} • Matchup vs <strong>${data.opponent_team_name}</strong></p>
+            </div>
+            <span style="background: ${outcomeColor}; color: #000; font-weight: 800; padding: 6px 14px; border-radius: 9999px; font-size: 13px; letter-spacing: 0.5px;">
+              ${outcomeBadge} (${data.score_margin >= 0 ? '+' : ''}${data.score_margin.toFixed(1)} pts)
+            </span>
+          </div>
+
+          <!-- Dual Scoreboard Box -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
+            <div style="background: #090d16; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 12px; color: #7dd3fc; text-transform: uppercase; font-weight: 600;">${data.user_team_name} (You)</span>
+              <div style="font-size: 26px; font-weight: 800; color: #38bdf8; margin: 4px 0;">${data.user_score.toFixed(1)} <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">pts</span></div>
+              <span style="font-size: 11px; color: var(--text-muted);">Projected: ${data.user_projected.toFixed(1)} pts</span>
+            </div>
+            <div style="background: #090d16; border: 1px solid rgba(244, 63, 94, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 12px; color: #fda4af; text-transform: uppercase; font-weight: 600;">${data.opponent_team_name}</span>
+              <div style="font-size: 26px; font-weight: 800; color: #f43f5e; margin: 4px 0;">${data.opponent_score.toFixed(1)} <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">pts</span></div>
+              <span style="font-size: 11px; color: var(--text-muted);">Projected: ${data.opponent_projected.toFixed(1)} pts</span>
+            </div>
+            <div style="background: #090d16; border: 1px solid rgba(234, 179, 8, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 12px; color: #fde047; text-transform: uppercase; font-weight: 600;">Optimal Lineup Ceiling</span>
+              <div style="font-size: 26px; font-weight: 800; color: #eab308; margin: 4px 0;">${data.optimal_lineup_points.toFixed(1)} <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">pts</span></div>
+              <span style="font-size: 11px; color: #fca5a5;">Left on Bench: ${data.points_left_on_bench.toFixed(1)} pts</span>
+            </div>
+          </div>
+
+          <!-- Coach Press Conference Summary -->
+          <div style="background: #090d16; border-left: 4px solid var(--accent); border-radius: 6px; padding: 14px; margin-bottom: 16px;">
+            <strong style="color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">🎙️ Head Coach Post-Game Press Conference:</strong>
+            <p style="font-size: 14px; color: #e2e8f0; line-height: 1.5; margin: 0;">${data.coach_game_summary}</p>
+          </div>
+
+          <!-- Game Balls (MVPs) -->
+          ${data.game_balls && data.game_balls.length > 0 ? `
+            <div style="margin-bottom: 16px;">
+              <h4 style="color: #22c55e; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                🏆 Game Balls (Top Performers & Smash Starts)
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
+                ${data.game_balls.map(gb => `
+                  <div style="background: #090d16; border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                      <strong style="color: #86efac; font-size: 14px;">${gb.player_name} (${gb.position})</strong>
+                      <span style="color: #22c55e; font-weight: 800; font-size: 15px;">${gb.actual_points.toFixed(1)} pts</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Proj: ${gb.projected_points.toFixed(1)} • Diff: ${gb.point_differential >= 0 ? '+' : ''}${gb.point_differential.toFixed(1)}</div>
+                    <p style="font-size: 12px; color: #cbd5e1; line-height: 1.4; margin: 0;">${gb.verdict_comment}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Missed Opportunities (Bench Points Left Unplayed) -->
+          ${data.missed_opportunities && data.missed_opportunities.length > 0 ? `
+            <div style="margin-bottom: 16px;">
+              <h4 style="color: #f59e0b; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                🤦 Points Left on the Bench (Suboptimal Starts)
+              </h4>
+              <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                ${data.missed_opportunities.map(mo => `
+                  <div style="background: #090d16; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+                      <span style="font-size: 13px; color: #fde047;">Bench: <strong>${mo.bench_player} (${mo.bench_points.toFixed(1)} pts)</strong> outscored Starter: <strong>${mo.started_player} (${mo.starter_points.toFixed(1)} pts)</strong></span>
+                      <span style="background: rgba(245, 158, 11, 0.2); color: #fde047; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">+${mo.points_differential.toFixed(1)} pts missed</span>
+                    </div>
+                    <p style="font-size: 12px; color: #cbd5e1; line-height: 1.4; margin: 0;">💡 <strong>Coaching Lesson:</strong> ${mo.lesson}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Busts / Underperformers -->
+          ${data.busts && data.busts.length > 0 ? `
+            <div style="margin-bottom: 16px;">
+              <h4 style="color: #ef4444; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                📉 Underperformers & Tape Breakdown
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
+                ${data.busts.map(b => `
+                  <div style="background: #090d16; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                      <strong style="color: #fca5a5; font-size: 14px;">${b.player_name} (${b.position})</strong>
+                      <span style="color: #ef4444; font-weight: 800; font-size: 15px;">${b.actual_points.toFixed(1)} pts</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Proj: ${b.projected_points.toFixed(1)} • Diff: ${b.point_differential >= 0 ? '+' : ''}${b.point_differential.toFixed(1)}</div>
+                    <p style="font-size: 12px; color: #cbd5e1; line-height: 1.4; margin: 0;">${b.verdict_comment}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Lessons Learned & Action Priorities -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;">
+            ${data.lessons_learned && data.lessons_learned.length > 0 ? `
+              <div style="background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+                <strong style="color: #38bdf8; font-size: 13px; text-transform: uppercase; display: block; margin-bottom: 8px;">📋 Film Room Takeaways:</strong>
+                <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                  ${data.lessons_learned.map(l => `<li style="margin-bottom: 4px;">${l}</li>`).join('')}
+                </ul>
+              </div>
+            ` : ''}
+
+            ${data.next_week_priorities && data.next_week_priorities.length > 0 ? `
+              <div style="background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+                <strong style="color: #a855f7; font-size: 13px; text-transform: uppercase; display: block; margin-bottom: 8px;">🎯 Week ${data.week + 1} Action Plan:</strong>
+                <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                  ${data.next_week_priorities.map(p => `<li style="margin-bottom: 4px;">${p}</li>`).join('')}
+                </ul>
+              </div>
+            ` : ''}
+          </div>
+        </div>`;
+      }
+
       // Section 0: Emergency Starting Hole Alert Banner
       if (data.lineup_hole_alerts && data.lineup_hole_alerts.length > 0) {
         html += `<div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 10px; padding: 18px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);">
@@ -746,6 +885,29 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             ${data.projected_point_differential !== undefined && data.projected_point_differential !== null ? `<span style="font-size: 13px; color: ${data.projected_point_differential >= 0 ? '#86efac' : '#fca5a5'}; font-weight: 600;">${data.projected_point_differential >= 0 ? '+' : ''}${data.projected_point_differential.toFixed(1)} Projected Margin</span>` : ''}
           </div>
           ${data.strategy_reasoning ? `<p style="font-size: 13px; color: #cbd5e1; margin: 0;"><em>"${data.strategy_reasoning}"</em></p>` : ''}
+        </div>`;
+      }
+
+      // Section 2.5: Opponent Matchup Scouting Card & Counter-Strategy
+      if (data.opponent_name) {
+        const oppProj = data.opponent_projected_total !== undefined && data.opponent_projected_total !== null ? data.opponent_projected_total.toFixed(1) : '--';
+        const oppAct = data.opponent_actual_total !== undefined && data.opponent_actual_total !== null && data.opponent_actual_total > 0 ? `${data.opponent_actual_total.toFixed(1)} pts` : null;
+        const myProj = data.projected_total_points !== undefined && data.projected_total_points !== null ? data.projected_total_points.toFixed(1) : '--';
+        const myAct = data.actual_total_points !== undefined && data.actual_total_points !== null && data.actual_total_points > 0 ? `${data.actual_total_points.toFixed(1)} pts` : null;
+
+        html += `<div style="background: #090d16; border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">⚔️</span>
+              <strong style="color: #c084fc; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Matchup Opponent: ${data.opponent_name}</strong>
+            </div>
+            <div style="font-size: 12px; color: #cbd5e1; display: flex; gap: 12px;">
+              <span>You: <strong style="color: #38bdf8;">${myAct ? myAct + ' (Live)' : myProj + ' Proj'}</strong></span>
+              <span style="color: #64748b;">vs</span>
+              <span>Opponent: <strong style="color: #f43f5e;">${oppAct ? oppAct + ' (Live)' : oppProj + ' Proj'}</strong></span>
+            </div>
+          </div>
+          ${data.opponent_matchup_breakdown ? `<p style="font-size: 13px; color: #cbd5e1; line-height: 1.5; margin: 0;">🛡️ <strong>Coach's Matchup Counter-Strategy:</strong> ${data.opponent_matchup_breakdown}</p>` : ''}
         </div>`;
       }
 
@@ -1125,8 +1287,18 @@ def run_weekly_analysis() -> dict[str, Any]:
             parsed_roster = parse_roster(my_team, league_config, week=current_week)
             matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
 
-            if weekday == 1:  # Tuesday: Waiver Wire Analysis
+            if weekday == 1:  # Tuesday: Weekly Recap (Film Room) + Waiver Wire Analysis
+                # 1. Post-Game Weekly Recap / Film Room
+                if matchup:
+                    recap = generate_weekly_recap(
+                        league=league_config,
+                        week=current_week,
+                        matchup=matchup,
+                        client=client,
+                    )
+                    results[f"{league_config.short_name} Film Room"] = recap.model_dump()
 
+                # 2. Waiver Wire Analysis
                 free_agents = [
                     {
                         "name": p.name,
@@ -1460,5 +1632,50 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> 
     except Exception as e:
         logger.error(f"Error querying waivers for league {league_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/query/weekly-recap")
+@app.get("/query/weekly-recap")
+def query_weekly_recap(
+    league_id: int = Query(..., description="ESPN League ID"),
+    week: Optional[int] = Query(None, description="NFL week (defaults to current week)"),
+) -> dict[str, Any]:
+    """On-demand Weekly Post-Game Film Room and Recap for a specific league."""
+    league_config = ALL_LEAGUES.get(league_id)
+    if not league_config:
+        raise HTTPException(
+            status_code=404, detail=f"League {league_id} not found in configuration."
+        )
+
+    try:
+        espn = LeagueClient().get_league(league_config)
+        current_week = get_current_week(espn)
+        target_week = week if week is not None else current_week
+
+        matchup = get_weekly_matchup(espn, league_config.team_id, target_week, league_config)
+        if not matchup:
+            raise HTTPException(
+                status_code=404, detail=f"Matchup for week {target_week} not found."
+            )
+
+        client = None
+        try:
+            client = GeminiIntelligenceClient()
+        except Exception:
+            pass
+
+        report = generate_weekly_recap(
+            league=league_config,
+            week=target_week,
+            matchup=matchup,
+            client=client,
+        )
+        return report.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error querying weekly recap for league {league_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 

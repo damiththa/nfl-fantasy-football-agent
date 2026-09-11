@@ -154,6 +154,68 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
         <span style="background: {color}; color: #0f172a; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: bold;">⚡ {strategy}</span>
       </div>"""
 
+    # Opponent Matchup & Strategy Card
+    if data.get("opponent_name"):
+        opp_name = data["opponent_name"]
+        opp_proj = data.get("opponent_projected_total")
+        opp_act = data.get("opponent_actual_total")
+        my_proj = data.get("projected_total_points")
+        my_act = data.get("actual_total_points")
+        opp_breakdown = data.get("opponent_matchup_breakdown")
+
+        my_score_str = f"{my_act:.1f} pts (Live)" if (my_act is not None and my_act > 0) else (f"{my_proj:.1f} Proj" if my_proj else "--")
+        opp_score_str = f"{opp_act:.1f} pts (Live)" if (opp_act is not None and opp_act > 0) else (f"{opp_proj:.1f} Proj" if opp_proj else "--")
+
+        content_html += f"""
+      <div style="background: #0f172a; border: 1px solid #a855f7; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="color: #c084fc; font-size: 13px; text-transform: uppercase;">⚔️ Matchup Opponent: {opp_name}</strong>
+          <span style="color: #cbd5e1; font-size: 12px;">You: <strong style="color: #38bdf8;">{my_score_str}</strong> vs Opp: <strong style="color: #f43f5e;">{opp_score_str}</strong></span>
+        </div>
+        {f'<div style="color: #cbd5e1; font-size: 12px; line-height: 1.4; margin-top: 4px;">🛡️ <strong>Coach\'s Counter-Strategy:</strong> {opp_breakdown}</div>' if opp_breakdown else ''}
+      </div>"""
+
+    # Post-Game Film Room & Weekly Recap
+    if data.get("coach_game_summary"):
+        result = data.get("result", "FINAL")
+        badge_color = "#22c55e" if result == "WIN" else "#ef4444" if result == "LOSS" else "#38bdf8"
+        score_margin = data.get("score_margin", 0.0)
+        margin_sign = "+" if score_margin >= 0 else ""
+
+        game_balls_html = ""
+        for gb in data.get("game_balls", []):
+            game_balls_html += f"""
+          <div style="background: #0f172a; border-left: 3px solid #22c55e; padding: 6px 10px; margin-bottom: 6px; font-size: 12px;">
+            <strong style="color: #86efac;">{gb.get('player_name')} ({gb.get('position')}):</strong> {gb.get('actual_points', 0):.1f} pts (Proj: {gb.get('projected_points', 0):.1f})
+            <div style="color: #cbd5e1; margin-top: 2px;">{gb.get('verdict_comment', '')}</div>
+          </div>"""
+
+        missed_html = ""
+        for mo in data.get("missed_opportunities", []):
+            missed_html += f"""
+          <div style="background: #0f172a; border-left: 3px solid #f59e0b; padding: 6px 10px; margin-bottom: 6px; font-size: 12px;">
+            <strong style="color: #fde047;">Bench {mo.get('bench_player')} ({mo.get('bench_points', 0):.1f})</strong> outscored <strong style="color: #fca5a5;">{mo.get('started_player')} ({mo.get('starter_points', 0):.1f})</strong> (+{mo.get('points_differential', 0):.1f} pts left on bench)
+            <div style="color: #cbd5e1; margin-top: 2px;">💡 {mo.get('lesson', '')}</div>
+          </div>"""
+
+        lessons_html = "".join(f"<li style='margin-bottom: 4px;'>{lesson_item}</li>" for lesson_item in data.get("lessons_learned", []))
+        priorities_html = "".join(f"<li style='margin-bottom: 4px;'>{prio_item}</li>" for prio_item in data.get("next_week_priorities", []))
+
+        content_html += f"""
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span style="background: {badge_color}; color: #000; font-weight: bold; font-size: 11px; padding: 3px 8px; border-radius: 4px;">{result} ({margin_sign}{score_margin:.1f} PTS)</span>
+          <span style="color: #94a3b8; font-size: 12px;">You: <strong>{data.get('user_score', 0):.1f}</strong> vs {data.get('opponent_team_name')}: <strong>{data.get('opponent_score', 0):.1f}</strong> (Optimal: <strong>{data.get('optimal_lineup_points', 0):.1f}</strong>)</span>
+        </div>
+        <div style="background: #0f172a; border-left: 4px solid #38bdf8; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; color: #e2e8f0; line-height: 1.4;">
+          <strong>🎙️ Head Coach Post-Game:</strong> {data.get('coach_game_summary', '')}
+        </div>
+        {f'<h4 style="color: #22c55e; font-size: 12px; text-transform: uppercase; margin: 10px 0 6px 0;">🏆 Game Balls</h4>{game_balls_html}' if game_balls_html else ''}
+        {f'<h4 style="color: #f59e0b; font-size: 12px; text-transform: uppercase; margin: 10px 0 6px 0;">🤦 Points Left on Bench</h4>{missed_html}' if missed_html else ''}
+        {f'<h4 style="color: #38bdf8; font-size: 12px; text-transform: uppercase; margin: 10px 0 6px 0;">📋 Film Room Lessons</h4><ul style="margin: 0; padding-left: 18px; color: #cbd5e1; font-size: 12px;">{lessons_html}</ul>' if lessons_html else ''}
+        {f'<h4 style="color: #a855f7; font-size: 12px; text-transform: uppercase; margin: 10px 0 6px 0;">🎯 Next Week Priorities</h4><ul style="margin: 0; padding-left: 18px; color: #cbd5e1; font-size: 12px;">{priorities_html}</ul>' if priorities_html else ''}
+      </div>"""
+
     # 0. Critical Starting Lineup Holes & Multi-Pathway Fixes
     hole_alerts = data.get("lineup_hole_alerts") or []
     if hole_alerts:

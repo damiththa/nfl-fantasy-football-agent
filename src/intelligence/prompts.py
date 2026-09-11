@@ -110,6 +110,12 @@ In the `reasoning` field for each player, write as a seasoned fantasy expert mak
 - Synthesize the data points: Vegas team totals, spread, defensive matchup difficulty, touch/target volume, and red-zone equity.
 - For starters: Explain precisely why this player is in a smash spot or volume-secure role.
 - For bench players: Explain the specific structural vulnerability (e.g. brutal defensive front, bad game script, low snap share, or inactive status) that demands they sit.
+
+OPPONENT MATCHUP COUNTER-STRATEGY MANDATE:
+In the `opponent_matchup_breakdown` field, write as an elite veteran coach detailing how this specific starting lineup is tailored to defeat this specific opponent:
+- Contrast your roster against the opponent's starting lineup ({opponent_roster or 'Opponent'}).
+- Identify our decisive positional advantages and any opponent threats we must counter.
+- Explain how our game-theory approach (floor vs ceiling) maximizes win probability against this specific matchup opponent.
 """
 
 
@@ -294,4 +300,55 @@ You are a seasoned, elite fantasy football coach. You do NOT make trades just to
     - Set `proposals: []`
     - In `hold_roster_reasoning` and `market_overview`, provide an authoritative coaching evaluation explaining that our roster is well-constructed, no opposing teams present favorable trade packages, and holding our assets is the disciplined, winning move.
 """
+
+
+def format_weekly_recap_prompt(
+    league: LeagueConfig,
+    week: int,
+    user_team_name: str,
+    user_score: float,
+    user_projected: float,
+    opponent_team_name: str,
+    opponent_score: float,
+    opponent_projected: float,
+    starters_performance: list[dict[str, Any]],
+    bench_performance: list[dict[str, Any]],
+    optimal_lineup_points: float,
+    points_left_on_bench: float,
+) -> str:
+    """Format prompt for post-game weekly recap, film room review, and lessons learned."""
+    score_margin = round(user_score - opponent_score, 1)
+    result_text = (
+        f"VICTORY (+{score_margin} pts)"
+        if score_margin > 0
+        else f"DEFEAT ({score_margin} pts)"
+        if score_margin < 0
+        else "TIE (0.0 pts)"
+    )
+
+    return f"""Deliver a post-game 'Film Room' weekly recap for Week {week} in league '{league.name}'.
+
+MATCHUP SCOREBOARD:
+- Matchup Outcome: {result_text}
+- {user_team_name} (Our Team): {user_score:.1f} pts (Projected: {user_projected:.1f})
+- {opponent_team_name} (Opponent): {opponent_score:.1f} pts (Projected: {opponent_projected:.1f})
+- Optimal Lineup Potential: {optimal_lineup_points:.1f} pts
+- Points Left on Bench: {points_left_on_bench:.1f} pts
+
+OUR STARTING LINEUP PERFORMANCE:
+{starters_performance}
+
+OUR BENCH PERFORMANCE:
+{bench_performance}
+
+COACHING MANDATE — VETERAN HEAD COACH PRESS CONFERENCE & FILM REVIEW:
+Analyze this week's results with the sharp, uncompromising eye of a veteran fantasy football head coach.
+1. `coach_game_summary`: Deliver an authoritative, high-conviction post-game press conference. Address what went right, what went wrong, and how the team performed relative to game-script expectations.
+2. `game_balls`: Award game balls to 1-3 MVPs who smashed their projections and secured key points, detailing their usage and execution.
+3. `missed_opportunities`: Identify any suboptimal start/sit decisions (e.g. where a bench player substantially outscored a starter at the same position). For each, extract a concrete coaching lesson so we don't repeat the mistake.
+4. `busts`: Call out starters who failed to deliver (negative point differential vs projection) and explain the structural reason (e.g. negative game script, injury in-game, offensive line collapse, or poor red-zone efficiency).
+5. `lessons_learned`: List 3-4 tactical coaching principles learned from this week's tape (e.g. target share spikes, backfield share consolidation, defensive matchup realities).
+6. `next_week_priorities`: Detail 2-3 immediate, actionable directives for Tuesday night waiver wire claims, lineup tweaks, and trade targets heading into Week {week + 1}.
+"""
+
 

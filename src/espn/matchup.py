@@ -22,6 +22,8 @@ class MatchupData:
     opp_projected: float
     projected_margin: float
     is_favorite: bool
+    your_score: float = 0.0
+    opp_score: float = 0.0
 
 
 def get_current_week(league: Any) -> int:
@@ -92,6 +94,36 @@ def get_weekly_matchup(
             margin = your_projected - opp_projected
             is_fav = margin > 0
 
+            # Determine actual scores from box score or player points sum
+            raw_your_score = (
+                getattr(matchup, "home_score", 0.0)
+                if is_home
+                else getattr(matchup, "away_score", 0.0)
+            )
+            raw_opp_score = (
+                getattr(matchup, "away_score", 0.0)
+                if is_home
+                else getattr(matchup, "home_score", 0.0)
+            )
+            try:
+                your_score = float(raw_your_score or 0.0)
+            except (ValueError, TypeError):
+                your_score = 0.0
+            try:
+                opp_score = float(raw_opp_score or 0.0)
+            except (ValueError, TypeError):
+                opp_score = 0.0
+
+            # If ESPN top-level score is 0.0 mid-week, calculate from starters
+            starter_your_actual = sum(p.actual_points for p in your_roster.starters)
+            if your_score == 0.0 and starter_your_actual > 0.0:
+                your_score = round(starter_your_actual, 1)
+
+            if opp_roster:
+                starter_opp_actual = sum(p.actual_points for p in opp_roster.starters)
+                if opp_score == 0.0 and starter_opp_actual > 0.0:
+                    opp_score = round(starter_opp_actual, 1)
+
             return MatchupData(
                 week=week,
                 your_team=your_roster,
@@ -100,6 +132,8 @@ def get_weekly_matchup(
                 opp_projected=opp_projected,
                 projected_margin=margin,
                 is_favorite=is_fav,
+                your_score=your_score,
+                opp_score=opp_score,
             )
 
     return None

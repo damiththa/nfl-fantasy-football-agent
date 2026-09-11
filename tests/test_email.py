@@ -192,6 +192,49 @@ class TestEmailHtmlBuilder:
         assert "Hold Roster (Stand Pat on Trades)" in html
         assert "Roster depth is pristine" in html
 
+    def test_renders_opponent_matchup_card(self):
+        results = {
+            "PNA": {
+                "opponent_name": "Clueless Rookies",
+                "opponent_projected_total": 108.5,
+                "projected_total_points": 115.0,
+                "opponent_matchup_breakdown": "Exploit their weak RB2 slot with our high-floor volume starters.",
+                "current_lineup": [],
+            }
+        }
+        html = _build_email_html("Test", "sunday_pregame", results, "now")
+        assert "Clueless Rookies" in html
+        assert "Exploit their weak RB2" in html
+
+    def test_renders_weekly_recap_film_room(self):
+        results = {
+            "PNA Film Room": {
+                "result": "WIN",
+                "score_margin": 14.5,
+                "user_score": 120.5,
+                "opponent_score": 106.0,
+                "opponent_team_name": "Rival",
+                "optimal_lineup_points": 125.0,
+                "coach_game_summary": "Tremendous execution in all four quarters.",
+                "game_balls": [
+                    {
+                        "player_name": "Brock Purdy",
+                        "position": "QB",
+                        "actual_points": 21.1,
+                        "projected_points": 15.5,
+                        "verdict_comment": "Flawless game management and key TD passes.",
+                    }
+                ],
+                "lessons_learned": ["Shootout environments amplify flex ceiling"],
+                "next_week_priorities": ["Target backup RB priority"],
+            }
+        }
+        html = _build_email_html("Test", "weekly_analysis", results, "now")
+        assert "WIN" in html
+        assert "Tremendous execution in all four quarters" in html
+        assert "Brock Purdy" in html
+        assert "Shootout environments amplify flex ceiling" in html
+
 
 
 
