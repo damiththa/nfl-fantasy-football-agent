@@ -23,6 +23,12 @@ class StartSitDecision(BaseModel):
         description="Optimistic fantasy point projection under favorable game script"
     )
     projected_points: float = Field(description="Base projected fantasy points")
+    actual_points: Optional[float] = Field(
+        default=None, description="Actual fantasy points scored if player has already played"
+    )
+    has_played: bool = Field(
+        default=False, description="Whether the player has already played or is currently playing"
+    )
     reasoning: str = Field(
         description="Seasoned veteran expert breakdown making the definitive analytical case for why the player must start or sit, synthesizing Vegas totals, matchups, volume, and game script"
     )
@@ -59,7 +65,14 @@ class CurrentRosterPlayer(BaseModel):
     team: str = Field(description="NFL team abbreviation")
     current_slot: str = Field(description="Current ESPN slot (e.g. QB, RB, WR, FLEX, BE, IR)")
     projected_points: float = Field(description="Projected fantasy points for the week")
+    actual_points: Optional[float] = Field(
+        default=None, description="Actual points scored so far this week if game has started/finished"
+    )
+    has_played: bool = Field(
+        default=False, description="Whether the player has already played or is currently playing"
+    )
     injury_status: str = Field(default="NORMAL", description="Current injury tag")
+
     action: Literal["KEEP_STARTING", "BENCH_NOW", "PROMOTE_TO_START", "STAY_ON_BENCH"] = Field(
         description="Explicit directive for this player"
     )
@@ -123,6 +136,12 @@ class LineupRecommendation(BaseModel):
     lineup_hole_alerts: list[LineupHoleAlert] = Field(
         default_factory=list,
         description="Emergency alerts for vacant slots, injuries, or bye weeks with bench, waiver, and trade solutions",
+    )
+    actual_total_points: Optional[float] = Field(
+        default=None, description="Total actual points scored so far by active starters"
+    )
+    projected_total_points: Optional[float] = Field(
+        default=None, description="Total projected points for active starters"
     )
     current_lineup: list[CurrentRosterPlayer] = Field(
         default_factory=list,

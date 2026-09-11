@@ -256,16 +256,28 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             slot = p.get("current_slot", pos)
             team = p.get("team", "?")
             proj = p.get("projected_points", 0)
+            act_pts = p.get("actual_points")
+            has_played = p.get("has_played", False)
             act = p.get("action", "")
             act_label = p.get("action_label", "START")
             act_detail = p.get("action_detail", "")
             m_str = _format_matchup_str(p)
 
-            badge_style = "color: #22c55e; background: rgba(34, 197, 94, 0.15);" if act == "KEEP_STARTING" else "color: #ef4444; background: rgba(239, 68, 68, 0.2); font-weight: bold;"
+            if has_played:
+                badge_style = "color: #38bdf8; background: rgba(56, 189, 248, 0.2); font-weight: bold;"
+                actual_cell = f'<td style="padding: 8px; border-bottom: 1px solid #334155; color: #38bdf8; font-weight: bold; font-size: 13px;">🏁 {act_pts:.1f}</td>'
+            elif act == "KEEP_STARTING":
+                badge_style = "color: #22c55e; background: rgba(34, 197, 94, 0.15);"
+                actual_cell = '<td style="padding: 8px; border-bottom: 1px solid #334155; color: #64748b; font-size: 12px;">--</td>'
+            else:
+                badge_style = "color: #ef4444; background: rgba(239, 68, 68, 0.2); font-weight: bold;"
+                actual_cell = '<td style="padding: 8px; border-bottom: 1px solid #334155; color: #64748b; font-size: 12px;">--</td>'
+
             lineup_rows += f"""
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #38bdf8; font-weight: bold; font-size: 13px;">{slot}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #f8fafc; font-weight: bold; font-size: 13px;">{name} <span style="color:#94a3b8; font-weight:normal; font-size:11px;">({team})</span>{f'<br><span style="color:#38bdf8; font-size:11px; font-weight:normal;">🗓️ {m_str}</span>' if m_str else ''}</td>
+            {actual_cell}
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #22c55e; font-weight: bold; font-size: 13px;">{proj}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;"><span style="{badge_style} padding: 2px 6px; border-radius: 4px;">{act_label}</span></td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 12px;">{act_detail}</td>
@@ -278,6 +290,7 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
           <tr>
             <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Slot</th>
             <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
+            <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Actual</th>
             <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
             <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Verdict</th>
             <th style="padding: 8px; border-bottom: 2px solid #38bdf8; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Analysis & Advice</th>
@@ -293,16 +306,28 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
             pos = p.get("position", "?")
             team = p.get("team", "?")
             proj = p.get("projected_points", 0)
+            act_pts = p.get("actual_points")
+            has_played = p.get("has_played", False)
             act = p.get("action", "")
             act_label = p.get("action_label", "BENCH")
             act_detail = p.get("action_detail", "")
             m_str = _format_matchup_str(p)
 
-            badge_style = "color: #f59e0b; background: rgba(245, 158, 11, 0.2); font-weight: bold;" if act == "PROMOTE_TO_START" else "color: #94a3b8; background: rgba(148, 163, 184, 0.15);"
+            if has_played:
+                badge_style = "color: #38bdf8; background: rgba(56, 189, 248, 0.2); font-weight: bold;"
+                actual_cell = f'<td style="padding: 8px; border-bottom: 1px solid #334155; color: #38bdf8; font-weight: bold; font-size: 13px;">🏁 {act_pts:.1f}</td>'
+            elif act == "PROMOTE_TO_START":
+                badge_style = "color: #f59e0b; background: rgba(245, 158, 11, 0.2); font-weight: bold;"
+                actual_cell = '<td style="padding: 8px; border-bottom: 1px solid #334155; color: #64748b; font-size: 12px;">--</td>'
+            else:
+                badge_style = "color: #94a3b8; background: rgba(148, 163, 184, 0.15);"
+                actual_cell = '<td style="padding: 8px; border-bottom: 1px solid #334155; color: #64748b; font-size: 12px;">--</td>'
+
             bench_rows += f"""
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-weight: bold; font-size: 13px;">{pos}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">{name} <span style="color:#64748b; font-size:11px;">({team})</span>{f'<br><span style="color:#94a3b8; font-size:11px; font-weight:normal;">🗓️ {m_str}</span>' if m_str else ''}</td>
+            {actual_cell}
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 13px;">{proj}</td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; font-size: 11px;"><span style="{badge_style} padding: 2px 6px; border-radius: 4px;">{act_label}</span></td>
             <td style="padding: 8px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 12px;">{act_detail}</td>
@@ -315,6 +340,7 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
           <tr>
             <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Pos</th>
             <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Player</th>
+            <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Actual</th>
             <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Proj</th>
             <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Verdict</th>
             <th style="padding: 8px; border-bottom: 2px solid #64748b; color: #94a3b8; text-align: left; font-size: 11px; text-transform: uppercase;">Analysis & Advice</th>
@@ -322,6 +348,7 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
         </thead>
         <tbody>{bench_rows}</tbody>
       </table>"""
+
     else:
         # Fallback to recommended starters table if current_lineup not present
         if data.get("recommended_starters"):

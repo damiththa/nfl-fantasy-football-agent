@@ -765,16 +765,36 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
       // Section 3: Current Starting Lineup (On ESPN As-Is)
       if (data.current_lineup && data.current_lineup.length > 0) {
+        const actualTotal = data.actual_total_points !== undefined && data.actual_total_points !== null ? data.actual_total_points : null;
+        const projTotal = data.projected_total_points !== undefined && data.projected_total_points !== null ? data.projected_total_points : null;
+        const totalHeader = (actualTotal !== null && actualTotal > 0)
+          ? `<span style="font-size: 13px; font-weight: normal; margin-left: auto; color: #cbd5e1; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 4px 10px;">
+               Live Score: <strong style="color: #38bdf8;">${actualTotal.toFixed(1)}</strong> / Proj: <strong>${projTotal ? projTotal.toFixed(1) : '0.0'}</strong> pts
+             </span>`
+          : (projTotal ? `<span style="font-size: 13px; font-weight: normal; margin-left: auto; color: #94a3b8;">Proj: ${projTotal.toFixed(1)} pts</span>` : '');
+
         html += `<h3 style="font-size: 16px; color: #f8fafc; margin-top: 18px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
           🏈 Current Starting Lineup <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">(On ESPN As-Is)</span>
+          ${totalHeader}
         </h3>`;
         for (const p of data.current_lineup) {
           const isBenchNow = p.action === 'BENCH_NOW';
-          const cardClass = isBenchNow ? 'card-bench-now' : 'card-keep';
-          const badgeClass = isBenchNow ? 'badge-bench-now' : 'badge-keep';
+          const isLocked = p.has_played || (p.action_label && p.action_label.includes('LOCKED'));
+          const cardClass = isLocked ? 'card-keep' : (isBenchNow ? 'card-bench-now' : 'card-keep');
+          const badgeClass = isLocked ? 'badge-keep' : (isBenchNow ? 'badge-bench-now' : 'badge-keep');
           const injuryBadge = p.injury_status && p.injury_status !== 'NORMAL' && p.injury_status !== 'ACTIVE'
             ? `<span style="color: #ef4444; font-weight: bold; font-size: 11px; background: rgba(239, 68, 68, 0.2); padding: 2px 6px; border-radius: 4px;">⚠️ ${p.injury_status}</span>`
             : '';
+
+          const pointsDisplay = p.has_played
+            ? `<div style="text-align: right;">
+                 <div style="color: #38bdf8; font-weight: bold; font-size: 14px;">🏁 ${p.actual_points !== undefined && p.actual_points !== null ? p.actual_points.toFixed(1) : '0.0'} pts</div>
+                 <div style="color: #94a3b8; font-size: 11px;">Proj: ${p.projected_points ? p.projected_points.toFixed(1) : '0.0'}</div>
+               </div>`
+            : `<div style="text-align: right;">
+                 <span class="player-proj">${p.projected_points ? p.projected_points.toFixed(1) : '0.0'} pts</span>
+                 <div style="color: #64748b; font-size: 11px;">Actual: --</div>
+               </div>`;
 
           html += `<div class="player-card ${cardClass}">
             <div class="player-header">
@@ -786,7 +806,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 ${injuryBadge}
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="player-proj">${p.projected_points ? p.projected_points.toFixed(1) : '0.0'} pts</span>
+                ${pointsDisplay}
                 <span class="action-badge ${badgeClass}">${p.action_label || (isBenchNow ? '🚨 BENCH' : '✅ START')}</span>
               </div>
             </div>
@@ -802,6 +822,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         // Fallback if current_lineup not present
         html += '<h3 style="color: #22c55e; margin-top: 16px; margin-bottom: 8px;">🟢 Optimal Starters</h3>';
         for (const p of data.recommended_starters) {
+          const recPointsDisplay = p.has_played
+            ? `<div style="text-align: right;">
+                 <div style="color: #38bdf8; font-weight: bold; font-size: 14px;">🏁 ${p.actual_points !== undefined && p.actual_points !== null ? p.actual_points.toFixed(1) : '0.0'} pts</div>
+                 <div style="color: #94a3b8; font-size: 11px;">Proj: ${p.projected_points ? p.projected_points.toFixed(1) : '0.0'}</div>
+               </div>`
+            : `<span class="player-proj">${p.projected_points ? p.projected_points.toFixed(1) : '0.0'} pts</span>`;
+
           html += `<div class="player-card card-keep">
             <div class="player-header">
               <div class="player-info">
@@ -810,7 +837,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <span class="player-meta">${p.team}</span>
                 ${getMatchupBadge(p)}
               </div>
-              <span class="player-proj">${p.projected_points ? p.projected_points.toFixed(1) : '0.0'} pts</span>
+              ${recPointsDisplay}
             </div>
             <div class="action-detail">${p.reasoning || ''}</div>
           </div>`;
@@ -830,6 +857,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             ? `<span style="color: #ef4444; font-weight: bold; font-size: 11px; background: rgba(239, 68, 68, 0.2); padding: 2px 6px; border-radius: 4px;">⚠️ ${p.injury_status}</span>`
             : '';
 
+          const benchPointsDisplay = p.has_played
+            ? `<div style="text-align: right;">
+                 <div style="color: #38bdf8; font-weight: bold; font-size: 13px;">🏁 ${p.actual_points !== undefined && p.actual_points !== null ? p.actual_points.toFixed(1) : '0.0'} pts</div>
+                 <div style="color: #94a3b8; font-size: 11px;">Proj: ${p.projected_points ? p.projected_points.toFixed(1) : '0.0'}</div>
+               </div>`
+            : `<div style="text-align: right;">
+                 <span class="player-proj" style="color: #94a3b8;">${p.projected_points ? p.projected_points.toFixed(1) : '0.0'} pts</span>
+               </div>`;
+
           html += `<div class="player-card ${cardClass}">
             <div class="player-header">
               <div class="player-info">
@@ -840,7 +876,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 ${injuryBadge}
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="player-proj" style="color: #94a3b8;">${p.projected_points ? p.projected_points.toFixed(1) : '0.0'} pts</span>
+                ${benchPointsDisplay}
                 <span class="action-badge ${badgeClass}">${p.action_label || (isPromote ? '⚡ START' : '⏸️ BENCH')}</span>
               </div>
             </div>
@@ -848,6 +884,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           </div>`;
         }
       }
+
 
       // Section 5: Key Start/Sit Decisions
       if (data.key_flex_decisions && data.key_flex_decisions.length > 0) {
@@ -1085,10 +1122,11 @@ def run_weekly_analysis() -> dict[str, Any]:
             if not my_team:
                 continue
 
-            parsed_roster = parse_roster(my_team, league_config)
+            parsed_roster = parse_roster(my_team, league_config, week=current_week)
             matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
 
             if weekday == 1:  # Tuesday: Waiver Wire Analysis
+
                 free_agents = [
                     {
                         "name": p.name,
@@ -1179,7 +1217,7 @@ def run_sunday_pregame() -> dict[str, Any]:
             if not my_team:
                 continue
 
-            parsed_roster = parse_roster(my_team, league_config)
+            parsed_roster = parse_roster(my_team, league_config, week=current_week)
             matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
 
             # Live injury and weather check for roster
@@ -1241,7 +1279,7 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
                 status_code=404, detail=f"Team {league_config.team_id} not found in league."
             )
 
-        parsed_roster = parse_roster(my_team, league_config)
+        parsed_roster = parse_roster(my_team, league_config, week=current_week)
         matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
         roster_names = [p.name for p in parsed_roster.players]
         injuries = get_injury_report(roster_names)
@@ -1278,8 +1316,9 @@ def query_roster_players(league_id: int = Query(..., description="ESPN League ID
 
     try:
         espn = LeagueClient().get_league(league_config)
+        current_week = get_current_week(espn)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
-        parsed_roster = parse_roster(my_team, league_config) if my_team else None
+        parsed_roster = parse_roster(my_team, league_config, week=current_week) if my_team else None
         players = []
         if parsed_roster:
             for p in parsed_roster.players:
@@ -1287,7 +1326,10 @@ def query_roster_players(league_id: int = Query(..., description="ESPN League ID
                     "name": p.name,
                     "pos": p.position,
                     "team": p.team,
-                    "pts": p.projected_points,
+                    "pts": p.actual_points if p.has_played else p.projected_points,
+                    "projected_points": p.projected_points,
+                    "actual_points": p.actual_points,
+                    "has_played": p.has_played,
                     "slot": p.slot,
                 })
         return {
@@ -1309,8 +1351,10 @@ def query_trade(req: TradeRequest) -> dict[str, Any]:
 
     try:
         espn = LeagueClient().get_league(league_config)
+        current_week = get_current_week(espn)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
-        parsed_roster = parse_roster(my_team, league_config) if my_team else None
+        parsed_roster = parse_roster(my_team, league_config, week=current_week) if my_team else None
+
 
         client = None
         try:
@@ -1382,7 +1426,7 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> 
                 detail=f"Team {league_config.team_id} not found in league {league_id}",
             )
 
-        parsed_roster = parse_roster(my_team, league_config)
+        parsed_roster = parse_roster(my_team, league_config, week=current_week)
         free_agents = [
             {
                 "name": p.name,

@@ -402,6 +402,9 @@ def enrich_lineup_recommendation_with_espn_status(
         s.home_away = ha
         s.matchup_display = m_disp
         s.game_time = g_time
+        if p_obj:
+            s.actual_points = getattr(p_obj, "actual_points", None)
+            s.has_played = getattr(p_obj, "has_played", False)
 
     # Update bench players
     for b in rec.bench_players:
@@ -417,6 +420,9 @@ def enrich_lineup_recommendation_with_espn_status(
         b.home_away = ha
         b.matchup_display = m_disp
         b.game_time = g_time
+        if p_obj:
+            b.actual_points = getattr(p_obj, "actual_points", None)
+            b.has_played = getattr(p_obj, "has_played", False)
 
     # Detect emergency lineup holes (injuries, OUT, IR, SUS, Bye weeks, Vacant)
     rec.lineup_hole_alerts = detect_lineup_holes_and_solutions(
@@ -465,11 +471,17 @@ def enrich_lineup_recommendation_with_espn_status(
             )
     rec.suboptimal_starters = suboptimal
 
-    # Generate explicit actionable swap instructions
-    swaps = []
-    needs_bench = [b for b in rec.bench_players if b.alignment == "MOVE_TO_BENCH"]
+    # Generate explicit actionable swap instructions (filter out players whose games are locked)
+    locked_starter_names = {
+        p.name.lower() for p in roster.starters if getattr(p, "has_played", False)
+    }
+    needs_bench = [
+        b for b in rec.bench_players
+        if b.alignment == "MOVE_TO_BENCH" and b.player_name.lower() not in locked_starter_names
+    ]
     needs_start = [s for s in rec.recommended_starters if s.alignment == "SWAP_TO_START"]
 
+    swaps = []
     for ns, nb in zip(needs_start, needs_bench):
         swaps.append(
             f"⬇️ Bench {nb.player_name} ({nb.current_slot}) → ⬆️ Start {ns.player_name} ({ns.position})"
@@ -494,7 +506,34 @@ def enrich_lineup_recommendation_with_espn_status(
         opp, ha, m_disp, g_time = get_player_matchup_info(
             p.team, odds, getattr(p, "bye_week", 0), current_week
         )
-        if p_lower in rec_starters_map:
+        act_pts = getattr(p, "actual_points", 0.0)
+        has_played = getattr(p, "has_played", False)
+
+        if has_played:
+            # Player is locked in active lineup
+            current_lineup_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot=p.slot,
+                    projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=True,
+                    injury_status=p.injury_status,
+                    action="KEEP_STARTING",
+                    action_label=f"🏁 LOCKED ({act_pts:.1f} pts)",
+                    action_detail=f"Game played/active ({act_pts:.1f} pts vs Proj {p.projected_points:.1f} pts). Locked in starting lineup.",
+                    floor=act_pts,
+                    ceiling=act_pts,
+                    game_script_note="Game completed/in-progress",
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
+                )
+            )
+        elif p_lower in rec_starters_map:
             s_rec = rec_starters_map[p_lower]
             current_lineup_items.append(
                 CurrentRosterPlayer(
@@ -503,6 +542,8 @@ def enrich_lineup_recommendation_with_espn_status(
                     team=p.team,
                     current_slot=p.slot,
                     projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=False,
                     injury_status=p.injury_status,
                     action="KEEP_STARTING",
                     action_label="✅ KEEP STARTING",
@@ -533,6 +574,8 @@ def enrich_lineup_recommendation_with_espn_status(
                     team=p.team,
                     current_slot=p.slot,
                     projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=False,
                     injury_status=p.injury_status,
                     action="BENCH_NOW",
                     action_label=label,
@@ -548,6 +591,12 @@ def enrich_lineup_recommendation_with_espn_status(
             )
 
     rec.current_lineup = sort_current_lineup_by_order(current_lineup_items, league)
+    rec.actual_total_points = round(
+        sum(p.actual_points for p in current_lineup_items if p.has_played and p.actual_points is not None), 1
+    )
+    rec.projected_total_points = round(
+        sum(p.projected_points for p in current_lineup_items), 1
+    )
 
     # Build current_bench from roster.bench
     current_bench_items: list[CurrentRosterPlayer] = []
@@ -556,7 +605,33 @@ def enrich_lineup_recommendation_with_espn_status(
         opp, ha, m_disp, g_time = get_player_matchup_info(
             p.team, odds, getattr(p, "bye_week", 0), current_week
         )
-        if p_lower in rec_starters_map:
+        act_pts = getattr(p, "actual_points", 0.0)
+        has_played = getattr(p, "has_played", False)
+
+        if has_played:
+            current_bench_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot=p.slot,
+                    projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=True,
+                    injury_status=p.injury_status,
+                    action="STAY_ON_BENCH",
+                    action_label=f"⏸️ BENCH LOCKED ({act_pts:.1f} pts)",
+                    action_detail=f"Played on bench ({act_pts:.1f} pts vs Proj {p.projected_points:.1f} pts). Locked on bench for Week {current_week}.",
+                    floor=act_pts,
+                    ceiling=act_pts,
+                    game_script_note="Game completed/in-progress",
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
+                )
+            )
+        elif p_lower in rec_starters_map:
             s_rec = rec_starters_map[p_lower]
             current_bench_items.append(
                 CurrentRosterPlayer(
@@ -565,6 +640,8 @@ def enrich_lineup_recommendation_with_espn_status(
                     team=p.team,
                     current_slot=p.slot,
                     projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=False,
                     injury_status=p.injury_status,
                     action="PROMOTE_TO_START",
                     action_label="⚡ START THIS PLAYER",
@@ -592,6 +669,8 @@ def enrich_lineup_recommendation_with_espn_status(
                     team=p.team,
                     current_slot=p.slot,
                     projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=False,
                     injury_status=p.injury_status,
                     action="STAY_ON_BENCH",
                     action_label="⏸️ KEEP ON BENCH",
@@ -605,6 +684,7 @@ def enrich_lineup_recommendation_with_espn_status(
                     game_time=g_time,
                 )
             )
+
 
     pos_priority = {"QB": 1, "TQB": 1, "RB": 2, "WR": 3, "TE": 4, "DST": 5, "D/ST": 5, "K": 6, "PK": 6}
     rec.current_bench = sorted(

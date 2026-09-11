@@ -81,10 +81,10 @@ def get_weekly_matchup(
                 else getattr(matchup, "home_projected", 0.0)
             )
 
-            your_roster = parse_roster(your_team, league_config)
+            your_roster = parse_roster(your_team, league_config, week=week)
 
             if opp_team:
-                opp_roster = parse_roster(opp_team, league_config)
+                opp_roster = parse_roster(opp_team, league_config, week=week)
             else:
                 opp_roster = None
                 opp_projected = 0.0
