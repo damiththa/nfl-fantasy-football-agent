@@ -678,8 +678,46 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       if (data.coach_game_summary) {
         const isWin = data.result === 'WIN';
         const isLoss = data.result === 'LOSS';
-        const outcomeColor = isWin ? '#22c55e' : (isLoss ? '#ef4444' : '#38bdf8');
-        const outcomeBadge = isWin ? '🏆 VICTORY' : (isLoss ? '📉 SETBACK' : (data.result === 'TIE' ? '⚖️ TIE' : '⚡ IN PROGRESS'));
+        const isInProgress = data.matchup_status === 'IN_PROGRESS';
+        const isPreKickoff = data.matchup_status === 'PRE_KICKOFF';
+
+        let outcomeColor = '#38bdf8';
+        let outcomeBadge = '⚡ IN PROGRESS';
+        let marginLabel = `(${data.score_margin >= 0 ? '+' : ''}${data.score_margin.toFixed(1)} pts live)`;
+
+        if (isInProgress) {
+          outcomeColor = '#f59e0b';
+          outcomeBadge = `⚡ IN PROGRESS (${data.completed_starters_count || 0}/${data.total_starters_count || 9} Played)`;
+          marginLabel = `(${data.score_margin >= 0 ? '+' : ''}${data.score_margin.toFixed(1)} pts live)`;
+        } else if (isPreKickoff) {
+          outcomeColor = '#38bdf8';
+          outcomeBadge = '⏳ PRE-KICKOFF';
+          marginLabel = `(${data.score_margin >= 0 ? '+' : ''}${data.score_margin.toFixed(1)} pts proj)`;
+        } else if (isWin) {
+          outcomeColor = '#22c55e';
+          outcomeBadge = '🏆 VICTORY';
+          marginLabel = `(+${data.score_margin.toFixed(1)} pts)`;
+        } else if (isLoss) {
+          outcomeColor = '#ef4444';
+          outcomeBadge = '📉 SETBACK';
+          marginLabel = `(${data.score_margin.toFixed(1)} pts)`;
+        } else if (data.result === 'TIE') {
+          outcomeColor = '#38bdf8';
+          outcomeBadge = '⚖️ TIE';
+          marginLabel = '(0.0 pts)';
+        }
+
+        const titleText = isInProgress
+          ? `Week ${data.week} Film Room: Mid-Week Matchup Checkpoint`
+          : (isPreKickoff ? `Week ${data.week} Film Room: Pre-Kickoff Outlook` : `Week ${data.week} Film Room & Weekly Recap`);
+
+        const coachHeader = isInProgress
+          ? `🎙️ Head Coach Mid-Week Matchup Assessment & Sunday/Monday Outlook:`
+          : (isPreKickoff ? `🎙️ Head Coach Pre-Kickoff Scouting Report:` : `🎙️ Head Coach Post-Game Press Conference:`);
+
+        const ceilingSubtitle = (isInProgress || isPreKickoff)
+          ? `Starters Completed: ${data.completed_starters_count || 0} of ${data.total_starters_count || 9}`
+          : `Left on Bench: ${data.points_left_on_bench.toFixed(1)} pts`;
 
         html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 20px;">
           <!-- Scoreboard Header -->
@@ -687,45 +725,73 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <div>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-size: 22px;">🎬</span>
-                <h3 style="margin: 0; color: var(--accent); font-size: 18px;">Week ${data.week} Film Room & Weekly Recap</h3>
+                <h3 style="margin: 0; color: ${isInProgress ? '#f59e0b' : 'var(--accent)'}; font-size: 18px;">${titleText}</h3>
               </div>
               <p style="font-size: 13px; color: var(--text-muted); margin: 4px 0 0 0;">${data.league_name} • Matchup vs <strong>${data.opponent_team_name}</strong></p>
             </div>
             <span style="background: ${outcomeColor}; color: #000; font-weight: 800; padding: 6px 14px; border-radius: 9999px; font-size: 13px; letter-spacing: 0.5px;">
-              ${outcomeBadge} (${data.score_margin >= 0 ? '+' : ''}${data.score_margin.toFixed(1)} pts)
+              ${outcomeBadge} ${marginLabel}
             </span>
           </div>
+
+          ${isInProgress ? `
+            <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">⏳</span>
+              <span style="font-size: 13px; color: #fde047;"><strong>Matchup In-Progress:</strong> Showing live scores from completed games (${data.completed_starters_count || 0} of ${data.total_starters_count || 9} starters). Official Win/Loss Film Room drops Tuesday morning post-MNF!</span>
+            </div>
+          ` : ''}
 
           <!-- Dual Scoreboard Box -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
             <div style="background: #090d16; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
               <span style="font-size: 12px; color: #7dd3fc; text-transform: uppercase; font-weight: 600;">${data.user_team_name} (You)</span>
               <div style="font-size: 26px; font-weight: 800; color: #38bdf8; margin: 4px 0;">${data.user_score.toFixed(1)} <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">pts</span></div>
-              <span style="font-size: 11px; color: var(--text-muted);">Projected: ${data.user_projected.toFixed(1)} pts</span>
+              <span style="font-size: 11px; color: var(--text-muted);">Projected Total: ${data.user_projected.toFixed(1)} pts</span>
             </div>
             <div style="background: #090d16; border: 1px solid rgba(244, 63, 94, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
               <span style="font-size: 12px; color: #fda4af; text-transform: uppercase; font-weight: 600;">${data.opponent_team_name}</span>
               <div style="font-size: 26px; font-weight: 800; color: #f43f5e; margin: 4px 0;">${data.opponent_score.toFixed(1)} <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">pts</span></div>
-              <span style="font-size: 11px; color: var(--text-muted);">Projected: ${data.opponent_projected.toFixed(1)} pts</span>
+              <span style="font-size: 11px; color: var(--text-muted);">Projected Total: ${data.opponent_projected.toFixed(1)} pts</span>
             </div>
             <div style="background: #090d16; border: 1px solid rgba(234, 179, 8, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
-              <span style="font-size: 12px; color: #fde047; text-transform: uppercase; font-weight: 600;">Optimal Lineup Ceiling</span>
+              <span style="font-size: 12px; color: #fde047; text-transform: uppercase; font-weight: 600;">Lineup Ceiling</span>
               <div style="font-size: 26px; font-weight: 800; color: #eab308; margin: 4px 0;">${data.optimal_lineup_points.toFixed(1)} <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">pts</span></div>
-              <span style="font-size: 11px; color: #fca5a5;">Left on Bench: ${data.points_left_on_bench.toFixed(1)} pts</span>
+              <span style="font-size: 11px; color: #fde047;">${ceilingSubtitle}</span>
             </div>
           </div>
 
           <!-- Coach Press Conference Summary -->
-          <div style="background: #090d16; border-left: 4px solid var(--accent); border-radius: 6px; padding: 14px; margin-bottom: 16px;">
-            <strong style="color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">🎙️ Head Coach Post-Game Press Conference:</strong>
+          <div style="background: #090d16; border-left: 4px solid ${isInProgress ? '#f59e0b' : 'var(--accent)'}; border-radius: 6px; padding: 14px; margin-bottom: 16px;">
+            <strong style="color: ${isInProgress ? '#f59e0b' : 'var(--accent)'}; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">${coachHeader}</strong>
             <p style="font-size: 14px; color: #e2e8f0; line-height: 1.5; margin: 0;">${data.coach_game_summary}</p>
           </div>
+
+          <!-- Upcoming Starters (Yet to Play) -->
+          ${data.upcoming_starters && data.upcoming_starters.length > 0 ? `
+            <div style="margin-bottom: 16px;">
+              <h4 style="color: #38bdf8; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                ⏳ Upcoming Starters (Awaiting Sunday/Monday Kickoff)
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
+                ${data.upcoming_starters.map(u => `
+                  <div style="background: #090d16; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                      <strong style="color: #7dd3fc; font-size: 14px;">${u.player_name} (${u.position} - ${u.team})</strong>
+                      <span style="color: #38bdf8; font-weight: 800; font-size: 14px;">Proj: ${u.projected_points.toFixed(1)} pts</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Slot: ${u.slot} • Status: Pending Kickoff</div>
+                    <p style="font-size: 12px; color: #cbd5e1; line-height: 1.4; margin: 0;">${u.verdict_comment}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
 
           <!-- Game Balls (MVPs) -->
           ${data.game_balls && data.game_balls.length > 0 ? `
             <div style="margin-bottom: 16px;">
               <h4 style="color: #22c55e; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
-                🏆 Game Balls (Top Performers & Smash Starts)
+                🏆 Game Balls (${isInProgress ? 'Early Top Performers' : 'Top Performers & Smash Starts'})
               </h4>
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
                 ${data.game_balls.map(gb => `
@@ -766,7 +832,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           ${data.busts && data.busts.length > 0 ? `
             <div style="margin-bottom: 16px;">
               <h4 style="color: #ef4444; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
-                📉 Underperformers & Tape Breakdown
+                📉 Underperformers & Tape Breakdown (${isInProgress ? 'Completed Games Only' : 'Starters'})
               </h4>
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
                 ${data.busts.map(b => `
@@ -796,7 +862,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
             ${data.next_week_priorities && data.next_week_priorities.length > 0 ? `
               <div style="background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
-                <strong style="color: #a855f7; font-size: 13px; text-transform: uppercase; display: block; margin-bottom: 8px;">🎯 Week ${data.week + 1} Action Plan:</strong>
+                <strong style="color: #a855f7; font-size: 13px; text-transform: uppercase; display: block; margin-bottom: 8px;">🎯 ${isInProgress ? 'Sunday Slate & Waiver Watchlist' : `Week ${data.week + 1} Action Plan`}:</strong>
                 <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
                   ${data.next_week_priorities.map(p => `<li style="margin-bottom: 4px;">${p}</li>`).join('')}
                 </ul>

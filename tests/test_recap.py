@@ -171,3 +171,125 @@ def test_generate_weekly_recap_with_gemini_mock():
     assert mock_client.generate_structured.called
     assert report.result == "WIN"
     assert report.coach_game_summary == "Masterclass execution across all skill positions."
+
+
+def test_in_progress_recap_does_not_call_unplayed_busts():
+    """Verify that starters who have not played are placed in upcoming_starters and NOT in busts."""
+    played_starters = [
+        _create_mock_player("Likely", "TE", "TE", 17.1, 8.5, played=True),
+        _create_mock_player("Rice", "WR", "WR", 14.3, 12.0, played=True),
+        _create_mock_player("Mahomes", "QB", "QB", 15.2, 18.0, played=True),
+    ]
+    unplayed_starters = [
+        _create_mock_player("Henry", "RB", "RB", 0.0, 16.2, played=False),
+        _create_mock_player("Swift", "RB", "RB", 0.0, 11.5, played=False),
+        _create_mock_player("Smith", "WR", "WR", 0.0, 14.1, played=False),
+        _create_mock_player("Flex1", "WR", "FLEX", 0.0, 10.0, played=False),
+        _create_mock_player("Flex2", "RB", "FLEX", 0.0, 9.0, played=False),
+        _create_mock_player("DST", "D/ST", "D/ST", 0.0, 7.0, played=False),
+    ]
+    all_starters = played_starters + unplayed_starters
+    bench = [
+        _create_mock_player("BenchRB", "RB", "BE", 0.0, 8.0, played=False),
+    ]
+
+    user_roster = ParsedRoster(
+        team_name="Mad Dawg",
+        players=all_starters + bench,
+        starters=all_starters,
+        bench=bench,
+        ir=[],
+    )
+
+    opp_starters = [
+        _create_mock_player("OppQB", "QB", "QB", 20.0, 18.0, played=True),
+        _create_mock_player("OppRB", "RB", "RB", 0.0, 15.0, played=False),
+    ]
+    opp_roster = ParsedRoster(
+        team_name="Rival",
+        players=opp_starters,
+        starters=opp_starters,
+        bench=[],
+        ir=[],
+    )
+
+    matchup = MatchupData(
+        week=1,
+        your_team=user_roster,
+        opponent_team=opp_roster,
+        your_projected=106.3,
+        opp_projected=95.0,
+        projected_margin=11.3,
+        is_favorite=True,
+        your_score=46.6,
+        opp_score=20.0,
+    )
+
+    report = generate_weekly_recap(PNA_2026, 1, matchup, client=None)
+    assert report.matchup_status == "IN_PROGRESS"
+    assert report.result == "IN_PROGRESS"
+    assert report.completed_starters_count == 3
+    assert report.total_starters_count == 9
+
+    # Check busts: Mahomes scored 15.2 vs 18.0 (diff -2.8), but Henry/Swift/Smith (0.0 pts) MUST NOT be in busts!
+    bust_names = [b.player_name for b in report.busts]
+    assert "Henry" not in bust_names
+    assert "Swift" not in bust_names
+    assert "Smith" not in bust_names
+
+    # Check upcoming starters: All 6 unplayed starters must be listed
+    upcoming_names = [u.player_name for u in report.upcoming_starters]
+    assert "Henry" in upcoming_names
+    assert "Swift" in upcoming_names
+    assert "Smith" in upcoming_names
+    assert len(report.upcoming_starters) == 6
+
+    # Summary must reflect Mid-Week Checkpoint
+    assert "Mid-Week Checkpoint" in report.coach_game_summary
+
+
+def test_missed_opportunities_ignores_unplayed_starters():
+    """Verify that a bench player who played is NOT compared to an unplayed starter with 0 pts."""
+    starters = [
+        _create_mock_player("Henry", "RB", "RB", 0.0, 16.0, played=False),  # Hasn't played yet
+    ]
+    bench = [
+        _create_mock_player("BenchRB", "RB", "BE", 14.0, 8.0, played=True),  # Played Thursday
+    ]
+    misses = _find_missed_opportunities(starters, bench)
+    # Henry hasn't played yet, so this must NOT be flagged as a missed opportunity!
+    assert len(misses) == 0
+
+
+def test_pre_kickoff_recap():
+    """Verify pre-kickoff state when 0 starters have played."""
+    starters = [
+        _create_mock_player("Purdy", "QB", "QB", 0.0, 18.0, played=False),
+        _create_mock_player("Henry", "RB", "RB", 0.0, 16.0, played=False),
+    ]
+    user_roster = ParsedRoster(
+        team_name="Mad Dawg",
+        players=starters,
+        starters=starters,
+        bench=[],
+        ir=[],
+    )
+    matchup = MatchupData(
+        week=1,
+        your_team=user_roster,
+        opponent_team=None,
+        your_projected=34.0,
+        opp_projected=0.0,
+        projected_margin=34.0,
+        is_favorite=True,
+        your_score=0.0,
+        opp_score=0.0,
+    )
+    report = generate_weekly_recap(PNA_2026, 1, matchup, client=None)
+    assert report.matchup_status == "PRE_KICKOFF"
+    assert report.result == "PRE_KICKOFF"
+    assert report.completed_starters_count == 0
+    assert len(report.busts) == 0
+    assert len(report.upcoming_starters) == 2
+    assert "Pre-game" in report.coach_game_summary or "not kicked off yet" in report.coach_game_summary
+

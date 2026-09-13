@@ -315,40 +315,88 @@ def format_weekly_recap_prompt(
     bench_performance: list[dict[str, Any]],
     optimal_lineup_points: float,
     points_left_on_bench: float,
+    matchup_status: str = "FINAL",
+    completed_starters: list[dict[str, Any]] | None = None,
+    upcoming_starters: list[dict[str, Any]] | None = None,
 ) -> str:
-    """Format prompt for post-game weekly recap, film room review, and lessons learned."""
-    score_margin = round(user_score - opponent_score, 1)
-    result_text = (
-        f"VICTORY (+{score_margin} pts)"
-        if score_margin > 0
-        else f"DEFEAT ({score_margin} pts)"
-        if score_margin < 0
-        else "TIE (0.0 pts)"
-    )
+    """Format prompt for post-game weekly recap or mid-week matchup checkpoint."""
+    completed = completed_starters if completed_starters is not None else [p for p in starters_performance if p.get("played", True)]
+    upcoming = upcoming_starters if upcoming_starters is not None else [p for p in starters_performance if not p.get("played", True)]
+    total_starters = len(starters_performance)
+    completed_count = len(completed)
 
-    return f"""Deliver a post-game 'Film Room' weekly recap for Week {week} in league '{league.name}'.
+    score_margin = round(user_score - opponent_score, 1)
+
+    if matchup_status == "IN_PROGRESS":
+        status_banner = f"IN PROGRESS ({completed_count} of {total_starters} Starters Completed)"
+        outcome_line = f"- Matchup Status: {status_banner}\n- Current Live Margin: {score_margin:+.1f} pts"
+        instructions = f"""
+COACHING MANDATE — MID-WEEK MATCHUP CHECKPOINT & GAME-SCRIPT OUTLOOK:
+This matchup is CURRENTLY IN PROGRESS. Only {completed_count} of {total_starters} starters have completed their games (e.g. Thursday Night Football).
+CRITICAL RULES:
+1. DO NOT declare a final VICTORY or DEFEAT. The game is not over.
+2. ABSOLUTELY FORBIDDEN: DO NOT treat upcoming players who have not played yet as busts, goose eggs, or inactive! Their actual points are 0.0 simply because their games have not kicked off yet.
+3. `coach_game_summary`: Deliver an authoritative, high-energy **Mid-Week Coach Assessment**. Recap Thursday night performances, assess where we stand against {opponent_team_name}, and lay out the exact game scripts and production needed from our upcoming Sunday/Monday starters to bring home the win.
+4. `game_balls`: Award game balls ONLY to starters who have ALREADY COMPLETED their games and exceeded expectations. If none qualify, return an empty list [].
+5. `busts`: ONLY include starters who have ALREADY PLAYED and severely underperformed. NEVER include upcoming players. If none qualify, return [].
+6. `missed_opportunities`: ONLY compare bench players who have played against starters who have ALSO already played. If none, return [].
+7. `upcoming_starters`: Provide an entry for each upcoming unplayed starter with their projected points and a veteran coaching breakdown (`verdict_comment`) on what we need from their matchup.
+8. `lessons_learned`: 2-3 tactical observations from the tape of games played so far or key trends to monitor on Sunday.
+9. `next_week_priorities`: 2-3 actionable items for monitoring waiver targets and depth heading into Sunday's slate.
+"""
+    elif matchup_status == "PRE_KICKOFF":
+        status_banner = "PRE-KICKOFF (No Games Started)"
+        outcome_line = f"- Matchup Status: {status_banner}\n- Projected Margin: {round(user_projected - opponent_projected, 1):+.1f} pts"
+        instructions = f"""
+COACHING MANDATE — PRE-GAME OUTLOOK:
+Week {week} matchups have not started yet.
+1. DO NOT call any players busts or declare results.
+2. `coach_game_summary`: Provide an inspiring pre-game scouting overview and key keys to victory.
+3. Set `game_balls`: [], `busts`: [], `missed_opportunities`: [].
+4. `upcoming_starters`: Detail key starters to watch.
+5. Provide actionable preparation priorities.
+"""
+    else:
+        result_text = (
+            f"VICTORY (+{score_margin} pts)"
+            if score_margin > 0
+            else f"DEFEAT ({score_margin} pts)"
+            if score_margin < 0
+            else "TIE (0.0 pts)"
+        )
+        outcome_line = f"- Matchup Outcome: {result_text}\n- Final Margin: {score_margin:+.1f} pts"
+        instructions = f"""
+COACHING MANDATE — POST-GAME RETROSPECTIVE FILM ROOM & PRESS CONFERENCE:
+All Week {week} games are officially in the books.
+1. `coach_game_summary`: Deliver an authoritative, high-conviction post-game press conference breaking down what went right, what failed, and how the team performed relative to game-script expectations.
+2. `game_balls`: Award game balls to 1-3 MVPs who smashed their projections and secured key points, detailing their usage and execution.
+3. `missed_opportunities`: Identify suboptimal start/sit decisions (where a bench player substantially outscored a starter at the same position). Extract concrete coaching lessons.
+4. `busts`: Call out starters who failed to deliver (negative point differential vs projection) and explain the structural reason (negative game script, injury in-game, offensive line collapse, or poor red-zone efficiency).
+5. `upcoming_starters`: Leave empty [] since all games are completed.
+6. `lessons_learned`: List 3-4 tactical coaching principles learned from this week's tape (target share spikes, backfield share consolidation, defensive matchup realities).
+7. `next_week_priorities`: Detail 2-3 immediate, actionable directives for Tuesday night waiver wire claims, lineup tweaks, and trade targets heading into Week {week + 1}.
+"""
+
+    return f"""Deliver a 'Film Room' analysis for Week {week} in league '{league.name}'.
 
 MATCHUP SCOREBOARD:
-- Matchup Outcome: {result_text}
+{outcome_line}
 - {user_team_name} (Our Team): {user_score:.1f} pts (Projected: {user_projected:.1f})
 - {opponent_team_name} (Opponent): {opponent_score:.1f} pts (Projected: {opponent_projected:.1f})
 - Optimal Lineup Potential: {optimal_lineup_points:.1f} pts
 - Points Left on Bench: {points_left_on_bench:.1f} pts
 
-OUR STARTING LINEUP PERFORMANCE:
-{starters_performance}
+COMPLETED STARTERS ({completed_count} played):
+{completed}
 
-OUR BENCH PERFORMANCE:
+UPCOMING STARTERS YET TO PLAY ({len(upcoming)} pending):
+{upcoming}
+
+BENCH PLAYERS:
 {bench_performance}
 
-COACHING MANDATE — VETERAN HEAD COACH PRESS CONFERENCE & FILM REVIEW:
-Analyze this week's results with the sharp, uncompromising eye of a veteran fantasy football head coach.
-1. `coach_game_summary`: Deliver an authoritative, high-conviction post-game press conference. Address what went right, what went wrong, and how the team performed relative to game-script expectations.
-2. `game_balls`: Award game balls to 1-3 MVPs who smashed their projections and secured key points, detailing their usage and execution.
-3. `missed_opportunities`: Identify any suboptimal start/sit decisions (e.g. where a bench player substantially outscored a starter at the same position). For each, extract a concrete coaching lesson so we don't repeat the mistake.
-4. `busts`: Call out starters who failed to deliver (negative point differential vs projection) and explain the structural reason (e.g. negative game script, injury in-game, offensive line collapse, or poor red-zone efficiency).
-5. `lessons_learned`: List 3-4 tactical coaching principles learned from this week's tape (e.g. target share spikes, backfield share consolidation, defensive matchup realities).
-6. `next_week_priorities`: Detail 2-3 immediate, actionable directives for Tuesday night waiver wire claims, lineup tweaks, and trade targets heading into Week {week + 1}.
+{instructions}
 """
+
 
 

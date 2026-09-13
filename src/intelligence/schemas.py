@@ -395,11 +395,17 @@ class WeeklyRecapReport(BaseModel):
     league_id: int = Field(description="ESPN League ID")
     league_name: str = Field(description="League name")
     week: int = Field(description="NFL Week number")
-    matchup_status: Literal["FINAL", "IN_PROGRESS"] = Field(
-        default="FINAL", description="Whether the matchup is final or in progress"
+    matchup_status: Literal["FINAL", "IN_PROGRESS", "PRE_KICKOFF"] = Field(
+        default="FINAL", description="Whether the matchup is final, in progress, or pre-kickoff"
     )
-    result: Literal["WIN", "LOSS", "TIE", "IN_PROGRESS"] = Field(
+    result: Literal["WIN", "LOSS", "TIE", "IN_PROGRESS", "PRE_KICKOFF"] = Field(
         description="Matchup outcome for the user team"
+    )
+    completed_starters_count: int = Field(
+        default=0, description="Number of starting players whose games have finished"
+    )
+    total_starters_count: int = Field(
+        default=9, description="Total number of starting roster slots"
     )
     user_team_name: str = Field(description="User team name")
     user_score: float = Field(description="User team actual points scored")
@@ -417,7 +423,7 @@ class WeeklyRecapReport(BaseModel):
     )
 
     coach_game_summary: str = Field(
-        description="Seasoned veteran coach post-game press conference / film room summary"
+        description="Seasoned veteran coach post-game press conference or mid-week matchup assessment"
     )
     game_balls: list[RecapPlayerPerformance] = Field(
         default_factory=list,
@@ -425,11 +431,15 @@ class WeeklyRecapReport(BaseModel):
     )
     missed_opportunities: list[MissedOpportunity] = Field(
         default_factory=list,
-        description="Points left on the bench and suboptimal start/sit decisions",
+        description="Points left on the bench and suboptimal start/sit decisions (completed games only)",
     )
     busts: list[RecapPlayerPerformance] = Field(
         default_factory=list,
-        description="Starters who drastically underperformed projections and reasons why",
+        description="Starters who drastically underperformed projections (completed games only)",
+    )
+    upcoming_starters: list[RecapPlayerPerformance] = Field(
+        default_factory=list,
+        description="Starters whose games have not kicked off yet (in-progress state)",
     )
     lessons_learned: list[str] = Field(
         default_factory=list,
@@ -443,3 +453,4 @@ class WeeklyRecapReport(BaseModel):
         default="",
         description="Date and time when recap was generated",
     )
+
