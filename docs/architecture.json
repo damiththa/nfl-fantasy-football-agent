@@ -27,30 +27,30 @@
     ]
   },
   "components": [
+    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Jobs (ET)", "pos": [40, 120], "size": [130, 60] },
     { "id": "user", "type": "external", "label": "Manager (Mad Dawg)", "sublabel": "Mobile / Web Browser", "pos": [40, 260], "size": [130, 60] },
-    { "id": "sendgrid", "type": "external", "label": "SendGrid v3 Mail", "sublabel": "Responsive HTML", "pos": [40, 120], "size": [130, 60] },
-    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Jobs (ET)", "pos": [270, 120], "size": [140, 60] },
+    { "id": "sendgrid", "type": "external", "label": "SendGrid v3 Mail", "sublabel": "Responsive HTML", "pos": [40, 400], "size": [130, 60] },
     { "id": "fastapi", "type": "backend", "label": "FastAPI Web Engine", "sublabel": "Cloud Run :8080", "pos": [270, 260], "size": [140, 60] },
     { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN, Gemini, SendGrid", "pos": [270, 400], "size": [140, 60], "tag": "IAM Protected" },
-    { "id": "engines", "type": "backend", "label": "Analysis Engines", "sublabel": "VORP / Recap / Waivers", "pos": [490, 260], "size": [150, 60] },
     { "id": "gemini", "type": "backend", "label": "Gemini 3.1 Pro", "sublabel": "Flagship Reasoning", "pos": [490, 120], "size": [150, 60], "tag": "Pydantic Schema" },
+    { "id": "engines", "type": "backend", "label": "Analysis Engines", "sublabel": "VORP / Recap / Waivers", "pos": [490, 260], "size": [150, 60] },
     { "id": "espn", "type": "external", "label": "ESPN Fantasy API", "sublabel": "Private v3 (2 Leagues)", "pos": [740, 180], "size": [140, 60] },
     { "id": "ext_data", "type": "external", "label": "Vegas & Weather", "sublabel": "The Odds & Open-Meteo", "pos": [740, 320], "size": [140, 60] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["scheduler", "fastapi", "engines", "gemini", "secrets"] },
+    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["fastapi", "engines", "gemini", "secrets"] },
     { "kind": "security-group", "label": "Cloud Run Container (fantasy-agent)", "wraps": ["fastapi", "engines"] }
   ],
   "connections": [
     { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS :443", "variant": "emphasis" },
-    { "id": "cron-triggers", "from": "scheduler", "to": "fastapi", "label": "POST /run/*" },
+    { "id": "cron-triggers", "from": "scheduler", "to": "fastapi", "label": "cron :8080" },
     { "id": "secrets-mount", "from": "secrets", "to": "fastapi", "label": "mounted env", "variant": "security" },
     { "id": "dispatch", "from": "fastapi", "to": "engines", "label": "orchestrate" },
     { "id": "ai-reasoning", "from": "engines", "to": "gemini", "label": "structured prompt", "variant": "emphasis" },
     { "id": "ai-response", "from": "gemini", "to": "engines", "label": "JSON output" },
     { "id": "pull-espn", "from": "engines", "to": "espn", "label": "rosters & scores" },
     { "id": "pull-context", "from": "engines", "to": "ext_data", "label": "spreads & weather" },
-    { "id": "send-email", "from": "engines", "to": "sendgrid", "label": "dispatch digest" },
+    { "id": "send-email", "from": "fastapi", "to": "sendgrid", "label": "dispatch digest" },
     { "id": "deliver-digest", "from": "sendgrid", "to": "user", "label": "Tuesday 7AM Digest", "variant": "emphasis" }
   ],
   "cards": [
