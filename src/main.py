@@ -398,10 +398,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="container">
     <header>
       <h1>🏈 Mad Dawg's Command Center</h1>
-      <p>AI Fantasy Intelligence • Zero-Cost Cloud Run • Gemini 2.5 Pro</p>
+      <p>AI Fantasy Intelligence • Zero-Cost Cloud Run • Gemini 3.1 Pro</p>
       <div class="status-bar">
         <span class="status-badge">⚡ Status: Operational</span>
-        <span class="status-badge">🧠 Brain: Gemini 2.5 Pro</span>
+        <span class="status-badge">🧠 Brain: Gemini 3.1 Pro</span>
         <span class="status-badge">🏈 Season: 2026</span>
         <span class="status-badge">🌿 Power: us-central1</span>
       </div>
@@ -1355,11 +1355,33 @@ def run_weekly_analysis() -> dict[str, Any]:
 
             if weekday == 1:  # Tuesday: Weekly Recap (Film Room) + Waiver Wire Analysis
                 # 1. Post-Game Weekly Recap / Film Room
-                if matchup:
+                # ESPN may have already rolled current_week forward to the next
+                # unplayed week by Tuesday morning. Detect this and look back.
+                recap_week = current_week
+                recap_matchup = matchup
+                if matchup and current_week > 1:
+                    # If no starters have played in the "current" week, it's already
+                    # been rolled forward — recap the previous (completed) week instead.
+                    your_lineup = matchup.your_lineup or []
+                    played_count = sum(
+                        1 for p in your_lineup if getattr(p, "actual_points", 0) > 0
+                    )
+                    if played_count == 0:
+                        recap_week = current_week - 1
+                        recap_matchup = get_weekly_matchup(
+                            espn, league_config.team_id, recap_week, league_config
+                        )
+                        logger.info(
+                            "ESPN week rolled to %d — recapping completed Week %d instead",
+                            current_week,
+                            recap_week,
+                        )
+
+                if recap_matchup:
                     recap = generate_weekly_recap(
                         league=league_config,
-                        week=current_week,
-                        matchup=matchup,
+                        week=recap_week,
+                        matchup=recap_matchup,
                         client=client,
                     )
                     results[f"{league_config.short_name} Film Room"] = recap.model_dump()

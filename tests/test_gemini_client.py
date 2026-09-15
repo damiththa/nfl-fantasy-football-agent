@@ -34,7 +34,7 @@ class MockGenaiClient:
 def test_gemini_client_init_default_pro():
     mock_sdk = MockGenaiClient()
     client = GeminiIntelligenceClient(mock_client=mock_sdk)
-    assert client.model == "gemini-2.5-pro"
+    assert client.model == "gemini-3.1-pro"
 
 
 def test_gemini_client_custom_model():

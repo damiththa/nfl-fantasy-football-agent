@@ -99,7 +99,7 @@ def _build_email_html(
     <div style="text-align: center; padding: 24px 0; margin-top: 16px; border-top: 1px solid #334155;">
       <p style="color: #94a3b8; font-size: 13px; font-style: italic; margin: 0 0 12px 0;">{signoff}</p>
       <p style="color: #475569; font-size: 11px; margin: 0;">
-        Sent by <strong style="color: #38bdf8;">Fantasy Football Agent</strong> • Powered by Gemini 2.5 Pro<br>
+        Sent by <strong style="color: #38bdf8;">Fantasy Football Agent</strong> • Powered by Gemini 3.1 Pro<br>
         {timestamp} • <a href="https://fantasy-agent-652912521571.us-central1.run.app" style="color: #38bdf8; text-decoration: none;">Open Command Center →</a>
       </p>
     </div>
@@ -652,7 +652,7 @@ def _subject_for_job(job_type: str, day: str | None = None) -> str:
     """Generate a witty email subject line."""
     subjects = {
         "weekly_analysis": {
-            "Tuesday": "🔄 Waiver Wire Intel — Who to Snag Before Your Leaguemates Wake Up",
+            "Tuesday": "🎬 Film Room Recap & Waiver Wire Intel — Tuesday Digest",
             "Thursday": "🏥 Thursday Injury & TNF Report — The Hospital Ward Update",
             "Friday": "📊 Friday Lineup Lock — Decisions, Decisions...",
             "Saturday": "🔍 Saturday Scouting Report — Know Your Enemy",

@@ -1,6 +1,6 @@
 # 🏈 Mad Dawg's NFL Fantasy Football Agent
 
-AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google Cloud Run** with **\$0.00 idle cost**, powered by **Gemini 2.5 Pro** and hosted on **~90% clean renewable wind energy** in `us-central1`.
+AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google Cloud Run** with **\$0.00 idle cost**, powered by **Gemini 3.1 Pro** and hosted on **~90% clean renewable wind energy** in `us-central1`.
 
 ---
 

@@ -63,14 +63,21 @@ upsert_cron_job() {
     echo "✅ Scheduled ${job_name} [${cron_schedule} ET] -> ${endpoint}"
 }
 
-# 1. Tuesday Waiver Wire & Friday Weekend Injury Lock (7:00 PM ET)
-# Tuesday: Ingests full Monday Night Football stats & Tuesday practice reports before waivers process overnight
-# Friday: Ingests official weekend injury designations (Out, Doubtful, Questionable) from all 32 NFL teams
+# 1a. Tuesday Morning Film Room Recap & Waiver Wire (7:00 AM ET)
+# Delivers post-game analysis and waiver recommendations before waivers process
 upsert_cron_job \
-    "weekly-routine" \
-    "0 19 * * 2,5" \
+    "tuesday-film-room" \
+    "0 7 * * 2" \
     "/run/weekly" \
-    "Tuesday 7:00 PM ET waiver wire priority & Friday 7:00 PM ET weekend injury lock"
+    "Tuesday 7:00 AM ET Film Room weekly recap and waiver wire priority"
+
+# 1b. Friday Weekend Injury Lock (7:00 PM ET)
+# Ingests official weekend injury designations (Out, Doubtful, Questionable)
+upsert_cron_job \
+    "friday-injury-lock" \
+    "0 19 * * 5" \
+    "/run/weekly" \
+    "Friday 7:00 PM ET weekend injury designations and lineup lock"
 
 # 2. Thursday Night Football Inactives (6:50 PM ET - 5 mins after official 90-min inactives drop)
 upsert_cron_job \
@@ -90,6 +97,6 @@ upsert_cron_job \
 
 echo ""
 echo "============================================================"
-echo "✅ All 3 Cloud Scheduler cron triggers configured successfully!"
-echo "   All jobs are within GCP's 3 free jobs/month tier."
+echo "✅ All 4 Cloud Scheduler cron triggers configured successfully!"
+echo "   All jobs are within GCP's free tier."
 echo "============================================================"

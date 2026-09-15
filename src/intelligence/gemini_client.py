@@ -1,6 +1,6 @@
 """
 Gemini client wrapper using google-genai SDK.
-Defaults to Gemini Pro (gemini-2.5-pro) for high-grade analytical reasoning,
+Defaults to Gemini Pro (gemini-3.1-pro) for high-grade analytical reasoning,
 with native Pydantic structured output support and zero-cost test mockability.
 """
 
@@ -33,7 +33,7 @@ class GeminiIntelligenceClient:
 
         Args:
             api_key: Optional API key. If not provided, loaded from env via get_gemini_api_key().
-            model: Optional model name. If not provided, loaded via get_gemini_model() (default: gemini-2.5-pro).
+            model: Optional model name. If not provided, loaded via get_gemini_model() (default: gemini-3.1-pro).
             mock_client: Optional mock client for testing without API keys.
         """
         self.model = model or get_gemini_model()
