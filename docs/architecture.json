@@ -4,7 +4,7 @@
   "meta": {
     "title": "Mad Dawg's NFL Fantasy Football Agent",
     "output": "architecture.html",
-    "quality_profile": "showcase",
+    "quality_profile": "standard",
     "views": [
       {
         "id": "scheduled-pipeline",

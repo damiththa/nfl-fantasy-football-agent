@@ -27,13 +27,9 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/tt-a1i/archify.git /tmp/archify
 
-      - name: Validate Architecture Specification
+      - name: Render Architecture Diagram
         run: |
-          node /tmp/archify/archify/bin/archify.mjs validate architecture docs/architecture.json --quality showcase --json
-
-      - name: Deliver Interactive Architecture HTML
-        run: |
-          node /tmp/archify/archify/bin/archify.mjs deliver architecture docs/architecture.json docs/architecture.html --quality showcase
+          node /tmp/archify/archify/bin/archify.mjs render architecture docs/architecture.json docs/architecture.html
 
       - name: Commit & Push Rendered Diagram
         run: |
