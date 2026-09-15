@@ -6,6 +6,20 @@ AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google
 
 ---
 
+## 🏛️ System Architecture
+
+<p align="center">
+  <a href="docs/architecture.html">
+    <img src="docs/architecture.svg" alt="Mad Dawg's NFL Fantasy Football Agent Architecture (Rendered via Archify)" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <em>Interactive diagram rendered with <strong>Archify</strong> • Click diagram or <a href="docs/architecture.html"><strong>Open Interactive Viewer</strong></a> for pan/zoom & live view filtering • Full spec in <a href="ARCHITECTURE.md"><strong>ARCHITECTURE.md</strong></a></em>
+</p>
+
+---
+
 ## 🌐 Live Web Command Center (Primary On-Demand Access)
 
 You can run your agent anytime directly from your phone or browser without touching a terminal:

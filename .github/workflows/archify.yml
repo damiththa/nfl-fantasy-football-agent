@@ -35,14 +35,33 @@ jobs:
             exit 1
           fi
 
-      - name: Commit & Push Rendered Diagram
+      - name: Extract Standalone SVG
+        run: |
+          python3 -c "
+          import re, xml.etree.ElementTree as ET
+          with open('docs/architecture.html', 'r', encoding='utf-8') as f:
+              html = f.read()
+          styles = re.findall(r'<style[^>]*>(.*?)</style>', html, re.DOTALL)
+          combined_style = styles[0] + '\n' + styles[1]
+          svg_match = re.search(r'<svg([^>]*)>(.*?)</svg>', html, re.DOTALL)
+          svg_attrs = svg_match.group(1)
+          if 'xmlns=' not in svg_attrs:
+              svg_attrs = ' xmlns=\"http://www.w3.org/2000/svg\"' + svg_attrs
+          svg_full = f'<svg{svg_attrs}>\n<style><![CDATA[\n{combined_style}\n]]></style>\n<rect width=\"100%\" height=\"100%\" fill=\"#020617\" rx=\"12\"/>\n{svg_match.group(2)}\n</svg>'
+          with open('docs/architecture.svg', 'w', encoding='utf-8') as out:
+              out.write(svg_full)
+          tree = ET.parse('docs/architecture.svg')
+          print('Extracted valid standalone docs/architecture.svg')
+          "
+
+      - name: Commit & Push Rendered Diagrams
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/architecture.html
+          git add docs/architecture.html docs/architecture.svg
           if git diff --staged --quiet; then
-            echo "Diagram is up to date, no changes to commit."
+            echo "Diagrams are up to date, no changes to commit."
           else
-            git commit -m "docs: auto-render Archify architecture diagram [skip ci]"
+            git commit -m "docs: auto-render Archify architecture diagrams (HTML + SVG) [skip ci]"
             git push
           fi

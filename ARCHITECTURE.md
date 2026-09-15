@@ -23,10 +23,16 @@ The **NFL Fantasy Football Intelligence Agent** is an autonomous, event-driven d
 
 ## 2. System Topology & Context
 
-> [!TIP]
-> **Interactive Cloud Architecture Diagram**: An interactive, explorable **Archify** diagram with dark/light themes, pan/zoom, and animated trace paths is defined in [`docs/architecture.json`](docs/architecture.json) and compiled via GitHub Actions into [`docs/architecture.html`](docs/architecture.html).
+<p align="center">
+  <a href="docs/architecture.html">
+    <img src="docs/architecture.svg" alt="System Topology (Rendered via Archify)" width="100%">
+  </a>
+</p>
 
-The following diagram illustrates the high-level architecture, actors, external data providers, compute workloads, and notification sinks:
+> [!TIP]
+> **Interactive Cloud Architecture Diagram**: The diagram above is compiled by Archify. You can open the standalone [**Interactive Viewer (docs/architecture.html)**](docs/architecture.html) to explore dark/light themes, pan/zoom navigation, and filter between automated cadence vs. on-demand optimization views. Specification source: [`docs/architecture.json`](docs/architecture.json).
+
+Below is the matching structural component mapping:
 
 ```mermaid
 flowchart TB
