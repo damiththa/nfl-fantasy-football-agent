@@ -17,6 +17,7 @@ class TestSubjectGeneration:
     def test_tuesday_waiver_subject(self):
         subject = _subject_for_job("weekly_analysis", "Tuesday")
         assert "Waiver Wire" in subject
+        assert "Film Room" in subject
 
     def test_thursday_injury_subject(self):
         subject = _subject_for_job("weekly_analysis", "Thursday")
