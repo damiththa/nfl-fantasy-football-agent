@@ -29,10 +29,7 @@ jobs:
 
       - name: Render Architecture Diagram
         run: |
-          node /tmp/archify/archify/bin/archify.mjs render architecture docs/architecture.json docs/architecture.html > /tmp/archify.log 2>&1 || true
-          while IFS= read -r line; do
-            echo "::warning::$line"
-          done < /tmp/archify.log
+          node /tmp/archify/archify/bin/archify.mjs render architecture docs/architecture.json docs/architecture.html
           if [ ! -f docs/architecture.html ]; then
             echo "::error::Archify failed to produce docs/architecture.html"
             exit 1
