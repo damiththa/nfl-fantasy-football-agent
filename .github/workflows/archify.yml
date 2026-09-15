@@ -1,0 +1,48 @@
+name: Render Architecture Diagram (Archify)
+
+on:
+  push:
+    paths:
+      - "docs/architecture.json"
+      - ".github/workflows/archify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render-architecture:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Clone Archify Engine
+        run: |
+          git clone --depth 1 https://github.com/tt-a1i/archify.git /tmp/archify
+
+      - name: Validate Architecture Specification
+        run: |
+          node /tmp/archify/archify/bin/archify.mjs validate architecture docs/architecture.json --quality showcase --json
+
+      - name: Deliver Interactive Architecture HTML
+        run: |
+          node /tmp/archify/archify/bin/archify.mjs deliver architecture docs/architecture.json docs/architecture.html --quality showcase
+
+      - name: Commit & Push Rendered Diagram
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/architecture.html
+          if git diff --staged --quiet; then
+            echo "Diagram is up to date, no changes to commit."
+          else
+            git commit -m "docs: auto-render Archify architecture diagram [skip ci]"
+            git push
+          fi

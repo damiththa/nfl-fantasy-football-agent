@@ -23,6 +23,9 @@ The **NFL Fantasy Football Intelligence Agent** is an autonomous, event-driven d
 
 ## 2. System Topology & Context
 
+> [!TIP]
+> **Interactive Cloud Architecture Diagram**: An interactive, explorable **Archify** diagram with dark/light themes, pan/zoom, and animated trace paths is defined in [`docs/architecture.json`](docs/architecture.json) and compiled via GitHub Actions into [`docs/architecture.html`](docs/architecture.html).
+
 The following diagram illustrates the high-level architecture, actors, external data providers, compute workloads, and notification sinks:
 
 ```mermaid

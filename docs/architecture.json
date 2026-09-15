@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mad Dawg's NFL Fantasy Football Agent",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "scheduled-pipeline",
+        "label": "Automated Weekly Cadence",
+        "focus": ["scheduler", "fastapi", "engines", "espn", "gemini", "sendgrid", "user"],
+        "note": "Tuesday Film Room, Thursday TNF, Friday Injury Lock, and Sunday Game Day inactives."
+      },
+      {
+        "id": "on-demand-optimization",
+        "label": "On-Demand Command Center",
+        "focus": ["user", "fastapi", "engines", "espn", "ext_data", "gemini"],
+        "note": "Live start/sit, waiver evaluations, and starting-lineup delta trade analysis."
+      },
+      {
+        "id": "security-and-ai",
+        "label": "Security & AI Governance",
+        "focus": ["secrets", "fastapi", "gemini"],
+        "note": "GCP Secret Manager mounts runtime secrets; Gemini 3.1 Pro enforces Pydantic structured output."
+      }
+    ]
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "Manager (Mad Dawg)", "sublabel": "Mobile / Web Browser", "pos": [40, 260], "size": [130, 60] },
+    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Jobs (ET)", "pos": [40, 120], "size": [130, 60] },
+    { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN, Gemini, SendGrid", "pos": [260, 420], "size": [140, 60], "tag": "IAM Protected" },
+    { "id": "fastapi", "type": "backend", "label": "FastAPI Web Engine", "sublabel": "Cloud Run :8080", "pos": [260, 260], "size": [140, 60] },
+    { "id": "engines", "type": "backend", "label": "Analysis Engines", "sublabel": "VORP / Recap / Waivers", "pos": [490, 260], "size": [150, 60] },
+    { "id": "gemini", "type": "backend", "label": "Gemini 3.1 Pro", "sublabel": "Flagship Reasoning", "pos": [490, 120], "size": [150, 60], "tag": "Pydantic Schema" },
+    { "id": "espn", "type": "external", "label": "ESPN Fantasy API", "sublabel": "Private v3 (2 Leagues)", "pos": [740, 200], "size": [140, 60] },
+    { "id": "ext_data", "type": "external", "label": "Vegas & Weather", "sublabel": "The Odds & Open-Meteo", "pos": [740, 320], "size": [140, 60] },
+    { "id": "sendgrid", "type": "external", "label": "SendGrid v3 Mail", "sublabel": "Responsive HTML", "pos": [260, 120], "size": [140, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["scheduler", "fastapi", "engines", "gemini", "secrets"] },
+    { "kind": "security-group", "label": "Cloud Run Container (fantasy-agent)", "wraps": ["fastapi", "engines"] }
+  ],
+  "connections": [
+    { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS :443", "variant": "emphasis" },
+    { "id": "cron-triggers", "from": "scheduler", "to": "fastapi", "label": "POST /run/*" },
+    { "id": "secrets-mount", "from": "secrets", "to": "fastapi", "label": "mounted env", "variant": "security" },
+    { "id": "dispatch", "from": "fastapi", "to": "engines", "label": "orchestrate" },
+    { "id": "ai-reasoning", "from": "engines", "to": "gemini", "label": "structured prompt", "variant": "emphasis" },
+    { "id": "ai-response", "from": "gemini", "to": "engines", "label": "JSON output" },
+    { "id": "pull-espn", "from": "engines", "to": "espn", "label": "rosters & scores" },
+    { "id": "pull-context", "from": "engines", "to": "ext_data", "label": "spreads & weather" },
+    { "id": "send-email", "from": "engines", "to": "sendgrid", "label": "dispatch digest" },
+    { "id": "deliver-digest", "from": "sendgrid", "to": "user", "label": "Tuesday 7AM Digest", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Ingress & Automation",
+      "items": [
+        "Google Cloud Scheduler triggers Tuesday, Thursday, Friday, and Sunday jobs",
+        "Manager accesses real-time Command Center from phone or browser"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Core Intelligence",
+      "items": [
+        "FastAPI hosted serverless on Cloud Run with min-instances=0 ($0.00 idle)",
+        "Deterministic VORP, lineup hole checks, and 3-state Film Room engine",
+        "Gemini 3.1 Pro generates structured game-theory analysis and coach commentary"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security & Upstream",
+      "items": [
+        "All credentials secured in GCP Secret Manager (zero hardcoded secrets)",
+        "Automated delivery to manager's mailbox via SendGrid v3 Mail API"
+      ]
+    }
+  ]
+}
