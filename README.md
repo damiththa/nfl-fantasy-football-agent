@@ -2,6 +2,8 @@
 
 AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google Cloud Run** with **\$0.00 idle cost**, powered by **Gemini 3.1 Pro** and hosted on **~90% clean renewable wind energy** in `us-central1`.
 
+📖 **[System Architecture Specification](ARCHITECTURE.md)** • 🌐 **[Live Web Portal](https://fantasy-agent-3pky7gmu6q-uc.a.run.app)** • 🛠️ **[Swagger Docs](https://fantasy-agent-3pky7gmu6q-uc.a.run.app/docs)**
+
 ---
 
 ## 🌐 Live Web Command Center (Primary On-Demand Access)
