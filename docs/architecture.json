@@ -7,48 +7,55 @@
     "quality_profile": "standard",
     "views": [
       {
+        "id": "roster-and-opponent",
+        "label": "ESPN Rosters & Opponent Lineup Flow",
+        "focus": ["secrets", "espn_my_team", "espn_opp", "espn_waivers", "espn_adapter", "engines"],
+        "note": "Private ESPN cookies (S2/SWID) authenticate ingestion of your roster, weekly opponent matchups, and free agents."
+      },
+      {
         "id": "scheduled-pipeline",
         "label": "Automated Weekly Cadence",
-        "focus": ["scheduler", "fastapi", "engines", "espn", "gemini", "sendgrid", "user"],
-        "note": "Tuesday Film Room, Thursday TNF, Friday Injury Lock, and Sunday Game Day inactives."
+        "focus": ["scheduler", "fastapi", "espn_adapter", "engines", "gemini", "sendgrid", "user"],
+        "note": "Tuesday 7AM Film Room, Thursday TNF inactives, Friday injury lock, and Sunday kickoff alerts."
       },
       {
         "id": "on-demand-optimization",
-        "label": "On-Demand Command Center",
-        "focus": ["user", "fastapi", "engines", "espn", "ext_data", "gemini"],
-        "note": "Live start/sit, waiver evaluations, and starting-lineup delta trade analysis."
-      },
-      {
-        "id": "security-and-ai",
-        "label": "Security & AI Governance",
-        "focus": ["secrets", "fastapi", "gemini"],
-        "note": "GCP Secret Manager mounts runtime secrets; Gemini 3.1 Pro enforces Pydantic structured output."
+        "label": "Live Command Center & AI Reasoning",
+        "focus": ["user", "fastapi", "engines", "ext_context", "gemini"],
+        "note": "On-demand start/sit, waiver priority, and VORP trade evaluations synthesized by Gemini 3.1 Pro."
       }
     ]
   },
   "components": [
-    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Jobs (ET)", "pos": [40, 120], "size": [130, 60] },
-    { "id": "user", "type": "external", "label": "Manager (Mad Dawg)", "sublabel": "Mobile / Web Browser", "pos": [40, 260], "size": [130, 60] },
-    { "id": "sendgrid", "type": "external", "label": "SendGrid v3 Mail", "sublabel": "Responsive HTML", "pos": [40, 400], "size": [130, 60] },
-    { "id": "fastapi", "type": "backend", "label": "FastAPI Web Engine", "sublabel": "Cloud Run :8080", "pos": [270, 260], "size": [140, 60] },
-    { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN, Gemini, SendGrid", "pos": [270, 400], "size": [140, 60], "tag": "IAM Protected" },
-    { "id": "gemini", "type": "backend", "label": "Gemini 3.1 Pro", "sublabel": "Flagship Reasoning", "pos": [490, 120], "size": [150, 60], "tag": "Pydantic Schema" },
-    { "id": "engines", "type": "backend", "label": "Analysis Engines", "sublabel": "VORP / Recap / Waivers", "pos": [490, 260], "size": [150, 60] },
-    { "id": "espn", "type": "external", "label": "ESPN Fantasy API", "sublabel": "Private v3 (2 Leagues)", "pos": [740, 180], "size": [140, 60] },
-    { "id": "ext_data", "type": "external", "label": "Vegas & Weather", "sublabel": "The Odds & Open-Meteo", "pos": [740, 320], "size": [140, 60] }
+    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Triggers (ET)", "pos": [40, 90], "size": [130, 60] },
+    { "id": "user", "type": "external", "label": "Manager (Mad Dawg)", "sublabel": "Mobile / Web Browser", "pos": [40, 200], "size": [130, 60] },
+    { "id": "sendgrid", "type": "external", "label": "SendGrid Mail API", "sublabel": "Responsive HTML", "pos": [40, 310], "size": [130, 60] },
+    { "id": "fastapi", "type": "backend", "label": "FastAPI Engine", "sublabel": "Cloud Run :8080", "pos": [260, 200], "size": [150, 60] },
+    { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN S2/SWID & Keys", "pos": [260, 420], "size": [150, 60], "tag": "IAM Protected" },
+    { "id": "gemini", "type": "backend", "label": "Gemini 3.1 Pro", "sublabel": "Flagship Reasoning", "pos": [490, 90], "size": [160, 60], "tag": "Pydantic Contract" },
+    { "id": "engines", "type": "backend", "label": "Decision Engines", "sublabel": "Lineup, Waivers, Recap", "pos": [490, 200], "size": [160, 60] },
+    { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 310], "size": [160, 60] },
+    { "id": "ext_context", "type": "external", "label": "Vegas Odds & Weather", "sublabel": "The Odds & Open-Meteo", "pos": [740, 90], "size": [180, 60] },
+    { "id": "espn_my_team", "type": "external", "label": "My Team Rosters", "sublabel": "Starters, Bench & IR", "pos": [740, 200], "size": [180, 60] },
+    { "id": "espn_opp", "type": "external", "label": "Weekly Opponents", "sublabel": "Matchup & Live Scores", "pos": [740, 310], "size": [180, 60] },
+    { "id": "espn_waivers", "type": "external", "label": "Free Agent Pool", "sublabel": "Top 25 Available Wire", "pos": [740, 420], "size": [180, 60] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["fastapi", "engines", "gemini", "secrets"] },
-    { "kind": "security-group", "label": "Cloud Run Container (fantasy-agent)", "wraps": ["fastapi", "engines"] }
+    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["fastapi", "secrets", "gemini", "engines", "espn_adapter"] },
+    { "kind": "security-group", "label": "Cloud Run Service (fantasy-agent)", "wraps": ["fastapi", "engines", "espn_adapter"] },
+    { "kind": "cluster", "label": "ESPN Fantasy Platform (Private v3 API)", "wraps": ["espn_my_team", "espn_opp", "espn_waivers"] }
   ],
   "connections": [
     { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS :443", "variant": "emphasis" },
     { "id": "cron-triggers", "from": "scheduler", "to": "fastapi", "label": "cron :8080" },
-    { "id": "secrets-mount", "from": "secrets", "to": "fastapi", "label": "mounted env", "variant": "security" },
-    { "id": "dispatch", "from": "fastapi", "to": "engines", "label": "orchestrate" },
-    { "id": "ai-reasoning", "from": "engines", "to": "gemini", "label": "Pydantic schema & reasoning", "variant": "emphasis" },
-    { "id": "pull-espn", "from": "engines", "to": "espn", "label": "rosters & scores" },
-    { "id": "pull-context", "from": "engines", "to": "ext_data", "label": "spreads & weather" },
+    { "id": "secrets-to-adapter", "from": "secrets", "to": "espn_adapter", "label": "ESPN_S2 & SWID", "variant": "security" },
+    { "id": "dispatch-analysis", "from": "fastapi", "to": "engines", "label": "evaluate" },
+    { "id": "ai-reasoning", "from": "engines", "to": "gemini", "label": "Pydantic contract", "variant": "emphasis" },
+    { "id": "parsed-data", "from": "espn_adapter", "to": "engines", "label": "rosters & matchups" },
+    { "id": "fetch-my-team", "from": "espn_adapter", "to": "espn_my_team", "label": "player status" },
+    { "id": "fetch-opponent", "from": "espn_adapter", "to": "espn_opp", "label": "opponent lineup" },
+    { "id": "fetch-waivers", "from": "espn_adapter", "to": "espn_waivers", "label": "waiver targets" },
+    { "id": "context-odds", "from": "ext_context", "to": "engines", "label": "spreads & weather" },
     { "id": "send-email", "from": "fastapi", "to": "sendgrid", "label": "dispatch digest" },
     { "id": "deliver-digest", "from": "sendgrid", "to": "user", "label": "Tuesday 7AM Digest", "variant": "emphasis" }
   ],
@@ -63,18 +70,19 @@
     },
     {
       "dot": "emerald",
-      "title": "Core Intelligence",
+      "title": "ESPN Ingestion & Optimization",
       "items": [
-        "FastAPI hosted serverless on Cloud Run with min-instances=0 ($0.00 idle)",
+        "Ingests My Team Roster, Opponent Lineups, and Free Agent Wire via private ESPN API",
         "Deterministic VORP, lineup hole checks, and 3-state Film Room engine",
         "Gemini 3.1 Pro generates structured game-theory analysis and coach commentary"
       ]
     },
     {
       "dot": "rose",
-      "title": "Security & Upstream",
+      "title": "Security & Upstream Market Context",
       "items": [
-        "All credentials secured in GCP Secret Manager (zero hardcoded secrets)",
+        "All ESPN session tokens and API keys secured in GCP Secret Manager",
+        "Vegas implied totals and stadium weather feed into game-script strategy",
         "Automated delivery to manager's mailbox via SendGrid v3 Mail API"
       ]
     }
