@@ -43,7 +43,7 @@
   "boundaries": [
     { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["fastapi", "secrets", "gemini", "engines", "espn_adapter"] },
     { "kind": "security-group", "label": "Cloud Run Service (fantasy-agent)", "wraps": ["fastapi", "engines", "espn_adapter"] },
-    { "kind": "cluster", "label": "ESPN Fantasy Platform (Private v3 API)", "wraps": ["espn_my_team", "espn_opp", "espn_waivers"] }
+    { "kind": "security-group", "label": "ESPN Fantasy Platform (Private v3 API)", "wraps": ["espn_my_team", "espn_opp", "espn_waivers"] }
   ],
   "connections": [
     { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS :443", "variant": "emphasis" },
