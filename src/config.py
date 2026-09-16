@@ -316,4 +316,4 @@ def get_current_season() -> int:
 
 def get_gemini_model() -> str:
     """Return configured Gemini model name from env or default to Gemini Pro."""
-    return os.environ.get("GEMINI_MODEL", "gemini-3.1-pro")
+    return os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")

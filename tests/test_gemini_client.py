@@ -34,7 +34,7 @@ class MockGenaiClient:
 def test_gemini_client_init_default_pro():
     mock_sdk = MockGenaiClient()
     client = GeminiIntelligenceClient(mock_client=mock_sdk)
-    assert client.model == "gemini-3.1-pro"
+    assert client.model == "gemini-2.5-pro"
 
 
 def test_gemini_client_custom_model():
@@ -82,3 +82,21 @@ def test_missing_api_key_raises_error(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     with pytest.raises(EnvironmentError, match="GEMINI_API_KEY not found"):
         GeminiIntelligenceClient()
+
+
+def test_validate_model_success():
+    mock_sdk = MockGenaiClient("pong")
+    client = GeminiIntelligenceClient(mock_client=mock_sdk)
+    assert client.validate_model() is True
+
+
+def test_validate_model_failure():
+    class FailingModels:
+        def generate_content(self, *args, **kwargs):
+            raise ConnectionError("Endpoint unreachable")
+
+    class FailingClient:
+        models = FailingModels()
+
+    client = GeminiIntelligenceClient(mock_client=FailingClient())
+    assert client.validate_model() is False

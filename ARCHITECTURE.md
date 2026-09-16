@@ -1,7 +1,7 @@
 # 🏛️ System Architecture Specification
 
 **System Name:** Mad Dawg's NFL Fantasy Football Intelligence Agent  
-**Document Version:** 2.0 (Post-Gemini 3.1 Pro Migration)  
+**Document Version:** 2.1 (Production Gemini 2.5 Pro Model with Startup Health Validation)  
 **Classification:** Event-Driven Serverless AI Agent & Decision-Support Platform  
 **Target Platform:** Google Cloud Platform (`us-central1`)  
 **Idle Operational Cost:** \$0.00 / month (100% GCP Free Tier Compliant)  
@@ -14,7 +14,7 @@ The **NFL Fantasy Football Intelligence Agent** is an autonomous, event-driven d
 
 ### Core Architectural Principles
 1. **Zero-Cost Serverless Execution:** Runs on Google Cloud Run configured with `min-instances=0`. Cold instances provision in <3 seconds on request and terminate immediately after processing, achieving \$0.00 idle cost.
-2. **Hybrid Probabilistic-Deterministic Intelligence:** Core mathematical valuations (VORP, points differentials, starter replacement thresholds, injury status) are computed deterministically. The LLM (**Gemini 3.1 Pro**) is utilized strictly for contextual reasoning, game-script synthesis, game-theory weighting, and executive coaching commentary, constrained by strict Pydantic JSON schemas.
+2. **Hybrid Probabilistic-Deterministic Intelligence:** Core mathematical valuations (VORP, points differentials, starter replacement thresholds, injury status) are computed deterministically. The LLM (**Gemini 2.5 Pro**) is utilized strictly for contextual reasoning, game-script synthesis, game-theory weighting, and executive coaching commentary, constrained by strict Pydantic JSON schemas.
 3. **Resilient Fail-Safe Operation:** If the LLM provider experiences network latency, rate limits, or service degradation, the engine seamlessly falls back to 100% deterministic optimization without crashing or missing automated weekly deadlines.
 4. **State-Aware Temporal Dynamics:** Matchup analysis differentiates between `PRE_KICKOFF`, `IN_PROGRESS`, and `FINAL` game states. Tuesday morning routines automatically guard against ESPN week rollover race conditions.
 5. **Zero Trust Security & Zero Hardcoded Secrets:** All credentials (ESPN session tokens, Gemini API keys, SendGrid API keys) are managed in Google Cloud Secret Manager and mounted as container environment variables at runtime.
@@ -77,7 +77,7 @@ flowchart TB
 
     subgraph External_Services ["🌐 External APIs & Upstream Providers"]
         ESPN_API["ESPN Fantasy Private API<br/>(lm-api-reads.fantasy.espn.com)"]
-        Gemini_API["Google Gemini 3.1 Pro<br/>(Vertex AI IAM / Google AI Studio)"]
+        Gemini_API["Google Gemini 2.5 Pro<br/>(Vertex AI IAM / Google AI Studio)"]
         SendGrid_API["SendGrid v3 Mail API<br/>(api.sendgrid.com)"]
         Odds_API["The Odds API / Sportsbooks"]
         Weather_API["Open-Meteo Weather API"]
@@ -159,7 +159,7 @@ flowchart TB
                          Matchup Context & Constraints
                                         ▼
                           ┌──────────────────────────┐
-                          │ Gemini 3.1 Pro Reasoning │
+                          │ Gemini 2.5 Pro Reasoning │
                           │ - Opponent Counter-Strat │
                           │ - Game Script Synthesis  │
                           │ - Coach Narrative        │
@@ -200,7 +200,7 @@ flowchart TB
 ---
 
 ### 2.3 Intelligence Layer & Prompt Orchestration (`src/intelligence/`)
-* **Model Selection:** **`gemini-3.1-pro`** (Google's flagship reasoning model, replacing deprecated `gemini-2.5-pro`).
+* **Model Selection:** **`gemini-2.5-pro`** (Flagship reasoning model running via Vertex AI in `us-central1` with internal thinking chains).
 * **Client Architecture (`src/intelligence/gemini_client.py`):**
   * Employs the modern `google.genai` SDK (`genai.Client`).
   * Supports dual-authentication:
@@ -249,7 +249,7 @@ sequenceDiagram
     participant CR as Cloud Run (FastAPI)
     participant ESPN as ESPN Fantasy API
     participant Engine as Recap & Waiver Engine
-    participant Gemini as Gemini 3.1 Pro
+    participant Gemini as Gemini 2.5 Pro
     participant SG as SendGrid API
     participant User as Manager (Mad Dawg)
 
@@ -290,7 +290,7 @@ sequenceDiagram
     participant CR as Cloud Run (FastAPI)
     participant ESPN as ESPN Fantasy API
     participant Ext as Vegas & Weather APIs
-    participant Gemini as Gemini 3.1 Pro
+    participant Gemini as Gemini 2.5 Pro
 
     User->>UI: Click "Optimize Lineup"
     UI->>CR: POST /query/lineup?league_id=991059191
@@ -332,9 +332,10 @@ sequenceDiagram
 1. **Deterministic Fallbacks:** In the event of an upstream Gemini API error (HTTP 429, 503, or rate limit exhaustion), the agent catches the exception, logs the event, and falls back to deterministic mathematical optimization. The scheduled email or web response will still generate with valid start/sit recommendations.
 2. **Cold Start Optimization:** The Docker image uses `python:3.14-slim` with pre-compiled bytecode. Container boot time is ~1.8 seconds.
 3. **Idempotent Deployments:** Deployment is fully scripted in `deploy/deploy.sh` and uses Google Cloud Build to build container images directly from source, eliminating local Docker daemon requirements.
-4. **Automated Health Monitoring:**
+4. **Automated Health Monitoring & Probing:**
    * Endpoint: `GET /health`
-   * Validates active season, connected leagues, and current Gemini model version (`gemini-3.1-pro`).
+   * Validates active season, connected leagues, model version (`gemini-2.5-pro`), and active connectivity status via `gemini_status`.
+   * Application startup performs an active probe to verify model availability in Vertex AI immediately on boot.
 
 ---
 

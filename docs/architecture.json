@@ -22,7 +22,7 @@
         "id": "on-demand-optimization",
         "label": "Live Command Center & AI Reasoning",
         "focus": ["user", "fastapi", "engines", "ext_context", "gemini"],
-        "note": "On-demand start/sit, waiver priority, and VORP trade evaluations synthesized by Gemini 3.1 Pro."
+        "note": "On-demand start/sit, waiver priority, and VORP trade evaluations synthesized by Gemini 2.5 Pro."
       }
     ]
   },
@@ -32,7 +32,7 @@
     { "id": "sendgrid", "type": "external", "label": "SendGrid Mail API", "sublabel": "Responsive HTML", "pos": [40, 310], "size": [130, 60] },
     { "id": "fastapi", "type": "backend", "label": "FastAPI Engine", "sublabel": "Cloud Run :8080", "pos": [260, 200], "size": [150, 60] },
     { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN S2/SWID & Keys", "pos": [260, 420], "size": [150, 60], "tag": "IAM Protected" },
-    { "id": "gemini", "type": "backend", "label": "Gemini 3.1 Pro", "sublabel": "Flagship Reasoning", "pos": [490, 90], "size": [160, 60], "tag": "Pydantic Contract" },
+    { "id": "gemini", "type": "backend", "label": "Gemini 2.5 Pro", "sublabel": "Flagship Reasoning", "pos": [490, 90], "size": [160, 60], "tag": "Pydantic Contract" },
     { "id": "engines", "type": "backend", "label": "Decision Engines", "sublabel": "Lineup, Waivers, Recap", "pos": [490, 200], "size": [160, 60] },
     { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 310], "size": [160, 60] },
     { "id": "ext_context", "type": "external", "label": "Vegas Odds & Weather", "sublabel": "The Odds & Open-Meteo", "pos": [740, 90], "size": [180, 60] },
@@ -74,7 +74,7 @@
       "items": [
         "Ingests My Team Roster, Opponent Lineups, and Free Agent Wire via private ESPN API",
         "Deterministic VORP, lineup hole checks, and 3-state Film Room engine",
-        "Gemini 3.1 Pro generates structured game-theory analysis and coach commentary"
+        "Gemini 2.5 Pro generates structured game-theory analysis and coach commentary"
       ]
     },
     {

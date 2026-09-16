@@ -1,6 +1,6 @@
 """
 Gemini client wrapper using google-genai SDK.
-Defaults to Gemini Pro (gemini-3.1-pro) for high-grade analytical reasoning,
+Defaults to Gemini Pro (gemini-2.5-pro) for high-grade analytical reasoning,
 with native Pydantic structured output support and zero-cost test mockability.
 """
 
@@ -33,7 +33,7 @@ class GeminiIntelligenceClient:
 
         Args:
             api_key: Optional API key. If not provided, loaded from env via get_gemini_api_key().
-            model: Optional model name. If not provided, loaded via get_gemini_model() (default: gemini-3.1-pro).
+            model: Optional model name. If not provided, loaded via get_gemini_model() (default: gemini-2.5-pro).
             mock_client: Optional mock client for testing without API keys.
         """
         self.model = model or get_gemini_model()
@@ -126,3 +126,28 @@ class GeminiIntelligenceClient:
         except Exception as e:
             logger.error(f"Gemini text generation failed ({self.model}): {e}")
             raise
+
+    def validate_model(self) -> bool:
+        """Probe the configured model with a minimal prompt to verify accessibility.
+
+        Returns:
+            True if the model is reachable and generates content, False otherwise.
+        """
+        try:
+            config = types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=5,
+            )
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents="ping",
+                config=config,
+            )
+            if response and getattr(response, "text", None) is not None:
+                logger.info("Gemini model %s validated successfully", self.model)
+                return True
+            logger.warning("Gemini model %s returned empty response during validation", self.model)
+            return False
+        except Exception as e:
+            logger.error(f"Gemini model validation failed for {self.model}: {e}")
+            return False

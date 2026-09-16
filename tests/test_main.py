@@ -15,7 +15,8 @@ def test_health_check(client):
     data = response.json()
     assert data["status"] == "healthy"
     assert data["season"] == 2026
-    assert data["model"] == "gemini-3.1-pro"
+    assert data["model"] == "gemini-2.5-pro"
+    assert "gemini_status" in data
     assert len(data["leagues"]) == 2
 
 

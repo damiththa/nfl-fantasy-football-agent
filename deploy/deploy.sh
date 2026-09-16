@@ -55,7 +55,7 @@ $GCLOUD run deploy "${SERVICE_NAME}" \
     --cpu=1 \
     --quiet \
     --set-secrets="ESPN_S2=ESPN_S2:latest,ESPN_SWID=ESPN_SWID:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,SENDGRID_API_KEY=SENDGRID_API_KEY:latest" \
-    --set-env-vars="NFL_SEASON=2026,GEMINI_MODEL=gemini-3.1-pro"
+    --set-env-vars="NFL_SEASON=2026,GEMINI_MODEL=gemini-2.5-pro"
 
 # Retrieve and display Service URL
 SERVICE_URL=$($GCLOUD run services describe "${SERVICE_NAME}" --region="${REGION}" --project="${PROJECT_ID}" --format="value(status.url)")

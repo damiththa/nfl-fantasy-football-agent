@@ -4,6 +4,7 @@ Exposes endpoints for Cloud Scheduler cron triggers and on-demand analysis queri
 """
 
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
 
@@ -31,10 +32,64 @@ from src.notifications.email import send_digest_email
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fantasy_agent")
 
+_gemini_health_cache: dict[str, Any] = {
+    "status": "untested",
+    "last_checked": None,
+    "error": None,
+}
+
+
+def check_gemini_connectivity(force: bool = False) -> dict[str, Any]:
+    """Check Gemini model connectivity and cache the result."""
+    global _gemini_health_cache
+    if not force and _gemini_health_cache["last_checked"] is not None:
+        return _gemini_health_cache
+
+    try:
+        client = GeminiIntelligenceClient()
+        if client.validate_model():
+            _gemini_health_cache = {
+                "status": "connected",
+                "model": client.model,
+                "last_checked": datetime.now().isoformat(),
+                "error": None,
+            }
+            logger.info("Gemini connectivity verified: %s reachable", client.model)
+        else:
+            _gemini_health_cache = {
+                "status": "unreachable",
+                "model": client.model,
+                "last_checked": datetime.now().isoformat(),
+                "error": "Model validation returned False",
+            }
+            logger.warning(
+                "Gemini connectivity check failed: %s validation failed. Fallback active.",
+                client.model,
+            )
+    except Exception as e:
+        _gemini_health_cache = {
+            "status": "unreachable",
+            "model": get_gemini_model(),
+            "last_checked": datetime.now().isoformat(),
+            "error": str(e),
+        }
+        logger.warning("Gemini connectivity check error: %s. Fallback active.", e)
+
+    return _gemini_health_cache
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run diagnostics on app startup."""
+    check_gemini_connectivity(force=True)
+    yield
+
+
 app = FastAPI(
     title="NFL Fantasy Football Agent",
     description="AI-powered Fantasy Football veteran analyst for ESPN leagues, powered by Gemini Pro.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -398,10 +453,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="container">
     <header>
       <h1>🏈 Mad Dawg's Command Center</h1>
-      <p>AI Fantasy Intelligence • Zero-Cost Cloud Run • Gemini 3.1 Pro</p>
+      <p>AI Fantasy Intelligence • Zero-Cost Cloud Run • Gemini 2.5 Pro</p>
       <div class="status-bar">
         <span class="status-badge">⚡ Status: Operational</span>
-        <span class="status-badge">🧠 Brain: Gemini 3.1 Pro</span>
+        <span class="status-badge">🧠 Brain: Gemini 2.5 Pro</span>
         <span class="status-badge">🏈 Season: 2026</span>
         <span class="status-badge">🌿 Power: us-central1</span>
       </div>
@@ -1298,12 +1353,14 @@ def favicon() -> Response:
 
 
 @app.get("/health")
-def health_check() -> dict[str, Any]:
+def health_check(check_gemini: bool = False) -> dict[str, Any]:
     """Health check endpoint confirming service status and configuration."""
+    gemini_info = check_gemini_connectivity(force=check_gemini)
     return {
         "status": "healthy",
         "season": get_current_season(),
         "model": get_gemini_model(),
+        "gemini_status": gemini_info["status"],
         "leagues": [
             {
                 "id": cfg.league_id,
@@ -1548,8 +1605,8 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
         client = None
         try:
             client = GeminiIntelligenceClient()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Could not initialize Gemini client for lineup: %s. Using deterministic fallback.", e)
 
         lineup = optimize_lineup(
             league=league_config,
@@ -1619,8 +1676,8 @@ def query_trade(req: TradeRequest) -> dict[str, Any]:
         client = None
         try:
             client = GeminiIntelligenceClient()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Could not initialize Gemini client for trade evaluation: %s. Using deterministic fallback.", e)
 
         verdict = evaluate_trade(
             league=league_config,
@@ -1652,8 +1709,8 @@ def query_propose_trades(league_id: int = Query(..., description="ESPN League ID
         client = None
         try:
             client = GeminiIntelligenceClient()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Could not initialize Gemini client for trade proposals: %s. Using deterministic fallback.", e)
 
         report = propose_league_trades(
             league=league_config,
@@ -1704,8 +1761,8 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> 
         client = None
         try:
             client = GeminiIntelligenceClient()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Could not initialize Gemini client for waivers: %s. Using deterministic fallback.", e)
 
         report = evaluate_waivers(
             league=league_config,
@@ -1749,8 +1806,8 @@ def query_weekly_recap(
         client = None
         try:
             client = GeminiIntelligenceClient()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Could not initialize Gemini client for recap: %s. Using deterministic fallback.", e)
 
         report = generate_weekly_recap(
             league=league_config,

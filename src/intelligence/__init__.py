@@ -1,5 +1,5 @@
 """
-Intelligence layer powered by Gemini Pro (gemini-3.1-pro).
+Intelligence layer powered by Gemini Pro (gemini-2.5-pro).
 Provides structured output schemas, prompts, and client wrappers.
 """
 
