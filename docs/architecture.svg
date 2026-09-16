@@ -5052,12 +5052,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-gemini" data-node-id="gemini" data-node-label="Gemini 2.5 Pro" tabindex="0" role="button" aria-label="Focus Gemini 2.5 Pro, Flagship Reasoning, Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Flagship Reasoning" data-node-tag="Pydantic Contract" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle)">
           <title>Gemini 2.5 Pro · Flagship Reasoning · Google Cloud Platform: us-central1 ($0.00 Idle) · Pydantic Contract</title>
-          <rect data-node-box="" x="490" y="90" width="160" height="60" rx="8" ry="8" class="b-surface" stroke="#334155" stroke-width="1.5"/>
-          <circle cx="506" cy="106" r="4.5" fill="#38bdf8"/>
-          <rect data-node-tag="" x="555" y="97" width="87" height="15" rx="3" class="b-tag" fill="rgba(56, 189, 248, 0.12)" stroke="#0284c7" stroke-width="0.75"/>
-          <text data-node-tag="" x="598" y="108" class="t-tag" font-size="8.5" font-weight="600" text-anchor="middle" fill="#38bdf8">Pydantic Contract</text>
+          <rect x="490" y="90" width="160" height="60" rx="6" class="c-mask"/>
+          <rect x="490" y="90" width="160" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(496 96) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
           <text data-node-label="" data-detail-anchor="" x="570" y="118" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Gemini 2.5 Pro</text>
-          <text data-node-sublabel="" x="570" y="132" class="t-sublabel" font-size="9" text-anchor="middle">Flagship Reasoning</text>
+        <text data-detail="context" x="570" y="134" class="t-muted" font-size="9" text-anchor="middle">Flagship Reasoning</text>
+        <text data-detail="fine" x="570" y="142" class="t-backend" font-size="7" text-anchor="middle">Pydantic Contract</text>
         </g>
 
         <g id="node-engines" data-node-id="engines" data-node-label="Decision Engines" tabindex="0" role="button" aria-label="Focus Decision Engines, Lineup, Waivers, Recap, Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Lineup, Waivers, Recap" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)">
