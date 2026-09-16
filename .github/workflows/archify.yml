@@ -30,10 +30,9 @@ jobs:
       - name: Render Architecture Diagram
         run: |
           node /tmp/archify/archify/bin/archify.mjs validate architecture docs/architecture.json --quality standard --json > /tmp/validate.json 2>&1 || true
-          echo "### Archify Validation Output" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/validate.json >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          while IFS= read -r line; do
+            echo "::error::$line"
+          done < /tmp/validate.json
           node /tmp/archify/archify/bin/archify.mjs render architecture docs/architecture.json docs/architecture.html
 
       - name: Extract Standalone SVG
