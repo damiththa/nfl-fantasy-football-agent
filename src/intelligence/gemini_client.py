@@ -294,8 +294,7 @@ class GeminiIntelligenceClient:
         try:
             config = types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=20,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                max_output_tokens=500,
             )
             response = self._client.models.generate_content(
                 model=self.model,
