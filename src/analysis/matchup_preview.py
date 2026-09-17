@@ -53,6 +53,7 @@ def generate_matchup_preview(
     win_prob = _calculate_win_probability(margin)
     opp_name = matchup.opponent_team.team_name if matchup.opponent_team else "Opponent"
 
+    fallback_err: Optional[str] = None
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
         your_roster_data = [
@@ -103,8 +104,12 @@ def generate_matchup_preview(
         )
 
         try:
-            return client.generate_structured(prompt=prompt, response_schema=MatchupReport)
+            report = client.generate_structured(prompt=prompt, response_schema=MatchupReport)
+            report.intelligence_backend = client.model
+            report.fallback_reason = None
+            return report
         except Exception as e:
+            fallback_err = str(e)
             logger.warning(
                 "Gemini matchup preview call failed (%s). Falling back to deterministic scouting breakdown.",
                 e,
@@ -156,4 +161,6 @@ def generate_matchup_preview(
         key_vulnerabilities=vulnerabilities or ["No glaring single positional liability"],
         weather_and_vegas_factors=weather_factors or ["Standard dome/clear outdoor conditions"],
         strategic_summary=summary,
+        intelligence_backend="deterministic_fallback",
+        fallback_reason=fallback_err or "Gemini client was not provided",
     )

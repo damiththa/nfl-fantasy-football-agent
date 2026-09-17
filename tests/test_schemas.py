@@ -211,3 +211,39 @@ def test_weekly_recap_report_schema():
     assert len(recap.game_balls) == 1
     assert len(recap.missed_opportunities) == 1
 
+
+def test_audit_fields_on_reports():
+    recap = WeeklyRecapReport(
+        league_id=991059191,
+        league_name="PNA 2026",
+        week=1,
+        matchup_status="FINAL",
+        result="WIN",
+        user_team_name="Mad Dawg",
+        user_score=100.0,
+        user_projected=90.0,
+        opponent_team_name="Opponent",
+        opponent_score=80.0,
+        opponent_projected=85.0,
+        score_margin=20.0,
+        optimal_lineup_points=110.0,
+        points_left_on_bench=10.0,
+        coach_game_summary="Great win.",
+        intelligence_backend="deterministic_fallback",
+        fallback_reason="Gemini client 404 test error",
+    )
+    assert recap.intelligence_backend == "deterministic_fallback"
+    assert recap.fallback_reason == "Gemini client 404 test error"
+
+    trade = TradeEvaluation(
+        verdict="ACCEPT",
+        your_vorp_change=3.0,
+        starting_lineup_impact="Upgrade",
+        playoff_schedule_impact="Good",
+        reasoning="Solid",
+        intelligence_backend="gemini-2.5-pro",
+        fallback_reason=None,
+    )
+    assert trade.intelligence_backend == "gemini-2.5-pro"
+    assert trade.fallback_reason is None
+

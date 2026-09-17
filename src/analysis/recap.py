@@ -294,6 +294,7 @@ def generate_weekly_recap(
         for p in upcoming_starters
     ]
 
+    fallback_err: Optional[str] = None
     # AI Reasoning with Gemini Pro
     if client is not None:
         try:
@@ -330,6 +331,8 @@ def generate_weekly_recap(
             report.optimal_lineup_points = optimal_pts
             report.points_left_on_bench = pts_left_on_bench
             report.generated_at = timestamp_str
+            report.intelligence_backend = client.model
+            report.fallback_reason = None
 
             # Safety guard: ensure NO unplayed players ever enter busts or missed_opportunities
             if matchup_status == "IN_PROGRESS":
@@ -346,6 +349,7 @@ def generate_weekly_recap(
 
             return report
         except Exception as e:
+            fallback_err = str(e)
             logger.warning("Gemini failed to generate weekly recap, using deterministic fallback: %s", e)
 
     # Deterministic fallback based on gamestate
@@ -427,5 +431,7 @@ def generate_weekly_recap(
         lessons_learned=lessons,
         next_week_priorities=priorities,
         generated_at=timestamp_str,
+        intelligence_backend="deterministic_fallback",
+        fallback_reason=fallback_err or "Gemini client was not provided",
     )
 

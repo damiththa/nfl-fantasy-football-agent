@@ -15,9 +15,21 @@ def test_health_check(client):
     data = response.json()
     assert data["status"] == "healthy"
     assert data["season"] == 2026
-    assert data["model"] == "gemini-2.5-pro"
+    assert data["model"] in ("gemini-2.5-pro", "gemini-3.1-pro")
+    assert data["target_model"] == "gemini-3.1-pro"
+    assert data["auto_upgrade_enabled"] is True
     assert "gemini_status" in data
     assert len(data["leagues"]) == 2
+
+
+def test_health_models(client):
+    response = client.get("/health/models")
+    assert response.status_code == 200
+    data = response.json()
+    assert "active_model" in data
+    assert data["target_model"] == "gemini-3.1-pro"
+    assert data["auto_upgrade_enabled"] is True
+    assert "candidates" in data
 
 
 def test_root_dashboard(client):

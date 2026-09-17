@@ -863,6 +863,7 @@ def optimize_lineup(
         odds=odds,
     )
 
+    fallback_err: Optional[str] = None
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
         your_roster_data = [
@@ -969,6 +970,8 @@ def optimize_lineup(
                     cleaned_starters.append(s)
             rec.recommended_starters = sort_starters_by_lineup_order(cleaned_starters, league)
             rec.bench_players = sort_bench_by_position(rec.bench_players)
+            rec.intelligence_backend = client.model
+            rec.fallback_reason = None
             return enrich_lineup_recommendation_with_espn_status(
                 rec,
                 roster,
@@ -980,6 +983,7 @@ def optimize_lineup(
                 matchup=matchup,
             )
         except Exception as e:
+            fallback_err = str(e)
             logger.warning(
                 "Gemini lineup optimization call failed (%s). Falling back to deterministic optimization.",
                 e,
@@ -1069,6 +1073,8 @@ def optimize_lineup(
         key_flex_decisions=[
             f"Filled {slots_filled['FLEX']}/{slots_needed['FLEX']} flex slots with highest projection upside."
         ],
+        intelligence_backend="deterministic_fallback",
+        fallback_reason=fallback_err or "Gemini client was not provided",
     )
     return enrich_lineup_recommendation_with_espn_status(
         rec,

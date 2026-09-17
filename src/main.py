@@ -26,7 +26,11 @@ from src.data.weather import fetch_game_weather
 from src.espn.client import LeagueClient
 from src.espn.matchup import get_current_week, get_weekly_matchup
 from src.espn.roster import parse_roster
-from src.intelligence.gemini_client import GeminiIntelligenceClient
+from src.intelligence.gemini_client import (
+    PREFERRED_MODELS,
+    GeminiIntelligenceClient,
+    negotiate_active_model,
+)
 from src.notifications.email import send_digest_email
 
 logging.basicConfig(level=logging.INFO)
@@ -80,7 +84,14 @@ def check_gemini_connectivity(force: bool = False) -> dict[str, Any]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run diagnostics on app startup."""
+    """Run diagnostics and model negotiation on app startup."""
+    active_model, diag = negotiate_active_model(force=True)
+    logger.info(
+        "Startup model negotiation: active=%s (target=%s, ready=%s)",
+        active_model,
+        PREFERRED_MODELS[0],
+        diag.get("auto_upgrade_active"),
+    )
     check_gemini_connectivity(force=True)
     yield
 
@@ -453,10 +464,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="container">
     <header>
       <h1>🏈 Mad Dawg's Command Center</h1>
-      <p>AI Fantasy Intelligence • Zero-Cost Cloud Run • Gemini 2.5 Pro</p>
+      <p>AI Fantasy Intelligence • Zero-Cost Cloud Run • Gemini Reasoning</p>
       <div class="status-bar">
         <span class="status-badge">⚡ Status: Operational</span>
-        <span class="status-badge">🧠 Brain: Gemini 2.5 Pro</span>
+        <span id="brain-badge" class="status-badge">🧠 Brain: Gemini Pro (Probing...)</span>
         <span class="status-badge">🏈 Season: 2026</span>
         <span class="status-badge">🌿 Power: us-central1</span>
       </div>
@@ -555,7 +566,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
 
     <footer>
-      <p>API Access: <a href="/docs" target="_blank">Swagger Documentation (/docs)</a> • <a href="/health" target="_blank">Health Status (/health)</a></p>
+      <p>API Access: <a href="/docs" target="_blank">Swagger Documentation (/docs)</a> • <a href="/health" target="_blank">Health Status (/health)</a> • <a href="/health/models" target="_blank">Model Diagnostics (/health/models)</a></p>
     </footer>
   </div>
 
@@ -657,8 +668,25 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       input.value = current.join(', ');
     }
 
+    async function updateBrainBadge() {
+      try {
+        const resp = await fetch('/health/models');
+        const d = await resp.json();
+        const badge = document.getElementById('brain-badge');
+        if (badge && d.active_model) {
+          const isTarget = d.auto_upgrade_active;
+          badge.innerHTML = `🧠 Brain: ${d.active_model} ${isTarget ? '🚀' : '(Target: ' + d.target_model + ')'}`;
+          if (isTarget) {
+            badge.style.borderColor = '#22c55e';
+            badge.style.color = '#86efac';
+          }
+        }
+      } catch (e) {}
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       loadTradeRoster();
+      updateBrainBadge();
     });
 
     function copyPitch(text, btnId) {
@@ -728,6 +756,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           ● Live Data (ESPN & Vegas)
         </span>
       </div>`;
+
+      // Fallback Alert Banner
+      if (data.intelligence_backend === 'deterministic_fallback') {
+        html += `<div style="background: rgba(245, 158, 11, 0.15); border-left: 4px solid #f59e0b; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px; font-size: 13px; color: #fbbf24; line-height: 1.4;">
+          ⚠️ <strong>AI Fallback Alert:</strong> Live Gemini reasoning was temporarily unavailable (${data.fallback_reason || 'connectivity check failed'}). Results were safely computed using the deterministic rules engine.
+        </div>`;
+      } else if (data.intelligence_backend) {
+        html += `<div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <span style="background: #1e293b; color: #38bdf8; padding: 3px 10px; border-radius: 6px; font-size: 11px; border: 1px solid #334155;">🧠 Engine: <strong>${data.intelligence_backend}</strong></span>
+        </div>`;
+      }
 
       // Section: Weekly Post-Game Film Room & Recap
       if (data.coach_game_summary) {
@@ -1352,14 +1391,32 @@ def favicon() -> Response:
     return Response(content=svg_content, media_type="image/svg+xml")
 
 
+@app.get("/health/models")
+def health_models(force: bool = False) -> dict[str, Any]:
+    """Inspect real-time status of all candidate Gemini models and auto-upgrade readiness."""
+    active_model, diag = negotiate_active_model(force=force)
+    return {
+        "active_model": active_model,
+        "target_model": PREFERRED_MODELS[0],
+        "auto_upgrade_enabled": True,
+        "auto_upgrade_active": diag.get("auto_upgrade_active", False),
+        "candidates": diag.get("candidates", {}),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 @app.get("/health")
 def health_check(check_gemini: bool = False) -> dict[str, Any]:
     """Health check endpoint confirming service status and configuration."""
     gemini_info = check_gemini_connectivity(force=check_gemini)
+    active_model, diag = negotiate_active_model(force=False)
     return {
         "status": "healthy",
         "season": get_current_season(),
-        "model": get_gemini_model(),
+        "model": active_model,
+        "target_model": PREFERRED_MODELS[0],
+        "auto_upgrade_enabled": True,
+        "auto_upgrade_active": diag.get("auto_upgrade_active", False),
         "gemini_status": gemini_info["status"],
         "leagues": [
             {

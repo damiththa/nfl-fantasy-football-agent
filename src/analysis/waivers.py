@@ -41,6 +41,7 @@ def evaluate_waivers(
     Returns:
         WaiverReport with ranked targets, drop candidates, and strategy.
     """
+    fallback_err: Optional[str] = None
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
         roster_data = [
@@ -76,6 +77,8 @@ def evaluate_waivers(
                         "name": inj.full_name,
                         "team": inj.team,
                         "status": inj.injury_status,
+                        "practice": inj.practice_participation,
+                        "body_part": inj.injury_body_part,
                         "notes": inj.injury_notes,
                     }
                 )
@@ -93,6 +96,8 @@ def evaluate_waivers(
             report = client.generate_structured(prompt=prompt, response_schema=WaiverReport)
             report.league_id = league.league_id
             report.week = week
+            report.intelligence_backend = client.model
+            report.fallback_reason = None
             if report.coach_verdict == "STAND_PAT" or not report.targets:
                 report.coach_verdict = "STAND_PAT"
                 report.is_move_recommended = False
@@ -108,6 +113,7 @@ def evaluate_waivers(
                 report.is_move_recommended = True
             return report
         except Exception as e:
+            fallback_err = str(e)
             logger.warning(
                 "Gemini waiver evaluation call failed (%s). Falling back to deterministic evaluation.",
                 e,
@@ -232,6 +238,8 @@ def evaluate_waivers(
             targets=[],
             roster_drop_candidates=[],
             overall_waiver_strategy="🛡️ COACH'S VERDICT: STAND PAT. Hold your roster and preserve waiver priority.",
+            intelligence_backend="deterministic_fallback",
+            fallback_reason=fallback_err or "Gemini client was not provided",
         )
 
     return WaiverReport(
@@ -246,4 +254,6 @@ def evaluate_waivers(
             f"Target high-leverage opportunities at {targets[0].position}. "
             f"Execute targeted claim for {targets[0].player_name} while dropping expendable depth."
         ),
+        intelligence_backend="deterministic_fallback",
+        fallback_reason=fallback_err or "Gemini client was not provided",
     )

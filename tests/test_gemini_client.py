@@ -1,7 +1,12 @@
 import pytest
 from pydantic import BaseModel
 
-from src.intelligence.gemini_client import GeminiIntelligenceClient
+from src.intelligence.gemini_client import (
+    PREFERRED_MODELS,
+    GeminiIntelligenceClient,
+    clean_json_text,
+    negotiate_active_model,
+)
 
 
 class DummySchema(BaseModel):
@@ -34,7 +39,7 @@ class MockGenaiClient:
 def test_gemini_client_init_default_pro():
     mock_sdk = MockGenaiClient()
     client = GeminiIntelligenceClient(mock_client=mock_sdk)
-    assert client.model == "gemini-2.5-pro"
+    assert client.model in PREFERRED_MODELS
 
 
 def test_gemini_client_custom_model():
@@ -100,3 +105,86 @@ def test_validate_model_failure():
 
     client = GeminiIntelligenceClient(mock_client=FailingClient())
     assert client.validate_model() is False
+
+
+def test_clean_json_text():
+    assert clean_json_text('{"verdict": "START"}') == '{"verdict": "START"}'
+    assert (
+        clean_json_text('```json\n{"verdict": "START"}\n```') == '{"verdict": "START"}'
+    )
+    assert clean_json_text('```\n{"verdict": "START"}\n```') == '{"verdict": "START"}'
+    assert clean_json_text('  {"verdict": "START"}  \n') == '{"verdict": "START"}'
+
+
+def test_negotiate_active_model_fallback_when_target_unavailable():
+    class SelectiveModels:
+        def generate_content(self, model, contents, config=None):
+            if model == "gemini-3.1-pro":
+                raise ConnectionError("404 Model Not Found in us-central1")
+            return MockModelResponse("ok")
+
+    class SelectiveClient:
+        models = SelectiveModels()
+
+    selected, diag = negotiate_active_model(force=True, mock_client=SelectiveClient())
+    assert selected == "gemini-2.5-pro"
+    assert diag["auto_upgrade_active"] is False
+    assert diag["candidates"]["gemini-3.1-pro"]["available"] is False
+    assert "404" in diag["candidates"]["gemini-3.1-pro"]["status"]
+    assert diag["candidates"]["gemini-2.5-pro"]["available"] is True
+
+
+def test_negotiate_active_model_upgrades_when_target_available():
+    class AllAvailableModels:
+        def generate_content(self, model, contents, config=None):
+            return MockModelResponse("ok")
+
+    class AllAvailableClient:
+        models = AllAvailableModels()
+
+    selected, diag = negotiate_active_model(force=True, mock_client=AllAvailableClient())
+    assert selected == "gemini-3.1-pro"
+    assert diag["auto_upgrade_active"] is True
+    assert diag["candidates"]["gemini-3.1-pro"]["available"] is True
+    assert diag["candidates"]["gemini-2.5-pro"]["available"] is True
+
+
+def test_in_flight_failover_structured():
+    calls = []
+
+    class FailoverModels:
+        def generate_content(self, model, contents, config=None):
+            calls.append(model)
+            if model == "gemini-3.1-pro":
+                raise RuntimeError("503 Service Unavailable")
+            return MockModelResponse('{"verdict": "FAILOVER_OK", "score": 88.0}')
+
+    class FailoverClient:
+        models = FailoverModels()
+
+    client = GeminiIntelligenceClient(model="gemini-3.1-pro", mock_client=FailoverClient())
+    res = client.generate_structured("test prompt", DummySchema)
+    assert res.verdict == "FAILOVER_OK"
+    assert res.score == 88.0
+    assert calls == ["gemini-3.1-pro", "gemini-2.5-pro"]
+    assert client.model == "gemini-2.5-pro"
+
+
+def test_in_flight_failover_text():
+    calls = []
+
+    class FailoverModels:
+        def generate_content(self, model, contents, config=None):
+            calls.append(model)
+            if model == "gemini-3.1-pro":
+                raise RuntimeError("429 Resource Exhausted")
+            return MockModelResponse("Failover text response")
+
+    class FailoverClient:
+        models = FailoverModels()
+
+    client = GeminiIntelligenceClient(model="gemini-3.1-pro", mock_client=FailoverClient())
+    res = client.generate_text("test prompt")
+    assert res == "Failover text response"
+    assert calls == ["gemini-3.1-pro", "gemini-2.5-pro"]
+    assert client.model == "gemini-2.5-pro"

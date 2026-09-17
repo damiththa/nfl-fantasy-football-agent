@@ -103,6 +103,7 @@ def propose_league_trades(
         ],
     }
 
+    fallback_err: Optional[str] = None
     # If Gemini client provided, use AI reasoning to craft smart win-win packages
     if client is not None:
         prompt = format_league_trade_prompt(
@@ -129,8 +130,11 @@ def propose_league_trades(
                 report.is_trade_recommended = True
             eastern = zoneinfo.ZoneInfo("America/New_York")
             report.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
+            report.intelligence_backend = client.model
+            report.fallback_reason = None
             return report
         except Exception as e:
+            fallback_err = str(e)
             logger.warning(
                 "Gemini proactive trade generation failed (%s). Falling back to deterministic VORP trade scanner.",
                 e,
@@ -220,6 +224,8 @@ def propose_league_trades(
                 "that warrant parting with your bench depth. Hold your current assets."
             ),
             generated_at=gen_time,
+            intelligence_backend="deterministic_fallback",
+            fallback_reason=fallback_err or "Gemini client was not provided",
         )
 
     return LeagueTradeReport(
@@ -234,4 +240,6 @@ def propose_league_trades(
             f"Leveraging surplus depth at {viable_bench[0].position} to upgrade starting {upgradable_starters[0].position}."
         ),
         generated_at=gen_time,
+        intelligence_backend="deterministic_fallback",
+        fallback_reason=fallback_err or "Gemini client was not provided",
     )

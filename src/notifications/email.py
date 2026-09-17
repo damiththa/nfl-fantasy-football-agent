@@ -44,6 +44,30 @@ def _build_email_html(
 ) -> str:
     """Build a beautiful, witty HTML email digest from analysis results."""
 
+    # Check for deterministic fallback across all leagues
+    fallback_detected = False
+    fallback_reasons: list[str] = []
+    active_backend = "Gemini Pro"
+    for _lg, ldata in results.items():
+        if isinstance(ldata, dict):
+            backend = ldata.get("intelligence_backend")
+            if backend == "deterministic_fallback":
+                fallback_detected = True
+                reason = ldata.get("fallback_reason")
+                if reason and reason not in fallback_reasons:
+                    fallback_reasons.append(reason)
+            elif backend and backend != "deterministic_fallback":
+                active_backend = backend
+
+    fallback_banner = ""
+    if fallback_detected:
+        reasons_summary = "; ".join(fallback_reasons[:2]) if fallback_reasons else "Model unavailable"
+        fallback_banner = f"""
+    <!-- Fallback Warning Banner -->
+    <div style="background: rgba(245, 158, 11, 0.15); border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 13px; color: #fbbf24; line-height: 1.4;">
+      ⚠️ <strong>AI Fallback Alert:</strong> Live Gemini reasoning was temporarily unavailable ({reasons_summary}). Results were safely computed via the deterministic rules engine.
+    </div>"""
+
     # Build league result sections
     league_sections = ""
     for league_name, data in results.items():
@@ -92,6 +116,8 @@ def _build_email_html(
       <p style="color: #e2e8f0; font-size: 15px; margin: 0; font-style: italic;">{tagline}</p>
     </div>
 
+    {fallback_banner}
+
     <!-- League Results -->
     {league_sections}
 
@@ -99,7 +125,7 @@ def _build_email_html(
     <div style="text-align: center; padding: 24px 0; margin-top: 16px; border-top: 1px solid #334155;">
       <p style="color: #94a3b8; font-size: 13px; font-style: italic; margin: 0 0 12px 0;">{signoff}</p>
       <p style="color: #475569; font-size: 11px; margin: 0;">
-        Sent by <strong style="color: #38bdf8;">Fantasy Football Agent</strong> • Powered by Gemini 2.5 Pro<br>
+        Sent by <strong style="color: #38bdf8;">Fantasy Football Agent</strong> • Powered by {active_backend}<br>
         {timestamp} • <a href="https://fantasy-agent-652912521571.us-central1.run.app" style="color: #38bdf8; text-decoration: none;">Open Command Center →</a>
       </p>
     </div>
@@ -144,6 +170,19 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
 
     # Build content rows from the analysis data
     content_html = ""
+
+    # Backend / Fallback status
+    if data.get("intelligence_backend") == "deterministic_fallback":
+        reason = data.get("fallback_reason") or "LLM unavailable"
+        content_html += f"""
+      <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b; border-radius: 6px; padding: 6px 12px; margin-bottom: 12px; font-size: 11px; color: #fbbf24;">
+        ⚠️ <strong>Deterministic Fallback:</strong> {reason}
+      </div>"""
+    elif data.get("intelligence_backend"):
+        content_html += f"""
+      <div style="margin-bottom: 12px;">
+        <span style="background: #1e293b; color: #38bdf8; padding: 2px 8px; border-radius: 4px; font-size: 11px; border: 1px solid #334155;">🧠 {data['intelligence_backend']}</span>
+      </div>"""
 
     # Strategy badge
     if data.get("game_theory_strategy"):

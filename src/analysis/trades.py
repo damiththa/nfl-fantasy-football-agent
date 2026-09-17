@@ -370,6 +370,8 @@ def evaluate_trade(
             ),
             counter_suggestion="Select eligible players from your current roster to trade.",
             generated_at=gen_time,
+            intelligence_backend="deterministic_fallback",
+            fallback_reason="Roster ownership validation failed: invalid player ownership",
         )
 
     # 2. Build incoming players data
@@ -403,6 +405,7 @@ def evaluate_trade(
     )
     net_vorp = round(receiving_vorp - giving_vorp, 2)
 
+    fallback_err: Optional[str] = None
     # 4. LLM Analysis via Gemini Pro if available
     if client is not None:
         roster_data = [
@@ -443,8 +446,11 @@ def evaluate_trade(
             verdict_obj.positional_depth_impact = depth_impact
             verdict_obj.your_vorp_change = net_vorp
             verdict_obj.generated_at = gen_time
+            verdict_obj.intelligence_backend = client.model
+            verdict_obj.fallback_reason = None
             return verdict_obj
         except Exception as e:
+            fallback_err = str(e)
             logger.warning(
                 "Gemini trade evaluation call failed (%s). Falling back to deterministic evaluation.",
                 e,
@@ -516,5 +522,7 @@ def evaluate_trade(
         reasoning=reasoning,
         counter_suggestion=counter,
         generated_at=gen_time,
+        intelligence_backend="deterministic_fallback",
+        fallback_reason=fallback_err or "Gemini client was not provided",
     )
 

@@ -187,6 +187,14 @@ class LineupRecommendation(BaseModel):
         default="",
         description="Date and time when this report was generated (e.g. 'Monday, Sep 7, 2026 at 3:15 PM EDT')",
     )
+    intelligence_backend: Optional[str] = Field(
+        default=None,
+        description="Active AI model identifier or 'deterministic_fallback'",
+    )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Diagnostic error details if deterministic fallback was triggered",
+    )
 
 
 class WaiverRecommendation(BaseModel):
@@ -234,6 +242,14 @@ class WaiverReport(BaseModel):
     )
     overall_waiver_strategy: str = Field(
         description="Strategic overview for this week's waiver cycle"
+    )
+    intelligence_backend: Optional[str] = Field(
+        default=None,
+        description="Active AI model identifier or 'deterministic_fallback'",
+    )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Diagnostic error details if deterministic fallback was triggered",
     )
 
 
@@ -291,6 +307,14 @@ class TradeEvaluation(BaseModel):
         default="",
         description="Date and time when trade evaluation was generated",
     )
+    intelligence_backend: Optional[str] = Field(
+        default=None,
+        description="Active AI model identifier or 'deterministic_fallback'",
+    )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Diagnostic error details if deterministic fallback was triggered",
+    )
 
 
 class MatchupReport(BaseModel):
@@ -316,6 +340,14 @@ class MatchupReport(BaseModel):
     )
     strategic_summary: str = Field(
         description="High-level scouting report and primary path to victory"
+    )
+    intelligence_backend: Optional[str] = Field(
+        default=None,
+        description="Active AI model identifier or 'deterministic_fallback'",
+    )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Diagnostic error details if deterministic fallback was triggered",
     )
 
 
@@ -360,6 +392,14 @@ class LeagueTradeReport(BaseModel):
     generated_at: str = Field(
         default="",
         description="Date and time when trade proposals were generated",
+    )
+    intelligence_backend: Optional[str] = Field(
+        default=None,
+        description="Active AI model identifier or 'deterministic_fallback'",
+    )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Diagnostic error details if deterministic fallback was triggered",
     )
 
 
@@ -452,5 +492,13 @@ class WeeklyRecapReport(BaseModel):
     generated_at: str = Field(
         default="",
         description="Date and time when recap was generated",
+    )
+    intelligence_backend: Optional[str] = Field(
+        default=None,
+        description="Active AI model identifier or 'deterministic_fallback'",
+    )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Diagnostic error details if deterministic fallback was triggered",
     )
 
