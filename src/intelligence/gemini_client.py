@@ -294,14 +294,17 @@ class GeminiIntelligenceClient:
         try:
             config = types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=5,
+                max_output_tokens=20,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             )
             response = self._client.models.generate_content(
                 model=self.model,
                 contents="ping",
                 config=config,
             )
-            if response and getattr(response, "text", None) is not None:
+            has_candidates = bool(getattr(response, "candidates", None))
+            has_text = getattr(response, "text", None) is not None
+            if response and (has_candidates or has_text):
                 logger.info("Gemini model %s validated successfully", self.model)
                 return True
             logger.warning("Gemini model %s returned empty response during validation", self.model)
