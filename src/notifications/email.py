@@ -774,3 +774,49 @@ def send_digest_email(
     except Exception as e:
         logger.error("❌ Failed to send email: %s", e, exc_info=True)
         return False
+
+
+def send_error_alert_email(job_type: str, error_detail: str) -> bool:
+    """Send an immediate critical alert email when an automated routine fails."""
+    api_key = _get_sendgrid_key()
+    if not api_key:
+        return False
+
+    subject = f"🚨 Fantasy Agent Alert — Failure in {job_type}"
+    timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p ET")
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="background-color: #0b0f19; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #151e32; border: 2px solid #ef4444; border-radius: 10px; padding: 24px;">
+    <h2 style="color: #ef4444; margin-top: 0;">🚨 Automated Routine Failure</h2>
+    <p style="color: #cbd5e1; font-size: 14px;">Your scheduled routine <strong>{job_type}</strong> encountered an error during execution on <strong>{timestamp}</strong>:</p>
+    <div style="background: rgba(239, 68, 68, 0.15); border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 13px; color: #fca5a5; margin: 16px 0; word-break: break-word;">
+      {error_detail}
+    </div>
+    <p style="font-size: 13px; color: #94a3b8;">The agent prevented this error from failing silently. Please check your Cloud Run logs or Command Center dashboard.</p>
+  </div>
+</body>
+</html>"""
+    payload = {
+        "personalizations": [{"to": [{"email": RECIPIENT_EMAIL, "name": RECIPIENT_NAME}], "subject": subject}],
+        "from": {"email": SENDER_EMAIL, "name": SENDER_NAME},
+        "content": [{"type": "text/html", "value": html_body}],
+    }
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(
+                SENDGRID_API_URL,
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+        if resp.status_code in (200, 201, 202):
+            logger.info("✅ Error alert email sent: '%s' → %s", subject, RECIPIENT_EMAIL)
+            return True
+        else:
+            logger.error("❌ SendGrid error alert returned %s: %s", resp.status_code, resp.text)
+            return False
+    except Exception as e:
+        logger.error("Failed to send error alert email: %s", e)
+        return False
+

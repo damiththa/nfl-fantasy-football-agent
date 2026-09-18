@@ -119,7 +119,7 @@ def test_clean_json_text():
 def test_negotiate_active_model_fallback_when_target_unavailable():
     class SelectiveModels:
         def generate_content(self, model, contents, config=None):
-            if model == "gemini-3.1-pro":
+            if "gemini-3" in model:
                 raise ConnectionError("404 Model Not Found in us-central1")
             return MockModelResponse("ok")
 

@@ -299,3 +299,35 @@ class TestSendDigestEmail:
             result = send_digest_email("weekly_analysis", {"PNA": {}})
             assert result is False
 
+
+class TestSendErrorAlertEmail:
+    """Tests for critical failure error email alerts."""
+
+    def test_send_error_alert_email_disabled_without_key(self):
+        from src.notifications.email import send_error_alert_email
+
+        with patch.dict("os.environ", {}, clear=True):
+            assert send_error_alert_email("weekly_analysis", "Timed out") is False
+
+    def test_send_error_alert_email_success(self):
+        from src.notifications.email import send_error_alert_email
+
+        mock_response = MagicMock()
+        mock_response.status_code = 202
+
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post = MagicMock(return_value=mock_response)
+
+        with (
+            patch.dict("os.environ", {"SENDGRID_API_KEY": "SG.test_key"}),
+            patch("httpx.Client", return_value=mock_client),
+        ):
+            res = send_error_alert_email("sunday_pregame", "Network connection reset")
+            assert res is True
+            call_args = mock_client.post.call_args
+            assert "🚨 Fantasy Agent Alert" in call_args.kwargs["json"]["personalizations"][0]["subject"]
+            assert "Network connection reset" in call_args.kwargs["json"]["content"][0]["value"]
+
+

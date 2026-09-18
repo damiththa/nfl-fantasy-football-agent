@@ -3,6 +3,7 @@ FastAPI application serving the NFL Fantasy Football Agent on Google Cloud Run.
 Exposes endpoints for Cloud Scheduler cron triggers and on-demand analysis queries.
 """
 
+import concurrent.futures
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -31,7 +32,7 @@ from src.intelligence.gemini_client import (
     GeminiIntelligenceClient,
     negotiate_active_model,
 )
-from src.notifications.email import send_digest_email
+from src.notifications.email import send_digest_email, send_error_alert_email
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fantasy_agent")
@@ -571,23 +572,77 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 
   <script>
+    let activeTimer = null;
+
     async function fetchEndpoint(url, title) {
       const resCard = document.getElementById('results-card');
       const resTitle = document.getElementById('results-title');
       const resContent = document.getElementById('results-content');
 
+      if (activeTimer) clearInterval(activeTimer);
+      let elapsedSec = 0;
+
+      function updateLoadingStatus() {
+        let stageText = "Syncing live ESPN rosters and scoring rules...";
+        if (elapsedSec > 4 && elapsedSec <= 12) {
+          stageText = "Pulling live Vegas spreads, game totals, and weather conditions...";
+        } else if (elapsedSec > 12 && elapsedSec <= 25) {
+          stageText = "Cross-referencing Sleeper trending pickups and injury designations...";
+        } else if (elapsedSec > 25) {
+          stageText = "Synthesizing deep game-theory decisions via Gemini Pro (crunching multi-slot optimization)...";
+        }
+        resContent.innerHTML = `
+          <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 18px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="spinner"></span>
+              <strong style="color: var(--accent); font-size: 15px;">Analysis in Progress (${elapsedSec}s elapsed)...</strong>
+            </div>
+            <p style="color: #cbd5e1; font-size: 13px; margin: 0;">${stageText}</p>
+          </div>
+        `;
+      }
+
       resTitle.textContent = title + " — Analyzing...";
-      resContent.innerHTML = '<p><span class="spinner"></span> Contacting ESPN, Vegas lines, Open-Meteo, and Gemini Pro...</p>';
+      updateLoadingStatus();
       resCard.style.display = 'block';
       resCard.scrollIntoView({ behavior: 'smooth' });
 
+      activeTimer = setInterval(() => {
+        elapsedSec++;
+        updateLoadingStatus();
+      }, 1000);
+
       try {
         const resp = await fetch(url, { method: 'POST' });
+        clearInterval(activeTimer);
         const data = await resp.json();
+
+        if (!resp.ok || data.detail || data.error) {
+          const errMsg = data.detail || data.error || ('HTTP ' + resp.status + ': ' + resp.statusText);
+          resTitle.textContent = title + " — ⚠️ Issue Detected";
+          resContent.innerHTML = `
+            <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin: 12px 0;">
+              <h3 style="color: #ef4444; margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px;">
+                <span>🚨</span> Analysis Warning / Error
+              </h3>
+              <p style="color: #fca5a5; font-size: 14px; margin: 0 0 10px 0; line-height: 1.5; font-family: monospace;">${errMsg}</p>
+              <p style="font-size: 12px; color: #94a3b8; margin: 0;">The agent prevented this error from failing silently. Check your ESPN connection and credentials if the problem persists.</p>
+            </div>
+          `;
+          return;
+        }
+
         resTitle.textContent = title;
         renderOutput(data);
       } catch (err) {
-        resContent.innerHTML = '<p style="color: #ef4444;">❌ Error: ' + err.message + '</p>';
+        clearInterval(activeTimer);
+        resTitle.textContent = title + " — ⚠️ Request Error";
+        resContent.innerHTML = `
+          <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin: 12px 0;">
+            <h3 style="color: #ef4444; margin: 0 0 8px 0;">🚨 Network Error</h3>
+            <p style="color: #fca5a5; font-size: 14px; margin: 0;">${err.message}</p>
+          </div>
+        `;
       }
     }
 
@@ -608,10 +663,34 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const resTitle = document.getElementById('results-title');
       const resContent = document.getElementById('results-content');
 
+      if (activeTimer) clearInterval(activeTimer);
+      let elapsedSec = 0;
+
       resTitle.textContent = "Evaluating Trade...";
-      resContent.innerHTML = '<p><span class="spinner"></span> Running VORP calculations and Gemini Pro analysis...</p>';
+      resContent.innerHTML = `
+        <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 18px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span class="spinner"></span>
+            <strong style="color: var(--accent); font-size: 15px;">Running VORP Analysis with Gemini Pro (0s elapsed)...</strong>
+          </div>
+          <p style="color: #cbd5e1; font-size: 13px; margin: 0;">Verifying roster ownership and calculating net starting points delta...</p>
+        </div>
+      `;
       resCard.style.display = 'block';
       resCard.scrollIntoView({ behavior: 'smooth' });
+
+      activeTimer = setInterval(() => {
+        elapsedSec++;
+        resContent.innerHTML = `
+          <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 18px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="spinner"></span>
+              <strong style="color: var(--accent); font-size: 15px;">Running VORP Analysis with Gemini Pro (${elapsedSec}s elapsed)...</strong>
+            </div>
+            <p style="color: #cbd5e1; font-size: 13px; margin: 0;">Verifying roster ownership and calculating net starting points delta...</p>
+          </div>
+        `;
+      }, 1000);
 
       try {
         const resp = await fetch('/query/trade', {
@@ -619,10 +698,26 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ league_id: leagueId, giving_players: giving, receiving_players: receiving })
         });
+        clearInterval(activeTimer);
         const data = await resp.json();
-        resTitle.textContent = "Trade Verdict: " + data.verdict;
+
+        if (!resp.ok || data.detail || (data.error && !data.verdict)) {
+          const errMsg = data.detail || data.error || ('HTTP ' + resp.status + ': ' + resp.statusText);
+          resTitle.textContent = "Trade Evaluation Failed";
+          resContent.innerHTML = `
+            <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin: 12px 0;">
+              <h3 style="color: #ef4444; margin: 0 0 8px 0;">🚨 Trade Evaluation Error</h3>
+              <p style="color: #fca5a5; font-size: 14px; margin: 0;">${errMsg}</p>
+            </div>
+          `;
+          return;
+        }
+
+        resTitle.textContent = "Trade Verdict: " + (data.verdict || 'Evaluation Complete');
         renderOutput(data);
       } catch (err) {
+        clearInterval(activeTimer);
+        resTitle.textContent = "Trade Evaluation Failed";
         resContent.innerHTML = '<p style="color: #ef4444;">❌ Error: ' + err.message + '</p>';
       }
     }
@@ -756,6 +851,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           ● Live Data (ESPN & Vegas)
         </span>
       </div>`;
+
+      // Top-level Error or Alert Banner
+      if (data.error || data.detail) {
+        const msg = data.error || data.detail;
+        html += `<div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin-bottom: 16px;">
+          <h3 style="color: #ef4444; margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px;">
+            <span>🚨</span> Routine Issue / Alert
+          </h3>
+          <p style="color: #fca5a5; font-size: 14px; margin: 0; line-height: 1.4; word-break: break-word;">${typeof msg === 'string' ? msg : JSON.stringify(msg)}</p>
+        </div>`;
+      }
 
       // Fallback Alert Banner
       if (data.intelligence_backend === 'deterministic_fallback') {
@@ -1431,10 +1537,12 @@ def health_check(check_gemini: bool = False) -> dict[str, Any]:
     }
 
 
+@app.get("/run/weekly")
 @app.post("/run/weekly")
 def run_weekly_analysis() -> dict[str, Any]:
     """Automated weekday workflow triggered by Cloud Scheduler (Tue, Thu, Fri, Sat).
     Routes internally based on current weekday (America/New_York).
+    Processes leagues concurrently to stay well below execution deadlines.
     """
     import zoneinfo
 
@@ -1447,7 +1555,7 @@ def run_weekly_analysis() -> dict[str, Any]:
 
     logger.info(f"Running automated weekly job for {day_name}...")
 
-    results = {}
+    results: dict[str, Any] = {}
     client = None
     try:
         client = GeminiIntelligenceClient()
@@ -1456,26 +1564,22 @@ def run_weekly_analysis() -> dict[str, Any]:
             f"Could not initialize GeminiIntelligenceClient: {e}. Falling back to deterministic mode."
         )
 
-    for league_id, league_config in ALL_LEAGUES.items():
+    def _process_single_league(league_config: Any) -> dict[str, Any]:
+        league_res: dict[str, Any] = {}
         try:
             espn = LeagueClient().get_league(league_config)
             current_week = get_current_week(espn)
             my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
             if not my_team:
-                continue
+                return {league_config.short_name: {"error": f"Team {league_config.team_id} not found in league"}}
 
             parsed_roster = parse_roster(my_team, league_config, week=current_week)
             matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
 
             if weekday == 1:  # Tuesday: Weekly Recap (Film Room) + Waiver Wire Analysis
-                # 1. Post-Game Weekly Recap / Film Room
-                # ESPN may have already rolled current_week forward to the next
-                # unplayed week by Tuesday morning. Detect this and look back.
                 recap_week = current_week
                 recap_matchup = matchup
                 if matchup and current_week > 1:
-                    # If no starters have played in the "current" week, it's already
-                    # been rolled forward — recap the previous (completed) week instead.
                     your_lineup = matchup.your_lineup or []
                     played_count = sum(
                         1 for p in your_lineup if getattr(p, "actual_points", 0) > 0
@@ -1498,7 +1602,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                         matchup=recap_matchup,
                         client=client,
                     )
-                    results[f"{league_config.short_name} Film Room"] = recap.model_dump()
+                    league_res[f"{league_config.short_name} Film Room"] = recap.model_dump()
 
                 # 2. Waiver Wire Analysis
                 free_agents = [
@@ -1520,7 +1624,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                     trending_adds=trending,
                     client=client,
                 )
-                results[league_config.short_name] = report.model_dump()
+                league_res[league_config.short_name] = report.model_dump()
 
             elif weekday in (3, 4):  # Thursday/Friday: Injury & TNF Check
                 roster_names = [p.name for p in parsed_roster.players]
@@ -1536,7 +1640,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                     client=client,
                     espn_league=espn,
                 )
-                results[league_config.short_name] = lineup.model_dump()
+                league_res[league_config.short_name] = lineup.model_dump()
 
             elif weekday == 5:  # Saturday: Full Matchup Preview & Scouting
                 odds = fetch_week_odds()
@@ -1544,35 +1648,55 @@ def run_weekly_analysis() -> dict[str, Any]:
                     report = generate_matchup_preview(
                         league_config, current_week, matchup, odds=odds, client=client
                     )
-                    results[league_config.short_name] = report.model_dump()
+                    league_res[league_config.short_name] = report.model_dump()
 
             else:
-                results[league_config.short_name] = {
+                league_res[league_config.short_name] = {
                     "message": f"No specific routine scheduled for {day_name}"
                 }
 
         except Exception as e:
-            logger.error(f"Error processing league {league_id}: {e}", exc_info=True)
-            results[league_config.short_name] = {"error": str(e)}
+            logger.error(f"Error processing league {league_config.league_id}: {e}", exc_info=True)
+            league_res[league_config.short_name] = {"error": str(e)}
 
-    # Send digest email
-    send_digest_email("weekly_analysis", results, day=day_name)
+        return league_res
 
-    return {
-        "job": "weekly_analysis",
-        "day": day_name,
-        "results": results,
-        "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
-        "timestamp": datetime.now().isoformat(),
-    }
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(ALL_LEAGUES)) as executor:
+            future_to_league = {
+                executor.submit(_process_single_league, cfg): cfg for cfg in ALL_LEAGUES.values()
+            }
+            for future in concurrent.futures.as_completed(future_to_league):
+                results.update(future.result())
+
+        # Send digest email
+        send_digest_email("weekly_analysis", results, day=day_name)
+
+        return {
+            "job": "weekly_analysis",
+            "day": day_name,
+            "results": results,
+            "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as fatal_err:
+        logger.error("Fatal error in weekly_analysis: %s", fatal_err, exc_info=True)
+        send_error_alert_email("weekly_analysis", str(fatal_err))
+        raise HTTPException(status_code=500, detail=str(fatal_err))
 
 
+@app.get("/run/sunday-pregame")
 @app.post("/run/sunday-pregame")
 def run_sunday_pregame() -> dict[str, Any]:
-    """Sunday 90-minute pregame alert: checks active/inactive statuses, weather, and finalizes starters."""
+    """Sunday 90-minute pregame alert: checks active/inactive statuses, weather, and finalizes starters.
+    Processes leagues concurrently to stay well below execution deadlines.
+    """
+    import zoneinfo
+
+    eastern = zoneinfo.ZoneInfo("America/New_York")
     logger.info("Running Sunday pregame inactive & final lineup optimization...")
 
-    results = {}
+    results: dict[str, Any] = {}
     client = None
     try:
         client = GeminiIntelligenceClient()
@@ -1583,13 +1707,14 @@ def run_sunday_pregame() -> dict[str, Any]:
 
     odds = fetch_week_odds()
 
-    for league_id, league_config in ALL_LEAGUES.items():
+    def _process_single_sunday_league(league_config: Any) -> dict[str, Any]:
+        league_res: dict[str, Any] = {}
         try:
             espn = LeagueClient().get_league(league_config)
             current_week = get_current_week(espn)
             my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
             if not my_team:
-                continue
+                return {league_config.short_name: {"error": f"Team {league_config.team_id} not found in league"}}
 
             parsed_roster = parse_roster(my_team, league_config, week=current_week)
             matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
@@ -1614,24 +1739,35 @@ def run_sunday_pregame() -> dict[str, Any]:
                 client=client,
                 espn_league=espn,
             )
-            results[league_config.short_name] = lineup.model_dump()
+            league_res[league_config.short_name] = lineup.model_dump()
 
         except Exception as e:
-            logger.error(f"Error in Sunday pregame for league {league_id}: {e}", exc_info=True)
-            results[league_config.short_name] = {"error": str(e)}
+            logger.error(f"Error in Sunday pregame for league {league_config.league_id}: {e}", exc_info=True)
+            league_res[league_config.short_name] = {"error": str(e)}
 
-    # Send game-day digest email
-    send_digest_email("sunday_pregame", results)
+        return league_res
 
-    import zoneinfo
-    eastern = zoneinfo.ZoneInfo("America/New_York")
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(ALL_LEAGUES)) as executor:
+            future_to_league = {
+                executor.submit(_process_single_sunday_league, cfg): cfg for cfg in ALL_LEAGUES.values()
+            }
+            for future in concurrent.futures.as_completed(future_to_league):
+                results.update(future.result())
 
-    return {
-        "job": "sunday_pregame",
-        "results": results,
-        "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
-        "timestamp": datetime.now().isoformat(),
-    }
+        # Send game-day digest email
+        send_digest_email("sunday_pregame", results)
+
+        return {
+            "job": "sunday_pregame",
+            "results": results,
+            "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as fatal_err:
+        logger.error("Fatal error in sunday_pregame: %s", fatal_err, exc_info=True)
+        send_error_alert_email("sunday_pregame", str(fatal_err))
+        raise HTTPException(status_code=500, detail=str(fatal_err))
 
 
 @app.post("/query/start-sit")

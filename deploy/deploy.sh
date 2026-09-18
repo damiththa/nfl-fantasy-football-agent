@@ -53,9 +53,20 @@ $GCLOUD run deploy "${SERVICE_NAME}" \
     --max-instances=1 \
     --memory=512Mi \
     --cpu=1 \
+    --timeout=600 \
     --quiet \
     --set-secrets="ESPN_S2=ESPN_S2:latest,ESPN_SWID=ESPN_SWID:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,SENDGRID_API_KEY=SENDGRID_API_KEY:latest" \
     --set-env-vars="NFL_SEASON=2026,GEMINI_MODEL=auto"
+
+# 4. Ensure Cloud Scheduler jobs have sufficient deadline (600s) to prevent timeouts
+echo "--> Updating Cloud Scheduler job deadlines to 600s..."
+for JOB in sunday-gameday-inactives thursday-tnf-lock tuesday-film-room friday-injury-lock; do
+    $GCLOUD scheduler jobs update http "${JOB}" \
+        --location="${REGION}" \
+        --project="${PROJECT_ID}" \
+        --attempt-deadline="600s" \
+        --quiet 2>/dev/null || true
+done
 
 # Retrieve and display Service URL
 SERVICE_URL=$($GCLOUD run services describe "${SERVICE_NAME}" --region="${REGION}" --project="${PROJECT_ID}" --format="value(status.url)")

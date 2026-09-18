@@ -36,3 +36,20 @@ def test_credential_helper(monkeypatch):
     monkeypatch.delenv("ESPN_SWID", raising=False)
     with pytest.raises(EnvironmentError):
         get_espn_credentials()
+
+
+def test_get_gemini_model(monkeypatch):
+    from src.config import get_gemini_model
+
+    monkeypatch.setenv("GEMINI_MODEL", "auto")
+    assert get_gemini_model() == "gemini-2.5-pro"
+
+    monkeypatch.setenv("GEMINI_MODEL", "")
+    assert get_gemini_model() == "gemini-2.5-pro"
+
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    assert get_gemini_model() == "gemini-2.5-pro"
+
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.1-pro")
+    assert get_gemini_model() == "gemini-3.1-pro"
+

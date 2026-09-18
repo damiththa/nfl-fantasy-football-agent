@@ -20,8 +20,10 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 PREFERRED_MODELS: list[str] = [
-    "gemini-3.1-pro",  # Primary target (auto-upgrades as soon as available on Vertex AI)
-    "gemini-2.5-pro",  # Proven stable fallback currently active
+    "gemini-3.1-pro",          # Primary target GA
+    "gemini-3.1-pro-preview",  # Primary target preview
+    "gemini-3-pro-preview",    # Secondary target preview
+    "gemini-2.5-pro",          # Proven stable fallback currently active
 ]
 
 _NEGOTIATED_MODEL: Optional[str] = None
@@ -118,7 +120,7 @@ def negotiate_active_model(
 
     _NEGOTIATED_MODEL = selected_model
     diagnostics["active_model"] = selected_model
-    diagnostics["auto_upgrade_active"] = selected_model == PREFERRED_MODELS[0]
+    diagnostics["auto_upgrade_active"] = selected_model != PREFERRED_MODELS[-1]
     _MODEL_PROBE_CACHE = diagnostics
 
     return selected_model, diagnostics
@@ -191,7 +193,7 @@ class GeminiIntelligenceClient:
         )
 
         models_to_try = [self.model]
-        if self.model == PREFERRED_MODELS[0] and PREFERRED_MODELS[-1] not in models_to_try:
+        if self.model != PREFERRED_MODELS[-1] and PREFERRED_MODELS[-1] not in models_to_try:
             models_to_try.append(PREFERRED_MODELS[-1])
 
         last_err: Optional[Exception] = None
@@ -250,7 +252,7 @@ class GeminiIntelligenceClient:
         )
 
         models_to_try = [self.model]
-        if self.model == PREFERRED_MODELS[0] and PREFERRED_MODELS[-1] not in models_to_try:
+        if self.model != PREFERRED_MODELS[-1] and PREFERRED_MODELS[-1] not in models_to_try:
             models_to_try.append(PREFERRED_MODELS[-1])
 
         last_err: Optional[Exception] = None
