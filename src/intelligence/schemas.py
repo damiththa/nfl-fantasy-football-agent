@@ -294,6 +294,18 @@ class TradeEvaluation(BaseModel):
     starting_lineup_impact: str = Field(
         description="How the trade specifically alters your weekly starting lineup quality"
     )
+    time_horizon: Literal["LONG_TERM_DECISION", "WEEKLY_PURPOSE"] = Field(
+        default="LONG_TERM_DECISION",
+        description="Explicitly states whether this trade is a 'LONG_TERM_DECISION' (season-long/playoff investment) or for 'WEEKLY_PURPOSE' (short-term matchup/bye-week fill-in)",
+    )
+    time_horizon_detail: str = Field(
+        default="",
+        description="Detailed explanation of whether this trade pays sustained dividends rest-of-season or is an immediate weekly fix",
+    )
+    coach_conviction: str = Field(
+        default="",
+        description="The Head Coach's direct, persuasive argument convincing the manager why they should (or should not) pull the trigger on this trade",
+    )
     playoff_schedule_impact: str = Field(
         default="",
         description="Evaluation of Weeks 15-17 schedule for acquired vs traded players",
@@ -363,6 +375,18 @@ class TradeProposal(BaseModel):
     your_lineup_upgrade: str = Field(description="How this specifically improves your starting lineup")
     why_target_accepts: str = Field(description="Why this trade solves a key deficiency for the opponent")
     negotiation_pitch: str = Field(description="Ready-to-send message to pitch this trade in fantasy chat")
+    time_horizon: Literal["LONG_TERM_DECISION", "WEEKLY_PURPOSE"] = Field(
+        default="LONG_TERM_DECISION",
+        description="Explicitly states whether this trade is a 'LONG_TERM_DECISION' (season-long/playoff upgrade) or for 'WEEKLY_PURPOSE' (immediate weekly matchup need)",
+    )
+    time_horizon_detail: str = Field(
+        default="",
+        description="Detailed explanation of whether this trade pays dividends rest-of-season or addresses immediate weekly needs",
+    )
+    coach_conviction: str = Field(
+        default="",
+        description="The Head Coach's direct, persuasive argument convincing the manager why they should initiate this trade",
+    )
 
 
 class LeagueTradeReport(BaseModel):

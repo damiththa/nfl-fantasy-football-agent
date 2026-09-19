@@ -1468,18 +1468,35 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           const mgrStr = tp.target_manager ? ` (${tp.target_manager})` : '';
           const btnId = `btn-pitch-${idx}`;
           const pitchSafe = (tp.negotiation_pitch || '').replace(/'/g, "\\\\'").replace(/"/g, '&quot;');
+          const isWeekly = tp.time_horizon === 'WEEKLY_PURPOSE';
+          const horizonBadge = isWeekly
+            ? '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #d97706; font-weight: bold; font-size: 11px; padding: 2px 8px; border-radius: 9999px;">⚡ WEEKLY / MATCHUP PURPOSE</span>'
+            : '<span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #0284c7; font-weight: bold; font-size: 11px; padding: 2px 8px; border-radius: 9999px;">🎯 LONG-TERM / ROS DECISION</span>';
+
           html += `<div class="trade-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
               <strong style="font-size: 15px; color: #f8fafc;">🤝 Trade with ${tp.target_team_name}${mgrStr}</strong>
-              <span style="color: var(--success); font-weight: bold; font-size: 12px; background: rgba(34, 197, 94, 0.15); padding: 2px 8px; border-radius: 4px;">+${tp.net_vorp_gain > 0 ? tp.net_vorp_gain : 0} Weekly VORP</span>
+              <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                ${horizonBadge}
+                <span style="color: var(--success); font-weight: bold; font-size: 12px; background: rgba(34, 197, 94, 0.15); padding: 2px 8px; border-radius: 4px;">+${tp.net_vorp_gain > 0 ? tp.net_vorp_gain : 0} Weekly VORP</span>
+              </div>
             </div>
             <p style="margin-bottom: 8px; font-size: 13px;">
               <span style="color: #ef4444; font-weight: bold;">Give:</span> <span style="color: #f8fafc;">${giving}</span>
               <span style="color: #94a3b8; margin: 0 6px;">➔</span>
               <span style="color: var(--success); font-weight: bold;">Receive:</span> <span style="color: #f8fafc;">${recving}</span>
             </p>
+            ${tp.time_horizon_detail ? `<p style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;"><strong>Strategic Horizon:</strong> ${tp.time_horizon_detail}</p>` : ''}
             <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 4px;"><strong style="color: var(--accent);">Your Upgrade:</strong> ${tp.your_lineup_upgrade}</p>
             <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 10px;"><strong style="color: #a78bfa;">Why Target Accepts:</strong> ${tp.why_target_accepts}</p>
+            ${tp.coach_conviction ? `
+              <div style="background: rgba(168, 85, 247, 0.1); border-left: 4px solid #a855f7; padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; line-height: 1.45;">
+                <strong style="color: #c084fc; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                  <span>🗣️</span> COACH'S CONVICTION (WHY YOU CONSIDER THIS):
+                </strong>
+                <span style="color: #f1f5f9; font-style: italic;">"${tp.coach_conviction}"</span>
+              </div>
+            ` : ''}
             <div style="background: #090d16; border: 1px solid var(--border); padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #38bdf8; line-height: 1.4;">
               💬 <strong>Negotiation Pitch:</strong> "${tp.negotiation_pitch}"
             </div>
@@ -1528,10 +1545,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           const color = data.verdict === 'ACCEPT' ? '#22c55e' : (data.verdict === 'REJECT' ? '#ef4444' : '#eab308');
           const delta = data.net_starting_points_change !== null && data.net_starting_points_change !== undefined ? data.net_starting_points_change : null;
           const deltaSign = delta !== null && delta > 0 ? '+' : '';
+          const isWeekly = data.time_horizon === 'WEEKLY_PURPOSE';
+          const horizonBadge = isWeekly
+            ? '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #d97706; font-weight: bold; font-size: 11px; padding: 3px 9px; border-radius: 9999px;">⚡ WEEKLY / MATCHUP PURPOSE</span>'
+            : '<span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #0284c7; font-weight: bold; font-size: 11px; padding: 3px 9px; border-radius: 9999px;">🎯 LONG-TERM / ROS DECISION</span>';
 
           html += `<div style="padding: 16px; background: rgba(255,255,255,0.05); border-left: 4px solid ${color}; border-radius: 8px; margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
-              <h3 style="color: ${color}; margin: 0; font-size: 18px;">VERDICT: ${data.verdict}</h3>
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <h3 style="color: ${color}; margin: 0; font-size: 18px;">VERDICT: ${data.verdict}</h3>
+                ${horizonBadge}
+              </div>
               ${delta !== null ? `<span style="font-size: 14px; font-weight: bold; color: ${delta > 0 ? '#22c55e' : (delta < 0 ? '#ef4444' : '#eab308')};">Net Starting Lineup: ${deltaSign}${delta} pts/wk</span>` : ''}
             </div>
 
@@ -1545,7 +1569,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
               </div>
             ` : ''}
 
+            ${data.coach_conviction ? `
+              <div style="background: ${data.verdict === 'ACCEPT' ? 'rgba(34, 197, 94, 0.12)' : (data.verdict === 'REJECT' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(234, 179, 8, 0.12)')}; border-left: 4px solid ${color}; padding: 12px 14px; border-radius: 6px; margin: 12px 0; font-size: 13px; line-height: 1.5;">
+                <strong style="color: ${color}; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                  <span>🗣️</span> COACH'S CONVICTION (WHY YOU CONSIDER THIS):
+                </strong>
+                <p style="color: #f8fafc; font-style: italic; margin: 0;">"${data.coach_conviction}"</p>
+              </div>
+            ` : ''}
+
             <p style="font-size: 14px; color: #cbd5e1; line-height: 1.5; margin: 8px 0;">${data.reasoning}</p>
+            ${data.time_horizon_detail ? `<p style="font-size: 13px; color: #94a3b8; margin-top: 6px;"><strong style="color: var(--accent);">Time Horizon Scope:</strong> ${data.time_horizon_detail}</p>` : ''}
 
             ${data.starting_lineup_changes && data.starting_lineup_changes.length > 0 ? `
               <div style="margin: 10px 0; padding: 10px; background: #090d16; border-radius: 6px; border: 1px solid var(--border);">

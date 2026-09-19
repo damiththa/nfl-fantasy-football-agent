@@ -359,6 +359,9 @@ def evaluate_trade(
             verdict="INVALID",
             is_valid_trade=False,
             roster_validation_errors=validation_errors,
+            time_horizon="LONG_TERM_DECISION",
+            time_horizon_detail="N/A (Invalid trade proposal due to roster ownership errors).",
+            coach_conviction="Coach's Directive: Do not submit invalid trade proposals. We only trade assets currently on our roster and cannot trade for players we already own.",
             your_vorp_change=0.0,
             starting_lineup_impact="Trade cannot be processed because one or more players violate roster ownership.",
             playoff_schedule_impact="N/A (Invalid trade proposal).",
@@ -448,6 +451,23 @@ def evaluate_trade(
             verdict_obj.generated_at = gen_time
             verdict_obj.intelligence_backend = client.model
             verdict_obj.fallback_reason = None
+            if not getattr(verdict_obj, "time_horizon", None):
+                verdict_obj.time_horizon = "LONG_TERM_DECISION"
+            if not getattr(verdict_obj, "coach_conviction", ""):
+                if verdict_obj.verdict == "ACCEPT":
+                    verdict_obj.coach_conviction = (
+                        f"Mad Dawg, this trade is a verified upgrade (+{net_pts:.1f} pts/wk). "
+                        "Pull the trigger with total confidence."
+                    )
+                elif verdict_obj.verdict == "REJECT":
+                    verdict_obj.coach_conviction = (
+                        "Mad Dawg, do not make this deal. It compromises your starting lineup "
+                        "and leaves your roster vulnerable."
+                    )
+                else:
+                    verdict_obj.coach_conviction = (
+                        "Hold your ground on this trade. We have the leverage—counter on our terms or walk away."
+                    )
             return verdict_obj
         except Exception as e:
             fallback_err = str(e)
@@ -462,6 +482,16 @@ def evaluate_trade(
 
     if has_critical_depth:
         verdict = "REJECT"
+        time_horizon = "LONG_TERM_DECISION"
+        time_horizon_detail = (
+            f"Long-term structural damage: Surrendering {', '.join(p.name for p in matched_giving)} leaves your roster "
+            f"permanently vulnerable at {depth_impact} for the rest of the season."
+        )
+        coach_conviction = (
+            f"Mad Dawg, as your Head Coach, I am ordering you to reject this deal immediately. "
+            f"Giving away {', '.join(p.name for p in matched_giving)} tears a giant hole in our roster depth. "
+            "A championship team cannot survive with depleted depth—slam the door on this offer."
+        )
         reasoning = (
             f"Net starting change is {net_pts:+.1f} pts, but this trade creates a fatal roster flaw: {depth_impact}. "
             f"Surrendering {', '.join(p.name for p in matched_giving)} leaves your roster structurally depleted."
@@ -469,6 +499,16 @@ def evaluate_trade(
         counter = "Demand a starting-caliber player at the depleted position to rebalance roster depth."
     elif net_pts >= 2.0:
         verdict = "ACCEPT"
+        time_horizon = "LONG_TERM_DECISION"
+        time_horizon_detail = (
+            f"Long-term season-long starting upgrade: Elevates your weekly starting foundation by +{net_pts:.1f} pts/wk "
+            f"({pre_pts:.1f} → {post_pts:.1f} projected pts) with sustained rest-of-season starting value."
+        )
+        coach_conviction = (
+            f"Mad Dawg, this is the exact kind of high-leverage move that wins fantasy championships. "
+            f"You are injecting a decisive +{net_pts:.1f} points into our starting lineup every single week with {', '.join(p.name for p in incoming_players)}. "
+            "We maintain our depth and substantially raise our weekly ceiling. Pull the trigger on this trade immediately."
+        )
         reasoning = (
             f"Decisive starting lineup upgrade (+{net_pts:.1f} weekly points). "
             f"Acquiring {', '.join(p.name for p in incoming_players)} meaningfully elevates your starting ceiling "
@@ -477,6 +517,16 @@ def evaluate_trade(
         counter = None
     elif net_pts <= -1.5:
         verdict = "REJECT"
+        time_horizon = "LONG_TERM_DECISION"
+        time_horizon_detail = (
+            f"Rest-of-season negative value: Decreases weekly starting output by {net_pts:+.1f} pts/wk "
+            f"({pre_pts:.1f} → {post_pts:.1f} pts) without providing adequate compensation."
+        )
+        coach_conviction = (
+            f"Mad Dawg, walk away from this table right now. This is a trap trade. "
+            f"Trading away {', '.join(p.name for p in matched_giving)} strips {abs(net_pts):.1f} points right out of our starting lineup each week. "
+            "You never sacrifice starting firepower for inferior returns. Flat-out reject this."
+        )
         reasoning = (
             f"Degrades starting lineup quality ({net_pts:+.1f} weekly points: {pre_pts:.1f} → {post_pts:.1f}). "
             f"Giving up {', '.join(p.name for p in matched_giving)} strips away more starting power than "
@@ -485,6 +535,15 @@ def evaluate_trade(
         counter = "Ask for an upgraded starter or an additional flex contributor to balance weekly scoring."
     elif all_incoming_benched:
         verdict = "REJECT"
+        time_horizon = "WEEKLY_PURPOSE"
+        time_horizon_detail = (
+            f"Ineffective short-term stash: Acquired players ({', '.join(p.name for p in incoming_players)}) do not crack "
+            "your active starting lineup and provide zero immediate weekly scoring boost."
+        )
+        coach_conviction = (
+            "Mad Dawg, do not take the bait. The incoming players cannot even beat out our current starters and will ride the pine. "
+            "We do not trade starting assets to accumulate expensive bench warmers. Reject this deal or demand a true starter."
+        )
         reasoning = (
             f"Net starting lineup impact is neutral/zero ({net_pts:+.1f} pts) because the acquired players "
             f"({', '.join(p.name for p in incoming_players)}) do NOT crack your current starting lineup and will merely "
@@ -493,6 +552,14 @@ def evaluate_trade(
         counter = "Target a player who actually upgrades one of your active starting slots."
     else:
         verdict = "COUNTER"
+        time_horizon = "LONG_TERM_DECISION"
+        time_horizon_detail = (
+            f"Marginal net impact ({net_pts:+.1f} pts/wk): Does not represent a decisive long-term or weekly upgrade in its current form."
+        )
+        coach_conviction = (
+            f"Mad Dawg, the foundation of a deal is here, but we don't do 'even' trades. We hold the cards. "
+            f"Counter their offer with: '{counter}' so that we capture real starting upside."
+        )
         reasoning = (
             f"Marginal net starting impact ({net_pts:+.1f} weekly points: {pre_pts:.1f} → {post_pts:.1f}). "
             f"The value is roughly balanced, but it does not decisively upgrade your weekly starting floor."
@@ -515,6 +582,9 @@ def evaluate_trade(
         positional_depth_impact=depth_impact,
         your_vorp_change=net_vorp,
         starting_lineup_impact=lineup_impact_summary,
+        time_horizon=time_horizon,
+        time_horizon_detail=time_horizon_detail,
+        coach_conviction=coach_conviction,
         playoff_schedule_impact=(
             f"Cross-reference acquired starters ({', '.join(p.name for p in incoming_players)}) with "
             f"Weeks 15-17 opposing defensive matchups."

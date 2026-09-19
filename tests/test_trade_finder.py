@@ -58,6 +58,9 @@ def test_propose_league_trades_deterministic():
     assert "Opponent Bench WR Beast" in prop.receiving_players
     assert prop.net_vorp_gain > 0
     assert "John Doe" in prop.negotiation_pitch
+    assert prop.time_horizon == "LONG_TERM_DECISION"
+    assert "Rest-of-season" in prop.time_horizon_detail or len(prop.time_horizon_detail) > 0
+    assert "Mad Dawg" in prop.coach_conviction
 
 
 def test_propose_league_trades_gemini():
@@ -82,7 +85,10 @@ def test_propose_league_trades_gemini():
                     '"proposals": [{"target_team_id": 2, "target_team_name": "Opponent", "target_manager": "Manager", '
                     '"giving_players": ["Bench RB"], "receiving_players": ["Target WR"], "net_vorp_gain": 2.5, '
                     '"your_lineup_upgrade": "Upgrades WR", "why_target_accepts": "Needs RB", '
-                    '"negotiation_pitch": "Hey let us trade"}]}'
+                    '"negotiation_pitch": "Hey let us trade", '
+                    '"time_horizon": "LONG_TERM_DECISION", '
+                    '"time_horizon_detail": "Permanent ROS upgrade", '
+                    '"coach_conviction": "Mad Dawg, make this trade now"}]}'
                 )
             return Response()
 
@@ -94,6 +100,9 @@ def test_propose_league_trades_gemini():
     assert len(report.proposals) == 1
     assert report.proposals[0].target_team_id == 2
     assert report.proposals[0].net_vorp_gain == 2.5
+    assert report.proposals[0].time_horizon == "LONG_TERM_DECISION"
+    assert "Permanent ROS" in report.proposals[0].time_horizon_detail
+    assert "Mad Dawg" in report.proposals[0].coach_conviction
 
 
 def test_propose_league_trades_hold_roster_deterministic():

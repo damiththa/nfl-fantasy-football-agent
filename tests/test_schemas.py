@@ -125,12 +125,18 @@ def test_trade_evaluation_schema():
         verdict="ACCEPT",
         your_vorp_change=4.2,
         starting_lineup_impact="Adds weekly RB1 starter to replace weak flex.",
+        time_horizon="LONG_TERM_DECISION",
+        time_horizon_detail="Season-long upgrade: elevates weekly floor and ceiling.",
+        coach_conviction="Mad Dawg, make this trade right now to secure the championship path.",
         playoff_schedule_impact="Soft Weeks 15-17 opposing rush defenses.",
         reasoning="Massive starting lineup upgrade that out-weighs bench depth loss.",
         counter_suggestion=None,
     )
     assert eval_result.verdict == "ACCEPT"
     assert eval_result.your_vorp_change == 4.2
+    assert eval_result.time_horizon == "LONG_TERM_DECISION"
+    assert "Season-long upgrade" in eval_result.time_horizon_detail
+    assert "Mad Dawg" in eval_result.coach_conviction
 
 
 def test_matchup_report_schema():

@@ -128,6 +128,17 @@ def propose_league_trades(
                     )
             else:
                 report.is_trade_recommended = True
+                for prop in report.proposals:
+                    if not getattr(prop, "time_horizon", None):
+                        prop.time_horizon = "LONG_TERM_DECISION"
+                    if not getattr(prop, "coach_conviction", ""):
+                        rec = ", ".join(prop.receiving_players)
+                        giv = ", ".join(prop.giving_players)
+                        prop.coach_conviction = (
+                            f"Mad Dawg, here is why you make this move: acquiring {rec} injects high-impact "
+                            f"starting equity while shipping away {giv} from our surplus depth. "
+                            "This is how championships are engineered."
+                        )
             eastern = zoneinfo.ZoneInfo("America/New_York")
             report.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
             report.intelligence_backend = client.model
@@ -199,6 +210,9 @@ def propose_league_trades(
                         your_lineup_upgrade=f"Upgrades our starting {target_pos} from {upgradable_starters[0].name} ({upgradable_starters[0].projected_points:.1f} pts) to {best_opp_bench.name} ({best_opp_bench.projected_points:.1f} pts).",
                         why_target_accepts=f"{opp_team_name} is thin at {bench_asset.position} starting {weakest_opp_starter.name} ({weakest_opp_starter.projected_points:.1f} pts); {bench_asset.name} ({bench_asset.projected_points:.1f} pts) steps right in as an immediate starter.",
                         negotiation_pitch=f"Hey {manager_name}, noticed you're a bit thin at {bench_asset.position} starting {weakest_opp_starter.name}. I've got extra {bench_asset.position} depth and could use a {target_pos}. Would you do {bench_asset.name} for {best_opp_bench.name}?",
+                        time_horizon="LONG_TERM_DECISION",
+                        time_horizon_detail=f"Rest-of-season permanent starting upgrade (+{points_upgrade:.1f} pts/wk): {best_opp_bench.name} becomes an every-week anchor in our starting {target_pos} slot, while parting with bench surplus {bench_asset.name}.",
+                        coach_conviction=f"Mad Dawg, listen up: this is a textbook championship trade. {best_opp_bench.name} immediately upgrades our starting lineup by +{points_upgrade:.1f} points every single week, while {bench_asset.name} is just burning a hole on our bench. {opp_team_name} is desperate for {bench_asset.position} and cannot afford to say no. Pull the trigger on this offer today.",
                     )
                     proposals.append(proposal)
                     if len(proposals) >= 2:

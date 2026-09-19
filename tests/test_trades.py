@@ -245,3 +245,61 @@ def test_evaluate_trade_with_gemini_client():
     )
     assert trade_eval.verdict == "ACCEPT"
     assert trade_eval.is_valid_trade
+    assert trade_eval.time_horizon in ("LONG_TERM_DECISION", "WEEKLY_PURPOSE")
+    assert len(trade_eval.coach_conviction) > 0
+
+
+def test_evaluate_trade_time_horizon_and_coach_conviction_accept():
+    """Verify time_horizon and coach_conviction are populated for ACCEPT."""
+    roster = ParsedRoster(
+        team_name="Mad Dawg Team",
+        players=[
+            _make_player("Brock Purdy", "QB", 18.0),
+            _make_player("Bench WR", "WR", 8.0),
+            _make_player("Bench RB", "RB", 8.0),
+            _make_player("Star WR1", "WR", 16.0),
+            _make_player("Star WR2", "WR", 15.0),
+            _make_player("Star RB1", "RB", 15.0),
+            _make_player("Star RB2", "RB", 14.0),
+            _make_player("Star TE", "TE", 12.0),
+            _make_player("DST", "DST", 8.0),
+        ],
+    )
+    projections = {"Elite RB Upgrade": ("RB", 19.0)}
+    eval_res = evaluate_trade(
+        league=PNA_2026,
+        roster=roster,
+        giving_players=["Bench WR", "Bench RB"],
+        receiving_players=["Elite RB Upgrade"],
+        player_projections=projections,
+    )
+    assert eval_res.verdict == "ACCEPT"
+    assert eval_res.time_horizon == "LONG_TERM_DECISION"
+    assert "upgrade" in eval_res.time_horizon_detail.lower()
+    assert "Mad Dawg" in eval_res.coach_conviction
+    assert "championship" in eval_res.coach_conviction.lower()
+
+
+def test_evaluate_trade_time_horizon_and_coach_conviction_reject():
+    """Verify time_horizon and coach_conviction are populated for REJECT."""
+    roster = ParsedRoster(
+        team_name="Mad Dawg Team",
+        players=[
+            _make_player("Brock Purdy", "QB", 18.0),
+            _make_player("Kyren Williams", "RB", 15.0),
+            _make_player("Justin Jefferson", "WR", 17.0),
+        ],
+    )
+    projections = {"Weak Player": ("WR", 5.0)}
+    eval_res = evaluate_trade(
+        league=PNA_2026,
+        roster=roster,
+        giving_players=["Kyren Williams"],
+        receiving_players=["Weak Player"],
+        player_projections=projections,
+    )
+    assert eval_res.verdict == "REJECT"
+    assert eval_res.time_horizon in ("LONG_TERM_DECISION", "WEEKLY_PURPOSE")
+    assert len(eval_res.coach_conviction) > 0
+    assert "reject" in eval_res.coach_conviction.lower() or "walk away" in eval_res.coach_conviction.lower()
+

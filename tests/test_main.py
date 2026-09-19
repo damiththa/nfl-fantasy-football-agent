@@ -98,3 +98,11 @@ def test_query_weekly_recap_invalid_league(client):
     assert "not found" in response.json()["detail"].lower()
 
 
+def test_root_dashboard_trade_horizon_and_conviction_markup(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "COACH'S CONVICTION" in response.text
+    assert "LONG-TERM / ROS DECISION" in response.text
+    assert "WEEKLY / MATCHUP PURPOSE" in response.text
+
+
