@@ -62,14 +62,16 @@ def format_lineup_prompt(
     """Format prompt for starting lineup and start/sit decisions."""
     hole_section = ""
     if lineup_hole_alerts:
-        hole_section = "\n🚨 CRITICAL STARTING LINEUP HOLES DETECTED (MUST BE ADDRESSED WITH PRIORITY):\n"
+        hole_section = (
+            "\n🚨 CRITICAL STARTING LINEUP HOLES DETECTED (MUST BE ADDRESSED WITH PRIORITY):\n"
+        )
         for h in lineup_hole_alerts:
             hole_section += f"- Slot {h.get('slot')}: {h.get('current_status')} (Current Starter: {h.get('current_player_name') or 'VACANT'})\n"
-            if h.get('bench_recommendation'):
+            if h.get("bench_recommendation"):
                 hole_section += f"  * Bench Fix: {h['bench_recommendation']}\n"
-            if h.get('waiver_recommendation'):
+            if h.get("waiver_recommendation"):
                 hole_section += f"  * Waiver Option: {h['waiver_recommendation']}\n"
-            if h.get('trade_recommendation'):
+            if h.get("trade_recommendation"):
                 hole_section += f"  * Trade Option: {h['trade_recommendation']}\n"
 
     return f"""Analyze Week {week} lineup decisions for league '{league.name}'.
@@ -104,6 +106,11 @@ TASK - DELIVER A COMPLETE START 'EM / SIT 'EM MASTER REPORT:
 3. INJURED / INACTIVE PLAYERS: Ensure NO players with OUT, IR, or DOUBTFUL tags are in the starting lineup.
 4. START/SIT DILEMMAS (key_flex_decisions): Address the closest 2-3 head-to-head toss-ups (e.g., "Start Player X over Player Y because...").
 5. EMERGENCY STARTING HOLES: If any starting holes are detected above, ensure `lineup_hole_alerts` is populated with clear bench, waiver, and trade recommendations.
+6. CRITICAL ROSTER LOCK & GAME TIMING MANDATE:
+   - Any player marked with `lock_status: "LOCKED_ON_BENCH"` (e.g. played Thursday night) is permanently locked on the bench on ESPN. You MUST NOT place them into `recommended_starters` or recommend starting them under any circumstance!
+   - Any player marked with `lock_status: "LOCKED_IN_STARTING_LINEUP"` is permanently locked into the starting lineup on ESPN. You MUST NOT bench them.
+   - Start/sit recommendations must strictly apply to `UNLOCKED_ACTIONABLE` players whose games have not yet kicked off.
+   - If an active starter is OUT, but all eligible bench replacements are `LOCKED_ON_BENCH`, acknowledge that zero legal bench swaps exist and instruct the user to execute an emergency waiver claim / IR placement.
 
 CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
 In the `reasoning` field for each player, write as a seasoned fantasy expert making the definitive case:
@@ -113,7 +120,7 @@ In the `reasoning` field for each player, write as a seasoned fantasy expert mak
 
 OPPONENT MATCHUP COUNTER-STRATEGY MANDATE:
 In the `opponent_matchup_breakdown` field, write as an elite veteran coach detailing how this specific starting lineup is tailored to defeat this specific opponent:
-- Contrast your roster against the opponent's starting lineup ({opponent_roster or 'Opponent'}).
+- Contrast your roster against the opponent's starting lineup ({opponent_roster or "Opponent"}).
 - Identify our decisive positional advantages and any opponent threats we must counter.
 - Explain how our game-theory approach (floor vs ceiling) maximizes win probability against this specific matchup opponent.
 """
@@ -240,7 +247,6 @@ In `coach_conviction`, speak directly to the manager ("Mad Dawg") as their trust
 """
 
 
-
 def format_matchup_prompt(
     league: LeagueConfig,
     week: int,
@@ -335,8 +341,16 @@ def format_weekly_recap_prompt(
     upcoming_starters: list[dict[str, Any]] | None = None,
 ) -> str:
     """Format prompt for post-game weekly recap or mid-week matchup checkpoint."""
-    completed = completed_starters if completed_starters is not None else [p for p in starters_performance if p.get("played", True)]
-    upcoming = upcoming_starters if upcoming_starters is not None else [p for p in starters_performance if not p.get("played", True)]
+    completed = (
+        completed_starters
+        if completed_starters is not None
+        else [p for p in starters_performance if p.get("played", True)]
+    )
+    upcoming = (
+        upcoming_starters
+        if upcoming_starters is not None
+        else [p for p in starters_performance if not p.get("played", True)]
+    )
     total_starters = len(starters_performance)
     completed_count = len(completed)
 
@@ -344,7 +358,9 @@ def format_weekly_recap_prompt(
 
     if matchup_status == "IN_PROGRESS":
         status_banner = f"IN PROGRESS ({completed_count} of {total_starters} Starters Completed)"
-        outcome_line = f"- Matchup Status: {status_banner}\n- Current Live Margin: {score_margin:+.1f} pts"
+        outcome_line = (
+            f"- Matchup Status: {status_banner}\n- Current Live Margin: {score_margin:+.1f} pts"
+        )
         instructions = f"""
 COACHING MANDATE — MID-WEEK MATCHUP CHECKPOINT & GAME-SCRIPT OUTLOOK:
 This matchup is CURRENTLY IN PROGRESS. Only {completed_count} of {total_starters} starters have completed their games (e.g. Thursday Night Football).
@@ -412,6 +428,3 @@ BENCH PLAYERS:
 
 {instructions}
 """
-
-
-

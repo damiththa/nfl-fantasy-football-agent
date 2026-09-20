@@ -24,6 +24,20 @@ class RosterPlayer:
     bye_week: int = 0
     percent_owned: float = 0.0
     has_played: bool = False
+    is_locked: bool = False
+    lock_status: str = "UNLOCKED_ACTIONABLE"
+
+    def __post_init__(self):
+        if self.has_played:
+            self.is_locked = True
+        if self.is_locked and self.lock_status == "UNLOCKED_ACTIONABLE":
+            slot_upper = (self.slot or "").upper()
+            if slot_upper in ("BENCH", "BE"):
+                self.lock_status = "LOCKED_ON_BENCH"
+            elif slot_upper == "IR":
+                self.lock_status = "LOCKED_ON_IR"
+            else:
+                self.lock_status = "LOCKED_IN_STARTING_LINEUP"
 
 
 @dataclass
@@ -37,9 +51,7 @@ class ParsedRoster:
     ir: List[RosterPlayer] = field(default_factory=list)
 
 
-def parse_roster(
-    team: Any, league_config: LeagueConfig, week: int | None = None
-) -> ParsedRoster:
+def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None) -> ParsedRoster:
     """Parse an espn_api Team or lineup list into a ParsedRoster.
 
     Extracts both projected and actual points from player.stats or BoxPlayer
@@ -53,7 +65,9 @@ def parse_roster(
     Returns:
         A ParsedRoster containing structured player data with projected and actual points.
     """
-    team_name = getattr(team, "team_name", "Unknown Team") if not isinstance(team, list) else "My Team"
+    team_name = (
+        getattr(team, "team_name", "Unknown Team") if not isinstance(team, list) else "My Team"
+    )
     parsed = ParsedRoster(team_name=team_name)
 
     if isinstance(team, list):
@@ -114,7 +128,9 @@ def parse_roster(
         has_played = False
         actual_pts = 0.0
 
-        if direct_actual is not None and ((game_played_attr is not None and game_played_attr > 0) or direct_actual > 0):
+        if direct_actual is not None and (
+            (game_played_attr is not None and game_played_attr > 0) or direct_actual > 0
+        ):
             actual_pts = round(float(direct_actual), 2)
             has_played = True
         elif stat_actual is not None:
@@ -140,6 +156,24 @@ def parse_roster(
         else:
             proj_pts = 0.0
 
+        espn_locked = bool(
+            getattr(player, "lineupLocked", False)
+            or getattr(player, "lineup_locked", False)
+            or getattr(player, "is_locked", False)
+        )
+        is_locked = bool(has_played or espn_locked)
+
+        slot_upper = slot_name.upper()
+        if is_locked:
+            if slot_upper in ("BENCH", "BE"):
+                lock_status = "LOCKED_ON_BENCH"
+            elif slot_upper == "IR":
+                lock_status = "LOCKED_ON_IR"
+            else:
+                lock_status = "LOCKED_IN_STARTING_LINEUP"
+        else:
+            lock_status = "UNLOCKED_ACTIONABLE"
+
         rp = RosterPlayer(
             name=getattr(player, "name", "Unknown Player") or "Unknown Player",
             position=getattr(player, "position", "UNK") or "UNK",
@@ -151,6 +185,8 @@ def parse_roster(
             bye_week=getattr(player, "bye_week", 0) or 0,
             percent_owned=getattr(player, "percent_owned", 0.0) or 0.0,
             has_played=has_played,
+            is_locked=is_locked,
+            lock_status=lock_status,
         )
 
         parsed.players.append(rp)
@@ -165,4 +201,3 @@ def parse_roster(
             parsed.starters.append(rp)
 
     return parsed
-

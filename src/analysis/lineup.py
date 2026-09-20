@@ -33,9 +33,7 @@ def sort_starters_by_lineup_order(
     """Sort recommended starters strictly into standard fantasy roster order:
     QB, RB, RB, WR, WR, TE, FLEX, [FLEX], D/ST, [K].
     """
-    qbs = [
-        s for s in starters if s.position.upper() in ("QB", "TQB") or "QB" in s.position.upper()
-    ]
+    qbs = [s for s in starters if s.position.upper() in ("QB", "TQB") or "QB" in s.position.upper()]
     rbs = [s for s in starters if s.position.upper() == "RB"]
     wrs = [s for s in starters if s.position.upper() == "WR"]
     tes = [s for s in starters if s.position.upper() == "TE"]
@@ -177,7 +175,14 @@ def detect_lineup_holes_and_solutions(
         elif slot_name not in ("QB", "RB", "WR", "TE", "FLEX", "K", "DST"):
             slot_name = p.position.upper()
 
-        is_out = (p.injury_status or "").upper() in ("OUT", "IR", "SUS", "SUSPENSION", "SUSPENDED", "DOUBTFUL")
+        is_out = (p.injury_status or "").upper() in (
+            "OUT",
+            "IR",
+            "SUS",
+            "SUSPENSION",
+            "SUSPENDED",
+            "DOUBTFUL",
+        )
         is_bye = getattr(p, "bye_week", 0) == current_week and current_week > 0
 
         inj_info = injury_map.get(p.name.lower())
@@ -226,7 +231,9 @@ def detect_lineup_holes_and_solutions(
         if filled < req_count:
             for _ in range(req_count - filled):
                 pos_target = "WR" if slot_name == "FLEX" else slot_name
-                vacant_holes.append((slot_name, pos_target, None, "VACANT ON ESPN: Slot is currently unfilled"))
+                vacant_holes.append(
+                    (slot_name, pos_target, None, "VACANT ON ESPN: Slot is currently unfilled")
+                )
 
     all_holes = unplayable_starters + vacant_holes
     if not all_holes:
@@ -264,10 +271,7 @@ def detect_lineup_holes_and_solutions(
             pass
 
     # Find candidate drop from user's bench (lowest projected healthy player not on IR)
-    bench_candidates = [
-        b for b in roster.bench
-        if (b.injury_status or "").upper() not in ("IR",)
-    ]
+    bench_candidates = [b for b in roster.bench if (b.injury_status or "").upper() not in ("IR",)]
     bench_candidates.sort(key=lambda b: getattr(b, "projected_points", 0.0) or 0.0)
     drop_candidate = bench_candidates[0] if bench_candidates else None
 
@@ -275,8 +279,9 @@ def detect_lineup_holes_and_solutions(
     used_bench_names: set[str] = set()
 
     for slot_name, pos_target, starter_name, reason in all_holes:
-        # Tier 1: Bench Promotion
+        # Tier 1: Bench Promotion (strictly unlocked players whose games haven't started)
         eligible_bench: list[RosterPlayer] = []
+        locked_eligible_bench: list[RosterPlayer] = []
         for b in roster.bench:
             if b.name.lower() in used_bench_names:
                 continue
@@ -292,12 +297,27 @@ def detect_lineup_holes_and_solutions(
             elif pos_target == b_pos:
                 is_eligible = True
 
-            b_out = (b.injury_status or "").upper() in ("OUT", "IR", "SUS", "SUSPENSION", "SUSPENDED", "DOUBTFUL")
+            b_out = (b.injury_status or "").upper() in (
+                "OUT",
+                "IR",
+                "SUS",
+                "SUSPENSION",
+                "SUSPENDED",
+                "DOUBTFUL",
+            )
             b_bye = getattr(b, "bye_week", 0) == current_week and current_week > 0
+            b_locked = getattr(b, "is_locked", False) or getattr(b, "has_played", False)
+
             if is_eligible and not b_out and not b_bye:
-                eligible_bench.append(b)
+                if b_locked:
+                    locked_eligible_bench.append(b)
+                else:
+                    eligible_bench.append(b)
 
         eligible_bench.sort(key=lambda b: getattr(b, "projected_points", 0.0) or 0.0, reverse=True)
+        locked_eligible_bench.sort(
+            key=lambda b: getattr(b, "projected_points", 0.0) or 0.0, reverse=True
+        )
 
         if eligible_bench:
             best_bench = eligible_bench[0]
@@ -305,6 +325,14 @@ def detect_lineup_holes_and_solutions(
             bench_rec = (
                 f"⬆️ Promote {best_bench.name} ({best_bench.position}, {best_bench.projected_points:.1f} pts) "
                 f"from your bench into starting {slot_name} slot."
+            )
+        elif locked_eligible_bench:
+            locked_names = ", ".join(
+                f"{p.name} ({p.projected_points:.1f} pts)" for p in locked_eligible_bench[:2]
+            )
+            bench_rec = (
+                f"🔒 All eligible bench options ({locked_names}) are LOCKED from prior games (e.g. Thursday Night Football) "
+                f"and cannot be moved into starting {slot_name}. Zero legal bench swaps exist; emergency waiver claim required."
             )
         else:
             bench_rec = (
@@ -317,33 +345,48 @@ def detect_lineup_holes_and_solutions(
         fa_options: list[Any] = []
         for p_fa in pos_for_fa:
             fa_options.extend(free_agents_by_pos.get(p_fa, []))
-        fa_options.sort(key=lambda fa: float(getattr(fa, "projected_points", 0.0) or 0.0), reverse=True)
+        fa_options.sort(
+            key=lambda fa: float(getattr(fa, "projected_points", 0.0) or 0.0), reverse=True
+        )
+
+        # Check if starter is eligible to be placed on IR to open an active roster spot
+        ir_tip = ""
+        if starter_name and any(
+            kw in reason.upper() for kw in ("OUT", "IR", "SUSPENSION", "SUSPENDED")
+        ):
+            ir_tip = f" (💡 Tip: If eligible, move {starter_name} directly to an IR slot on ESPN to open a roster spot without a drop!)"
 
         if fa_options:
             top_fa = fa_options[0]
             top_fa_pts = float(getattr(top_fa, "projected_points", 0.0) or 0.0)
             top_fa_team = getattr(top_fa, "proTeam", "FA")
             top_fa_pos = getattr(top_fa, "position", pos_target)
-            if drop_candidate and (starter_name is None or drop_candidate.name.lower() != starter_name.lower()):
+            if drop_candidate and (
+                starter_name is None or drop_candidate.name.lower() != starter_name.lower()
+            ):
                 waiver_rec = (
                     f"🎯 Claim {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts). "
-                    f"Suggested Drop: {drop_candidate.name} ({drop_candidate.position}, {drop_candidate.projected_points:.1f} pts)."
+                    f"Suggested Drop: {drop_candidate.name} ({drop_candidate.position}, {drop_candidate.projected_points:.1f} pts).{ir_tip}"
                 )
             else:
-                waiver_rec = f"🎯 Claim {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts) from free agency."
+                waiver_rec = f"🎯 Claim {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts) from free agency.{ir_tip}"
         else:
             if drop_candidate:
                 waiver_rec = (
                     f"🎯 Scan waiver wire for top available {pos_target}. "
-                    f"Suggested Drop: {drop_candidate.name} ({drop_candidate.position}, {drop_candidate.projected_points:.1f} pts)."
+                    f"Suggested Drop: {drop_candidate.name} ({drop_candidate.position}, {drop_candidate.projected_points:.1f} pts).{ir_tip}"
                 )
             else:
-                waiver_rec = f"🎯 Scan waiver wire for top available {pos_target} streaming starter."
+                waiver_rec = (
+                    f"🎯 Scan waiver wire for top available {pos_target} streaming starter.{ir_tip}"
+                )
 
         # Tier 3: Trade Target Solution
         trade_candidates = other_teams_by_surplus.get(pos_target, [])
         if slot_name == "FLEX" and not trade_candidates:
-            trade_candidates = other_teams_by_surplus.get("RB", []) + other_teams_by_surplus.get("WR", [])
+            trade_candidates = other_teams_by_surplus.get("RB", []) + other_teams_by_surplus.get(
+                "WR", []
+            )
 
         if trade_candidates:
             target_team, target_player = trade_candidates[0]
@@ -474,13 +517,25 @@ def enrich_lineup_recommendation_with_espn_status(
 
     # Generate explicit actionable swap instructions (filter out players whose games are locked)
     locked_starter_names = {
-        p.name.lower() for p in roster.starters if getattr(p, "has_played", False)
+        p.name.lower()
+        for p in roster.starters
+        if getattr(p, "has_played", False) or getattr(p, "is_locked", False)
+    }
+    locked_bench_names = {
+        p.name.lower()
+        for p in roster.bench
+        if getattr(p, "has_played", False) or getattr(p, "is_locked", False)
     }
     needs_bench = [
-        b for b in rec.bench_players
+        b
+        for b in rec.bench_players
         if b.alignment == "MOVE_TO_BENCH" and b.player_name.lower() not in locked_starter_names
     ]
-    needs_start = [s for s in rec.recommended_starters if s.alignment == "SWAP_TO_START"]
+    needs_start = [
+        s
+        for s in rec.recommended_starters
+        if s.alignment == "SWAP_TO_START" and s.player_name.lower() not in locked_bench_names
+    ]
 
     swaps = []
     for ns, nb in zip(needs_start, needs_bench):
@@ -493,7 +548,13 @@ def enrich_lineup_recommendation_with_espn_status(
             swaps.append(f"⬆️ Insert {ns.player_name} ({ns.position}) into vacant starting slot")
     elif len(needs_bench) > len(needs_start):
         for nb in needs_bench[len(needs_start) :]:
-            swaps.append(f"⬇️ Move {nb.player_name} ({nb.current_slot}) to Bench")
+            if locked_bench_names:
+                swaps.append(
+                    f"🚨 NO UNLOCKED BENCH REPLACEMENT for {nb.player_name} ({nb.current_slot}). "
+                    f"Bench options are locked from prior games. Move {nb.player_name} to IR and claim an emergency Sunday Free Agent streamer."
+                )
+            else:
+                swaps.append(f"⬇️ Move {nb.player_name} ({nb.current_slot}) to Bench")
 
     rec.actionable_swaps = swaps
 
@@ -509,8 +570,9 @@ def enrich_lineup_recommendation_with_espn_status(
         )
         act_pts = getattr(p, "actual_points", 0.0)
         has_played = getattr(p, "has_played", False)
+        is_locked = getattr(p, "is_locked", False) or has_played
 
-        if has_played:
+        if is_locked:
             # Player is locked in active lineup
             current_lineup_items.append(
                 CurrentRosterPlayer(
@@ -520,7 +582,7 @@ def enrich_lineup_recommendation_with_espn_status(
                     current_slot=p.slot,
                     projected_points=p.projected_points,
                     actual_points=act_pts,
-                    has_played=True,
+                    has_played=is_locked,
                     injury_status=p.injury_status,
                     action="KEEP_STARTING",
                     action_label=f"🏁 LOCKED ({act_pts:.1f} pts)",
@@ -593,11 +655,14 @@ def enrich_lineup_recommendation_with_espn_status(
 
     rec.current_lineup = sort_current_lineup_by_order(current_lineup_items, league)
     rec.actual_total_points = round(
-        sum(p.actual_points for p in current_lineup_items if p.has_played and p.actual_points is not None), 1
+        sum(
+            p.actual_points
+            for p in current_lineup_items
+            if p.has_played and p.actual_points is not None
+        ),
+        1,
     )
-    rec.projected_total_points = round(
-        sum(p.projected_points for p in current_lineup_items), 1
-    )
+    rec.projected_total_points = round(sum(p.projected_points for p in current_lineup_items), 1)
 
     # Build current_bench from roster.bench
     current_bench_items: list[CurrentRosterPlayer] = []
@@ -608,8 +673,9 @@ def enrich_lineup_recommendation_with_espn_status(
         )
         act_pts = getattr(p, "actual_points", 0.0)
         has_played = getattr(p, "has_played", False)
+        is_locked = getattr(p, "is_locked", False) or has_played
 
-        if has_played:
+        if is_locked:
             current_bench_items.append(
                 CurrentRosterPlayer(
                     player_name=p.name,
@@ -618,11 +684,11 @@ def enrich_lineup_recommendation_with_espn_status(
                     current_slot=p.slot,
                     projected_points=p.projected_points,
                     actual_points=act_pts,
-                    has_played=True,
+                    has_played=is_locked,
                     injury_status=p.injury_status,
                     action="STAY_ON_BENCH",
                     action_label=f"⏸️ BENCH LOCKED ({act_pts:.1f} pts)",
-                    action_detail=f"Played on bench ({act_pts:.1f} pts vs Proj {p.projected_points:.1f} pts). Locked on bench for Week {current_week}.",
+                    action_detail=f"Played/locked on bench ({act_pts:.1f} pts vs Proj {p.projected_points:.1f} pts). Locked on bench for Week {current_week}.",
                     floor=act_pts,
                     ceiling=act_pts,
                     game_script_note="Game completed/in-progress",
@@ -686,8 +752,17 @@ def enrich_lineup_recommendation_with_espn_status(
                 )
             )
 
-
-    pos_priority = {"QB": 1, "TQB": 1, "RB": 2, "WR": 3, "TE": 4, "DST": 5, "D/ST": 5, "K": 6, "PK": 6}
+    pos_priority = {
+        "QB": 1,
+        "TQB": 1,
+        "RB": 2,
+        "WR": 3,
+        "TE": 4,
+        "DST": 5,
+        "D/ST": 5,
+        "K": 6,
+        "PK": 6,
+    }
     rec.current_bench = sorted(
         current_bench_items,
         key=lambda p: (pos_priority.get(p.position.upper(), 99), -p.projected_points),
@@ -874,6 +949,8 @@ def optimize_lineup(
                 "current_slot": p.slot,
                 "projected_pts": p.projected_points,
                 "injury": p.injury_status,
+                "is_locked": getattr(p, "is_locked", False),
+                "lock_status": getattr(p, "lock_status", "UNLOCKED_ACTIONABLE"),
             }
             for p in roster.players
         ]
@@ -946,7 +1023,7 @@ def optimize_lineup(
         try:
             rec = client.generate_structured(prompt=prompt, response_schema=LineupRecommendation)
 
-            # Code-level safety guard: zero-tolerance for OUT, IR, or DOUBTFUL starters
+            # Code-level safety guard 1: zero-tolerance for OUT, IR, or DOUBTFUL starters
             out_player_names = {
                 p.name.lower()
                 for p in roster.players
@@ -957,17 +1034,73 @@ def optimize_lineup(
                     if inj.injury_status and inj.injury_status.upper() in ("OUT", "IR", "DOUBTFUL"):
                         out_player_names.add(inj.full_name.lower())
 
+            # Code-level safety guard 2: zero-tolerance for recommending locked bench players as starters
+            locked_bench_players = {
+                p.name.lower(): p
+                for p in roster.bench
+                if getattr(p, "is_locked", False) or getattr(p, "has_played", False)
+            }
+
+            # Code-level safety guard 3: players currently in starting lineup who are locked MUST remain starters
+            locked_starter_players = {
+                p.name.lower(): p
+                for p in roster.starters
+                if getattr(p, "is_locked", False) or getattr(p, "has_played", False)
+            }
+
             cleaned_starters = []
+            rec_starters_lower = {s.player_name.lower() for s in rec.recommended_starters}
+
+            # Ensure all locked ESPN starters are preserved
+            for p_locked_lower, p_locked in locked_starter_players.items():
+                if p_locked_lower not in rec_starters_lower:
+                    logger.warning(
+                        "Enforcing ESPN roster lock: Re-inserting locked starter %s into starting lineup",
+                        p_locked.name,
+                    )
+                    act_pts = getattr(p_locked, "actual_points", 0.0)
+                    cleaned_starters.append(
+                        StartSitDecision(
+                            player_name=p_locked.name,
+                            position=p_locked.position,
+                            team=p_locked.team,
+                            action="START",
+                            confidence=1.0,
+                            floor=act_pts,
+                            ceiling=act_pts,
+                            projected_points=p_locked.projected_points,
+                            reasoning=f"🔒 LOCKED IN LINEUP: Game already started/completed ({act_pts:.1f} pts). Locked on ESPN.",
+                        )
+                    )
+                    rec.bench_players = [
+                        b for b in rec.bench_players if b.player_name.lower() != p_locked_lower
+                    ]
+
             for s in rec.recommended_starters:
-                if s.player_name.lower() in out_player_names:
+                s_lower = s.player_name.lower()
+                if s_lower in out_player_names:
                     logger.warning(
                         "Enforcing injury rule: Moving injured starter %s to bench", s.player_name
                     )
                     s.action = "BENCH"
                     s.reasoning = f"🚨 INACTIVE/OUT: Must be benched. {s.reasoning}"
                     rec.bench_players.append(s)
-                else:
+                elif s_lower in locked_bench_players:
+                    logger.warning(
+                        "Enforcing ESPN roster lock: Moving locked bench player %s back to bench",
+                        s.player_name,
+                    )
+                    p_b = locked_bench_players[s_lower]
+                    act_b_pts = getattr(p_b, "actual_points", 0.0)
+                    s.action = "BENCH"
+                    s.reasoning = (
+                        f"🔒 LOCKED ON BENCH: Played prior game ({act_b_pts:.1f} pts, e.g. Thursday Night Football). "
+                        "ESPN permanently locks bench players once kickoff occurs; cannot be moved into lineup."
+                    )
+                    rec.bench_players.append(s)
+                elif s_lower not in {cs.player_name.lower() for cs in cleaned_starters}:
                     cleaned_starters.append(s)
+
             rec.recommended_starters = sort_starters_by_lineup_order(cleaned_starters, league)
             rec.bench_players = sort_bench_by_position(rec.bench_players)
             rec.intelligence_backend = client.model
@@ -993,9 +1126,6 @@ def optimize_lineup(
     recommended_starters = []
     bench_players = []
 
-    # Sort players by projected points
-    sorted_players = sorted(roster.players, key=lambda p: p.projected_points, reverse=True)
-
     # Assign based on roster slots
     slots_needed = {
         "QB": league.roster.qb,
@@ -1010,7 +1140,61 @@ def optimize_lineup(
     slots_filled = {k: 0 for k in slots_needed}
     flex_eligible = ("RB", "WR", "TE")
 
-    for p in sorted_players:
+    # 1. Lock in starters whose games have already started (cannot be moved to bench)
+    for p in roster.starters:
+        if getattr(p, "is_locked", False) or getattr(p, "has_played", False):
+            pos = p.position.upper().replace("/", "")
+            if pos == "DEF":
+                pos = "DST"
+            if pos in slots_filled and slots_filled[pos] < slots_needed[pos]:
+                slots_filled[pos] += 1
+            elif pos in flex_eligible and slots_filled["FLEX"] < slots_needed["FLEX"]:
+                slots_filled["FLEX"] += 1
+            act_pts = getattr(p, "actual_points", 0.0)
+            recommended_starters.append(
+                StartSitDecision(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    action="START",
+                    confidence=1.0,
+                    floor=act_pts,
+                    ceiling=act_pts,
+                    projected_points=p.projected_points,
+                    reasoning=f"🔒 LOCKED IN LINEUP: Game already played/started ({act_pts:.1f} pts). Immutable ESPN starter.",
+                )
+            )
+
+    # 2. Bench players whose games have already started on the bench (cannot be promoted)
+    locked_bench_set = set()
+    for p in roster.bench:
+        if getattr(p, "is_locked", False) or getattr(p, "has_played", False):
+            locked_bench_set.add(p.name.lower())
+            act_pts = getattr(p, "actual_points", 0.0)
+            bench_players.append(
+                StartSitDecision(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    action="BENCH",
+                    confidence=1.0,
+                    floor=act_pts,
+                    ceiling=act_pts,
+                    projected_points=p.projected_points,
+                    reasoning=f"🔒 LOCKED ON BENCH: Played prior game on bench ({act_pts:.1f} pts, e.g. Thursday Night Football). Locked on ESPN.",
+                )
+            )
+
+    # 3. For remaining unlocked players, sort by projected points and fill remaining slots
+    started_names_lower = {s.player_name.lower() for s in recommended_starters}
+    unlocked_players = [
+        p
+        for p in roster.players
+        if p.name.lower() not in started_names_lower and p.name.lower() not in locked_bench_set
+    ]
+    unlocked_players.sort(key=lambda p: p.projected_points, reverse=True)
+
+    for p in unlocked_players:
         pos = p.position.upper().replace("/", "")
         if pos == "DEF":
             pos = "DST"
@@ -1086,4 +1270,3 @@ def optimize_lineup(
         injuries=injuries,
         matchup=matchup,
     )
-
