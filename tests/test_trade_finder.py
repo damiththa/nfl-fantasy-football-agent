@@ -174,3 +174,53 @@ def test_propose_league_trades_gemini_hold_roster():
     assert len(report.proposals) == 0
     assert "lateral churn" in report.hold_roster_reasoning
 
+
+def test_propose_league_trades_does_not_assume_unset_bench_is_unvalued():
+    """Verify that trade proposals do NOT assume a star sitting in slot='Bench' is unvalued or available for cheap.
+
+    Scenario: Opponent has an unadjusted lineup where elite WR 'Justin Jefferson' (20.0 pts)
+    is temporarily sitting in slot='Bench', while 'Decoy WR' (4.0 pts) is in 'WR1'.
+    The engine must compute optimal starters, recognize Justin Jefferson is their true WR1,
+    and NOT try to poach him with a cheap bench piece assuming he is 'benched'.
+    """
+    user_team = MagicMock()
+    user_team.team_id = PNA_2026.team_id
+    user_team.team_name = "Mad Dawg"
+    user_team.roster = [
+        _make_mock_player("Josh Allen", "QB", "QB", 22.0),
+        _make_mock_player("Bijan Robinson", "RB", "RB", 18.0),
+        _make_mock_player("Bench RB Asset", "RB", "Bench", 14.0),
+        _make_mock_player("Weak Starter WR", "WR", "WR", 7.0),
+        _make_mock_player("Trey McBride", "TE", "TE", 12.0),
+    ]
+
+    opp_team = MagicMock()
+    opp_team.team_id = 2
+    opp_team.team_name = "Rival Squad"
+    opp_team.owners = [{"firstName": "Jane", "lastName": "Doe"}]
+    opp_team.roster = [
+        _make_mock_player("Lamar Jackson", "QB", "QB", 21.0),
+        _make_mock_player("Opponent Weak RB", "RB", "RB", 6.0),
+        _make_mock_player("Decoy WR", "WR", "WR", 4.0),
+        _make_mock_player("Justin Jefferson", "WR", "Bench", 20.0),  # Star sitting on bench because unadjusted!
+        _make_mock_player("Surplus WR Depth", "WR", "Bench", 12.0),  # True tradeable depth
+    ]
+
+    mock_league = MagicMock()
+    mock_league.teams = [user_team, opp_team]
+
+    report = propose_league_trades(PNA_2026, 1, mock_league)
+    assert report.is_trade_recommended is True
+    assert len(report.proposals) >= 1
+    prop = report.proposals[0]
+
+    # Must NOT target the unadjusted star Justin Jefferson as an expendable bench piece!
+    assert "Justin Jefferson" not in prop.receiving_players
+    # Must target the true surplus asset
+    assert "Surplus WR Depth" in prop.receiving_players
+    # Must NOT say "you have Justin Jefferson on your bench" or "you're benching"
+    assert "benching" not in prop.why_target_accepts.lower()
+    assert "on your bench" not in prop.negotiation_pitch.lower()
+    assert "overall roster construction" in prop.why_target_accepts.lower()
+
+

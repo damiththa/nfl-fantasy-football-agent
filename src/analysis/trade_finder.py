@@ -11,7 +11,7 @@ import zoneinfo
 from datetime import datetime
 from typing import Any, Optional
 
-from src.analysis.trades import calculate_vorp
+from src.analysis.trades import calculate_vorp, compute_optimal_starters
 from src.config import LeagueConfig
 from src.espn.roster import ParsedRoster, parse_roster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
@@ -65,18 +65,24 @@ def propose_league_trades(
             parsed = parse_roster(team, league)
             manager = _extract_manager_name(team)
             other_teams_parsed.append((team, parsed))
+            opp_opt_starters, opp_opt_bench, opp_opt_pts = compute_optimal_starters(parsed.players, league)
             other_teams_data.append(
                 {
                     "team_id": team_id,
                     "team_name": getattr(team, "team_name", "Unknown"),
                     "manager": manager,
-                    "starters": [
+                    "optimal_starters": [
                         {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
-                        for p in parsed.starters
+                        for p in opp_opt_starters
                     ],
-                    "bench": [
+                    "true_surplus_bench": [
                         {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
-                        for p in parsed.bench
+                        for p in opp_opt_bench
+                    ],
+                    "optimal_starting_points": opp_opt_pts,
+                    "all_roster_players": [
+                        {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+                        for p in parsed.players
                     ],
                 }
             )
@@ -91,15 +97,21 @@ def propose_league_trades(
         )
 
     user_roster = parse_roster(user_team, league)
+    user_opt_starters, user_opt_bench, user_opt_pts = compute_optimal_starters(user_roster.players, league)
     user_roster_data = {
         "team_name": user_roster.team_name,
-        "starters": [
-            {"name": p.name, "pos": p.position, "slot": p.slot, "pts": p.projected_points, "injury": p.injury_status}
-            for p in user_roster.starters
-        ],
-        "bench": [
+        "optimal_starters": [
             {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
-            for p in user_roster.bench
+            for p in user_opt_starters
+        ],
+        "true_surplus_bench": [
+            {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+            for p in user_opt_bench
+        ],
+        "optimal_starting_points": user_opt_pts,
+        "all_roster_players": [
+            {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+            for p in user_roster.players
         ],
     }
 
@@ -151,72 +163,131 @@ def propose_league_trades(
                 e,
             )
 
-    # Deterministic Fallback: Scan teams for mutual surpluses and deficits
+    # Deterministic Fallback: Scan teams for mutual surpluses and deficits based on overall optimal rosters
     proposals: list[TradeProposal] = []
 
-    # Identify user's bench depth (healthy bench players with solid projected pts)
-    viable_bench = [
-        p for p in user_roster.bench
-        if (p.injury_status or "").upper() not in ("OUT", "IR", "SUSPENSION") and p.position in ("RB", "WR", "TE", "QB")
+    # Identify user's weakest starting slot among flex-eligible positions (RB, WR, TE)
+    user_flex_starters = [
+        p for p in user_opt_starters
+        if (p.position or "").upper() in ("RB", "WR", "TE")
     ]
-    viable_bench.sort(key=lambda p: p.projected_points, reverse=True)
+    user_flex_starters.sort(key=lambda p: p.projected_points)
 
-    # Identify user's lowest projected starter (target for upgrade)
-    upgradable_starters = [
-        p for p in user_roster.starters
-        if p.position in ("RB", "WR", "TE")
+    user_bench_assets = [
+        p for p in user_opt_bench
+        if (p.injury_status or "").upper() not in ("OUT", "IR", "SUSPENSION") and (p.position or "").upper() in ("RB", "WR", "TE", "QB")
     ]
-    upgradable_starters.sort(key=lambda p: p.projected_points)
+    user_bench_assets.sort(key=lambda p: p.projected_points, reverse=True)
 
-    if viable_bench and upgradable_starters and other_teams_parsed:
-        target_pos = upgradable_starters[0].position
-        bench_asset = viable_bench[0]
+    # Candidate assets user can trade: true bench depth first, then startable assets if depth allows
+    user_trade_candidates = user_bench_assets + [
+        p for p in user_flex_starters
+        if (p.injury_status or "").upper() not in ("OUT", "IR", "SUSPENSION") and getattr(p, "projected_points", 0.0) >= 8.0
+    ]
+
+    if user_flex_starters and user_trade_candidates and other_teams_parsed:
+        user_weakest_starter = user_flex_starters[0]
+        target_pos = user_weakest_starter.position
 
         for team, opp_roster in other_teams_parsed:
-            opp_starters_at_bench_pos = [
-                p for p in opp_roster.starters if p.position == bench_asset.position
+            opp_opt_starters, opp_opt_bench, opp_opt_pts = compute_optimal_starters(opp_roster.players, league)
+
+            # Look across opponent's entire roster for healthy assets at target_pos
+            # Prioritize true surplus bench depth first, then secondary starters (avoiding untradable alpha WR1/RB1s)
+            opp_bench_cands = [
+                p for p in opp_opt_bench
+                if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in ("OUT", "IR")
             ]
-            opp_bench_at_target_pos = [
-                p for p in opp_roster.bench
-                if p.position == target_pos and (p.injury_status or "").upper() not in ("OUT", "IR")
+            opp_bench_cands.sort(key=lambda p: p.projected_points, reverse=True)
+
+            opp_starter_cands = [
+                p for p in opp_opt_starters
+                if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in ("OUT", "IR")
+            ]
+            opp_starter_cands.sort(key=lambda p: p.projected_points)
+
+            opp_cands_at_target_pos = opp_bench_cands + opp_starter_cands
+
+            opp_flex_starters = [
+                p for p in opp_opt_starters
+                if (p.position or "").upper() in ("RB", "WR", "TE")
             ]
 
-            # Only propose if opponent has a weak starter at bench_asset's pos AND surplus at target_pos
-            if opp_starters_at_bench_pos and opp_bench_at_target_pos:
-                weakest_opp_starter = min(opp_starters_at_bench_pos, key=lambda p: p.projected_points)
-                best_opp_bench = max(opp_bench_at_target_pos, key=lambda p: p.projected_points)
+            found_trade_for_team = False
+            for user_asset in user_trade_candidates:
+                if user_asset.position == target_pos:
+                    continue  # We don't trade same position (e.g. WR for WR)
 
-                # Require a meaningful upgrade threshold (>= 1.5 pts) for starting lineup
-                points_upgrade = best_opp_bench.projected_points - upgradable_starters[0].projected_points
-                opp_upgrade = bench_asset.projected_points - weakest_opp_starter.projected_points
+                opp_starters_at_user_pos = [
+                    p for p in opp_flex_starters if (p.position or "").upper() == user_asset.position
+                ]
+                if not opp_starters_at_user_pos:
+                    continue
 
-                if points_upgrade >= 1.5 and opp_upgrade >= 1.0:
-                    net_gain = round(
-                        calculate_vorp(best_opp_bench.projected_points, target_pos, league.num_teams)
-                        - calculate_vorp(upgradable_starters[0].projected_points, target_pos, league.num_teams),
-                        1,
-                    )
-                    manager_name = _extract_manager_name(team)
-                    opp_team_name = getattr(team, "team_name", "Opponent")
-                    opp_team_id = getattr(team, "team_id", 0)
+                opp_weakest_at_pos = min(opp_starters_at_user_pos, key=lambda p: p.projected_points)
+                opp_upgrade = user_asset.projected_points - opp_weakest_at_pos.projected_points
 
-                    proposal = TradeProposal(
-                        target_team_id=opp_team_id,
-                        target_team_name=opp_team_name,
-                        target_manager=manager_name,
-                        giving_players=[bench_asset.name],
-                        receiving_players=[best_opp_bench.name],
-                        net_vorp_gain=max(net_gain, 1.5),
-                        your_lineup_upgrade=f"Upgrades our starting {target_pos} from {upgradable_starters[0].name} ({upgradable_starters[0].projected_points:.1f} pts) to {best_opp_bench.name} ({best_opp_bench.projected_points:.1f} pts).",
-                        why_target_accepts=f"{opp_team_name} is thin at {bench_asset.position} starting {weakest_opp_starter.name} ({weakest_opp_starter.projected_points:.1f} pts); {bench_asset.name} ({bench_asset.projected_points:.1f} pts) steps right in as an immediate starter.",
-                        negotiation_pitch=f"Hey {manager_name}, noticed you're a bit thin at {bench_asset.position} starting {weakest_opp_starter.name}. I've got extra {bench_asset.position} depth and could use a {target_pos}. Would you do {bench_asset.name} for {best_opp_bench.name}?",
-                        time_horizon="LONG_TERM_DECISION",
-                        time_horizon_detail=f"Rest-of-season permanent starting upgrade (+{points_upgrade:.1f} pts/wk): {best_opp_bench.name} becomes an every-week anchor in our starting {target_pos} slot, while parting with bench surplus {bench_asset.name}.",
-                        coach_conviction=f"Mad Dawg, listen up: this is a textbook championship trade. {best_opp_bench.name} immediately upgrades our starting lineup by +{points_upgrade:.1f} points every single week, while {bench_asset.name} is just burning a hole on our bench. {opp_team_name} is desperate for {bench_asset.position} and cannot afford to say no. Pull the trigger on this offer today.",
-                    )
-                    proposals.append(proposal)
-                    if len(proposals) >= 2:
+                for opp_asset in opp_cands_at_target_pos:
+                    if opp_asset.name == user_asset.name:
+                        continue
+
+                    points_upgrade = opp_asset.projected_points - user_weakest_starter.projected_points
+
+                    # Both teams must experience a genuine starting lineup upgrade in their optimal lineups
+                    if points_upgrade >= 1.5 and opp_upgrade >= 1.0:
+                        net_gain = round(
+                            calculate_vorp(opp_asset.projected_points, target_pos, league.num_teams)
+                            - calculate_vorp(user_weakest_starter.projected_points, target_pos, league.num_teams),
+                            1,
+                        )
+                        manager_name = _extract_manager_name(team)
+                        opp_team_name = getattr(team, "team_name", "Opponent")
+                        opp_team_id = getattr(team, "team_id", 0)
+
+                        proposal = TradeProposal(
+                            target_team_id=opp_team_id,
+                            target_team_name=opp_team_name,
+                            target_manager=manager_name,
+                            giving_players=[user_asset.name],
+                            receiving_players=[opp_asset.name],
+                            net_vorp_gain=max(net_gain, 1.5),
+                            your_lineup_upgrade=(
+                                f"Upgrades our starting {target_pos} from {user_weakest_starter.name} "
+                                f"({user_weakest_starter.projected_points:.1f} pts) to {opp_asset.name} "
+                                f"({opp_asset.projected_points:.1f} pts) by +{points_upgrade:.1f} pts/wk."
+                            ),
+                            why_target_accepts=(
+                                f"Based on overall roster construction, {opp_team_name}'s weakest starting "
+                                f"{user_asset.position} is {opp_weakest_at_pos.name} ({opp_weakest_at_pos.projected_points:.1f} pts). "
+                                f"Adding {user_asset.name} ({user_asset.projected_points:.1f} pts) directly injects "
+                                f"+{opp_upgrade:.1f} pts/wk into their starting lineup, while they trade from depth at {target_pos}."
+                            ),
+                            negotiation_pitch=(
+                                f"Hey {manager_name}, looking at our overall rosters, {user_asset.name} provides an immediate +{opp_upgrade:.1f} pts/wk "
+                                f"upgrade to your starting {user_asset.position} spot over {opp_weakest_at_pos.name}. I have depth at {user_asset.position} "
+                                f"and could use help at {opp_asset.position} with {opp_asset.name}. Would you be open to this swap?"
+                            ),
+                            time_horizon="LONG_TERM_DECISION",
+                            time_horizon_detail=(
+                                f"Rest-of-season permanent starting upgrade (+{points_upgrade:.1f} pts/wk for us, "
+                                f"+{opp_upgrade:.1f} pts/wk for {opp_team_name}): A balanced, mutually beneficial deal "
+                                f"addressing structural needs on both rosters."
+                            ),
+                            coach_conviction=(
+                                f"Mad Dawg, listen up: this is a textbook championship trade. We aren't making naive assumptions "
+                                f"about unadjusted bench slots—looking at overall roster strength, {opp_asset.name} immediately upgrades "
+                                f"our starting {target_pos} by +{points_upgrade:.1f} points every single week. Meanwhile, {opp_team_name} "
+                                f"gains +{opp_upgrade:.1f} pts/wk at {user_asset.position} where their roster is thin. "
+                                f"It's a genuine win-win deal that moves our championship needle. Send the offer today."
+                            ),
+                        )
+                        proposals.append(proposal)
+                        found_trade_for_team = True
                         break
+                if found_trade_for_team:
+                    break
+            if len(proposals) >= 2:
+                break
 
     eastern = zoneinfo.ZoneInfo("America/New_York")
     gen_time = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
@@ -250,8 +321,8 @@ def propose_league_trades(
         hold_roster_reasoning=None,
         proposals=proposals,
         market_overview=(
-            f"High-conviction market scan identified {len(proposals)} targeted upgrade opportunity. "
-            f"Leveraging surplus depth at {viable_bench[0].position} to upgrade starting {upgradable_starters[0].position}."
+            f"High-conviction market scan identified {len(proposals)} targeted upgrade opportunity based on overall roster balance. "
+            f"Trading from positional depth to improve optimal starting lineup output."
         ),
         generated_at=gen_time,
         intelligence_backend="deterministic_fallback",

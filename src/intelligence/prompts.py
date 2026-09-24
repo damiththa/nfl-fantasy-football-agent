@@ -227,6 +227,13 @@ A trade is only good if it is OVERALL GOOD FOR OUR TEAM AND STARTING LINEUP.
 3. Check depth risk: Does the trade dangerously deplete our depth at RB or WR, leaving us vulnerable to injury or bye weeks?
 4. Verdict must be ACCEPT (if decisive starting upgrade without breaking roster balance), REJECT (if starting points decline, incoming players sit on bench, or depth is gutted), or COUNTER (if close or requires adjustment).
 
+CRITICAL ANTI-BENCH-ASSUMPTION & HOLISTIC ROSTER MANDATE:
+- ABSOLUTELY NEVER assume an opponent is benching or discounting a player just because they appear in an ESPN bench slot. Opponents frequently have NOT set their lineups yet (especially early or mid-week), or have star players temporarily placed on the bench.
+- Evaluate the player and the trade based on OVERALL ROSTER CONSTRUCTION and OPTIMAL STARTING CAPACITY:
+  1. Determine whether the incoming player actually elevates OUR starting lineup.
+  2. Determine whether the outgoing player genuinely improves the OPPONENT'S starting lineup at a position where their overall roster is thin, making the trade a credible, realistic deal they would actually accept.
+  3. Never claim an opponent will accept because "they aren't starting this player" or "he's on their bench." Base their incentive strictly on mutual roster upgrades.
+
 CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
 In the `reasoning` and impact fields, write as a shrewd, battle-tested fantasy veteran:
 - Break down the exact structural advantage or risk to our starting lineup and roster balance.
@@ -300,8 +307,22 @@ LEAGUE FORMAT:
 OUR ROSTER (Mad Dawg):
 {your_roster}
 
-OTHER TEAMS IN THE LEAGUE (Rosters and key starters/bench):
+OTHER TEAMS IN THE LEAGUE (Rosters, optimal starters, and true surplus depth):
 {other_teams}
+
+CRITICAL ROSTER EVALUATION & ANTI-BENCH ASSUMPTION MANDATE:
+1. NEVER assume an opponent's player is 'benched', unvalued, or available for cheap simply because of their current ESPN slot. Opponents frequently have NOT set their lineups yet (especially early or mid-week), or have stars temporarily sitting in a bench slot.
+2. Look at each team's OVERALL OPTIMAL LINEUP (provided under `optimal_starters`) and their true surplus depth (under `true_surplus_bench`) across all positions.
+3. A trade is only realistic and actionable if it represents a TRUE MUTUAL UPGRADE based on overall roster construction:
+   - For our team: It must tangibly elevate our weekly starting lineup points without creating a fatal depth hole.
+   - For the trade partner: It must offer them a genuine starting upgrade at a position where their overall roster is thin, in exchange for talent they can afford to part with.
+   - NEVER write in `why_target_accepts` or `negotiation_pitch` that "they have this player on their bench" or "they aren't starting them". Frame the rationale strictly on overall positional balance: e.g. "Their roster carries elite surplus at WR but is weak at RB; offering them an everyday starter at RB upgrades their starting lineup while unlocking their surplus WR for us."
+4. TIME HORIZON CLASSIFICATION:
+   - For each proposal, explicitly designate `time_horizon`:
+     - "LONG_TERM_DECISION": A rest-of-season starting lineup cornerstone, talent consolidation, or playoff schedule upgrade.
+     - "WEEKLY_PURPOSE": A tactical, short-term move designed for immediate matchup or bye-week coverage.
+   - In `time_horizon_detail`, articulate clearly whether the deal is a long-term strategic foundation or an immediate weekly play.
+   - In `coach_conviction`, deliver a persuasive, high-energy coaching pitch directly to "Mad Dawg" explaining why this trade is a winning play.
 
 VETERAN HEAD COACH MANDATE — CONDITIONAL DISCIPLINE (ONLY TRADE IF IT CLEARLY UPGRADES THE TEAM):
 You are a seasoned, elite fantasy football coach. You do NOT make trades just to be active.
@@ -312,9 +333,7 @@ You are a seasoned, elite fantasy football coach. You do NOT make trades just to
     - Set `coach_verdict: "PROPOSE_TRADES"`
     - Set `is_trade_recommended: true`
     - Include the proposals with net VORP gains, lineup upgrades, why the opponent accepts, and a persuasive negotiation pitch.
-    - Explicitly set `time_horizon` to "LONG_TERM_DECISION" (season-long/playoff roster upgrade) or "WEEKLY_PURPOSE" (immediate weekly matchup / bye-week bridge).
-    - In `time_horizon_detail`, clearly explain why this move is either an enduring rest-of-season investment or a short-term tactical play.
-    - In `coach_conviction`, write an impassioned, persuasive speech directly to the manager ("Mad Dawg") convincing them why they should aggressively pursue this specific trade now.
+    - Set `time_horizon`, `time_horizon_detail`, and `coach_conviction` according to the mandate above.
   - IF our roster is in great shape, or other teams lack pieces that genuinely upgrade our starting lineup, or trade values don't make sense:
     - Set `coach_verdict: "HOLD_ROSTER"`
     - Set `is_trade_recommended: false`
