@@ -233,8 +233,15 @@ def propose_league_trades(
 
                     points_upgrade = opp_asset.projected_points - user_weakest_starter.projected_points
 
-                    # Both teams must experience a genuine starting lineup upgrade in their optimal lineups
-                    if points_upgrade >= 1.5 and opp_upgrade >= 1.0:
+                    # The trade must be decisively more beneficial for US:
+                    # 1. points_upgrade >= 1.5 (our starting lineup improves)
+                    # 2. opp_upgrade >= 1.0 (opponent has incentive to accept)
+                    # 3. Premium asset protection: If user gives up a top asset (>=13.0 pts),
+                    #    we never accept a discounted return (opp_asset must be within 2.5 pts of user_asset)
+                    is_star_trade = user_asset.projected_points >= 13.0
+                    fair_value_return = not is_star_trade or (opp_asset.projected_points >= user_asset.projected_points - 2.5)
+
+                    if points_upgrade >= 1.5 and opp_upgrade >= 1.0 and fair_value_return:
                         net_gain = round(
                             calculate_vorp(opp_asset.projected_points, target_pos, league.num_teams)
                             - calculate_vorp(user_weakest_starter.projected_points, target_pos, league.num_teams),
