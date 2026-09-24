@@ -6,6 +6,7 @@ with native Pydantic structured output support and zero-cost test mockability.
 
 import logging
 import os
+import time
 from typing import Any, Optional, Type, TypeVar
 
 from google import genai
@@ -19,11 +20,16 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
+# Retry configuration for 429 RESOURCE_EXHAUSTED rate-limiting
+MAX_RETRIES_429 = 3
+INITIAL_BACKOFF_SECONDS = 5.0
+BACKOFF_MULTIPLIER = 2.0
+
 PREFERRED_MODELS: list[str] = [
-    "gemini-3.1-pro",          # Primary target GA
-    "gemini-3.1-pro-preview",  # Primary target preview
+    "gemini-3.1-pro-preview",  # Primary target: GA in us-central1 as of Feb 2026
+    "gemini-3.1-pro",          # Alias (resolves if GA identifier changes)
     "gemini-3-pro-preview",    # Secondary target preview
-    "gemini-2.5-pro",          # Proven stable fallback currently active
+    "gemini-2.5-pro",          # Legacy stable fallback (EOL Oct 2026)
 ]
 
 _NEGOTIATED_MODEL: Optional[str] = None
@@ -167,6 +173,12 @@ class GeminiIntelligenceClient:
             self._client = genai.Client(api_key=resolved_key)
         self.last_validation_error: Optional[str] = None
 
+    @staticmethod
+    def _is_rate_limit_error(exc: Exception) -> bool:
+        """Check if an exception is a 429 RESOURCE_EXHAUSTED rate-limit error."""
+        err_str = str(exc).lower()
+        return "429" in err_str or "resource_exhausted" in err_str or "resource exhausted" in err_str
+
     def generate_structured(
         self,
         prompt: str,
@@ -175,6 +187,9 @@ class GeminiIntelligenceClient:
         temperature: float = 0.2,
     ) -> T:
         """Generate structured output adhering to a Pydantic schema using Gemini Pro.
+
+        Includes automatic exponential backoff retry for 429 RESOURCE_EXHAUSTED errors
+        and in-flight failover to the backup model if the primary is unavailable.
 
         Args:
             prompt: Task-specific prompt and data payload.
@@ -198,33 +213,48 @@ class GeminiIntelligenceClient:
 
         last_err: Optional[Exception] = None
         for model_id in models_to_try:
-            try:
-                response = self._client.models.generate_content(
-                    model=model_id,
-                    contents=prompt,
-                    config=config,
-                )
-                raw_text = clean_json_text(response.text or "{}")
-                validated = response_schema.model_validate_json(raw_text)
-                if model_id != self.model:
-                    logger.warning(
-                        "In-flight failover succeeded using backup model %s (primary was %s)",
-                        model_id,
-                        self.model,
+            backoff = INITIAL_BACKOFF_SECONDS
+            for attempt in range(MAX_RETRIES_429 + 1):
+                try:
+                    response = self._client.models.generate_content(
+                        model=model_id,
+                        contents=prompt,
+                        config=config,
                     )
-                    self.model = model_id
-                return validated
-            except Exception as e:
-                last_err = e
-                if model_id != models_to_try[-1]:
-                    logger.warning(
-                        "Primary model %s failed (%s). Attempting in-flight failover to %s...",
-                        model_id,
-                        e,
-                        models_to_try[-1],
-                    )
-                else:
-                    logger.error("Gemini API request failed (%s): %s", model_id, e)
+                    raw_text = clean_json_text(response.text or "{}")
+                    validated = response_schema.model_validate_json(raw_text)
+                    if model_id != self.model:
+                        logger.warning(
+                            "In-flight failover succeeded using backup model %s (primary was %s)",
+                            model_id,
+                            self.model,
+                        )
+                        self.model = model_id
+                    return validated
+                except Exception as e:
+                    last_err = e
+                    if self._is_rate_limit_error(e) and attempt < MAX_RETRIES_429:
+                        logger.warning(
+                            "Rate-limited (429) on model %s, attempt %d/%d. Retrying in %.1fs...",
+                            model_id,
+                            attempt + 1,
+                            MAX_RETRIES_429,
+                            backoff,
+                        )
+                        time.sleep(backoff)
+                        backoff *= BACKOFF_MULTIPLIER
+                        continue
+                    # Non-429 error or retries exhausted: try next model
+                    if model_id != models_to_try[-1]:
+                        logger.warning(
+                            "Primary model %s failed (%s). Attempting in-flight failover to %s...",
+                            model_id,
+                            e,
+                            models_to_try[-1],
+                        )
+                    else:
+                        logger.error("Gemini API request failed (%s): %s", model_id, e)
+                    break  # Move to next model
 
         if last_err:
             raise last_err
@@ -237,6 +267,8 @@ class GeminiIntelligenceClient:
         temperature: float = 0.3,
     ) -> str:
         """Generate unstructured text analysis.
+
+        Includes automatic exponential backoff retry for 429 RESOURCE_EXHAUSTED errors.
 
         Args:
             prompt: The user prompt.
@@ -257,31 +289,45 @@ class GeminiIntelligenceClient:
 
         last_err: Optional[Exception] = None
         for model_id in models_to_try:
-            try:
-                response = self._client.models.generate_content(
-                    model=model_id,
-                    contents=prompt,
-                    config=config,
-                )
-                if model_id != self.model:
-                    logger.warning(
-                        "In-flight failover succeeded using backup model %s for text (primary was %s)",
-                        model_id,
-                        self.model,
+            backoff = INITIAL_BACKOFF_SECONDS
+            for attempt in range(MAX_RETRIES_429 + 1):
+                try:
+                    response = self._client.models.generate_content(
+                        model=model_id,
+                        contents=prompt,
+                        config=config,
                     )
-                    self.model = model_id
-                return response.text or ""
-            except Exception as e:
-                last_err = e
-                if model_id != models_to_try[-1]:
-                    logger.warning(
-                        "Primary model %s failed (%s). Attempting in-flight failover to %s...",
-                        model_id,
-                        e,
-                        models_to_try[-1],
-                    )
-                else:
-                    logger.error("Gemini text generation failed (%s): %s", model_id, e)
+                    if model_id != self.model:
+                        logger.warning(
+                            "In-flight failover succeeded using backup model %s for text (primary was %s)",
+                            model_id,
+                            self.model,
+                        )
+                        self.model = model_id
+                    return response.text or ""
+                except Exception as e:
+                    last_err = e
+                    if self._is_rate_limit_error(e) and attempt < MAX_RETRIES_429:
+                        logger.warning(
+                            "Rate-limited (429) on model %s for text, attempt %d/%d. Retrying in %.1fs...",
+                            model_id,
+                            attempt + 1,
+                            MAX_RETRIES_429,
+                            backoff,
+                        )
+                        time.sleep(backoff)
+                        backoff *= BACKOFF_MULTIPLIER
+                        continue
+                    if model_id != models_to_try[-1]:
+                        logger.warning(
+                            "Primary model %s failed (%s). Attempting in-flight failover to %s...",
+                            model_id,
+                            e,
+                            models_to_try[-1],
+                        )
+                    else:
+                        logger.error("Gemini text generation failed (%s): %s", model_id, e)
+                    break  # Move to next model
 
         if last_err:
             raise last_err

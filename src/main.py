@@ -959,12 +959,25 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
       // Fallback Alert Banner
       if (data.intelligence_backend === 'deterministic_fallback') {
+        const rawReason = data.fallback_reason || 'connectivity check failed';
+        let friendlyReason = rawReason;
+        if (rawReason.includes('429') || rawReason.toLowerCase().includes('resource_exhausted') || rawReason.toLowerCase().includes('resource exhausted')) {
+          friendlyReason = 'Gemini API rate limit reached (429). The system retried automatically but the API remained throttled. This is temporary — try again in a few minutes.';
+        } else if (rawReason.includes('500') || rawReason.toLowerCase().includes('internal')) {
+          friendlyReason = 'Gemini API experienced a temporary internal error. Try again shortly.';
+        } else if (rawReason.includes('503') || rawReason.toLowerCase().includes('unavailable')) {
+          friendlyReason = 'Gemini API is temporarily unavailable. Try again in a few minutes.';
+        } else if (rawReason.toLowerCase().includes('deadline') || rawReason.toLowerCase().includes('timeout')) {
+          friendlyReason = 'Gemini API request timed out. The analysis may be too complex for current server load.';
+        } else if (rawReason.toLowerCase().includes('not provided')) {
+          friendlyReason = 'Gemini client was not initialized. Results use the deterministic rules engine.';
+        }
         html += `<div style="background: rgba(245, 158, 11, 0.15); border-left: 4px solid #f59e0b; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px; font-size: 13px; color: #fbbf24; line-height: 1.4;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <strong>⚠️ AI Fallback Active — Rules Engine Output</strong>
             <span style="background: #f59e0b; color: #0b0f19; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;">CONFIDENCE: MODERATE</span>
           </div>
-          Live Gemini reasoning was temporarily unavailable (${data.fallback_reason || 'connectivity check failed'}). Results were safely computed using the deterministic rules engine.
+          ${friendlyReason}
         </div>`;
       }
 
