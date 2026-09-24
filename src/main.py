@@ -468,7 +468,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <p>AI Fantasy Intelligence • Zero-Cost Cloud Run • Gemini Reasoning</p>
       <div class="status-bar">
         <span id="system-health-badge" class="status-badge" style="cursor: pointer; transition: all 0.2s;" onclick="checkSystemHealth()" title="Click to re-verify live system health">⚡ Status: Checking...</span>
-        <span id="brain-badge" class="status-badge">🧠 Brain: Gemini Pro (Probing...)</span>
+        <span id="brain-badge" class="status-badge" style="cursor: pointer; transition: all 0.2s;" onclick="updateBrainBadge(true)" title="Click to re-probe latest Gemini Pro models">🧠 Brain: Gemini Pro (Probing...)</span>
         <span class="status-badge">🏈 Season: 2026</span>
         <span class="status-badge">🌿 Region: us-central1</span>
       </div>
@@ -791,20 +791,36 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       }
     }
 
-    async function updateBrainBadge() {
+    async function updateBrainBadge(force = false) {
+      const badge = document.getElementById('brain-badge');
+      if (badge && force) {
+        badge.innerHTML = '🧠 Brain: Probing models...';
+        badge.style.borderColor = '#38bdf8';
+        badge.style.color = '#7dd3fc';
+      }
       try {
-        const resp = await fetch('/health/models');
+        const resp = await fetch('/health/models' + (force ? '?force=true' : ''));
         const d = await resp.json();
-        const badge = document.getElementById('brain-badge');
         if (badge && d.active_model) {
           const isTarget = d.auto_upgrade_active;
-          badge.innerHTML = `🧠 Brain: ${d.active_model} ${isTarget ? '🚀' : '(Target: ' + d.target_model + ')'}`;
+          badge.innerHTML = `🧠 Brain: ${d.active_model} ${isTarget ? '🚀' : '(Fallback: ' + d.active_model + ')'}`;
           if (isTarget) {
             badge.style.borderColor = '#22c55e';
             badge.style.color = '#86efac';
+            badge.style.background = 'rgba(34, 197, 94, 0.1)';
+            badge.title = `Primary Target Active: ${d.active_model}. Click to re-probe models.`;
+          } else {
+            badge.style.borderColor = '#f59e0b';
+            badge.style.color = '#fbbf24';
+            badge.style.background = 'rgba(245, 158, 11, 0.1)';
+            badge.title = `Active: ${d.active_model} (Target ${d.target_model} waiting on GCP quota). Click to re-probe models.`;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        if (badge) {
+          badge.title = 'Click to re-probe models';
+        }
+      }
     }
 
     window.addEventListener('DOMContentLoaded', () => {
