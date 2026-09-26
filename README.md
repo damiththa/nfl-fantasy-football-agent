@@ -1,6 +1,6 @@
 # 🏈 Mad Dawg's NFL Fantasy Football Agent
 
-AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google Cloud Run** with **\$0.00 idle cost**, powered by **Gemini Pro (`gemini-2.5-pro`)** and hosted on **~90% clean renewable wind energy** in `us-central1`.
+AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google Cloud Run** with **\$0.00 idle cost**, powered by **dynamic Gemini Pro model negotiation** (auto-probes `gemini-3.1-pro-preview` → `gemini-2.5-pro` stable fallback) with **429 exponential backoff retry** and hosted on **~90% clean renewable wind energy** in `us-central1`.
 
 📖 **[System Architecture Specification](ARCHITECTURE.md)** • 🌐 **[Live Web Portal](https://fantasy-agent-3pky7gmu6q-uc.a.run.app)** • 🛠️ **[Swagger Docs](https://fantasy-agent-3pky7gmu6q-uc.a.run.app/docs)**
 
@@ -16,6 +16,18 @@ AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google
 
 <p align="center">
   <em>Interactive diagram rendered with <strong>Archify</strong> • Click diagram or <a href="docs/architecture.html"><strong>Open Interactive Viewer</strong></a> for pan/zoom & live view filtering • Full spec in <a href="ARCHITECTURE.md"><strong>ARCHITECTURE.md</strong></a></em>
+</p>
+
+## 📡 API Endpoints & Data Flow
+
+<p align="center">
+  <a href="docs/api-data-flow.html">
+    <img src="docs/api-data-flow.svg" alt="API & Data Flow Diagram (Rendered via Archify)" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <em>Interactive diagram rendered with <strong>Archify</strong> • Click diagram or <a href="docs/api-data-flow.html"><strong>Open Interactive Viewer</strong></a> for filtered views • <strong>Fully stateless — no database</strong></em>
 </p>
 
 ---

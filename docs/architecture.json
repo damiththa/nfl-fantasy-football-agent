@@ -2,47 +2,60 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Mad Dawg's NFL Fantasy Football Agent",
+    "title": "Mad Dawg's NFL Fantasy Football Agent — System Architecture",
     "output": "architecture.html",
     "quality_profile": "standard",
     "views": [
       {
         "id": "roster-and-opponent",
         "label": "ESPN Rosters & Opponent Lineup Flow",
-        "focus": ["secrets", "espn_my_team", "espn_opp", "espn_waivers", "espn_adapter", "engines"],
+        "focus": ["secrets", "espn_my_team", "espn_opp", "espn_waivers", "espn_adapter", "engines", "trade_engine"],
         "note": "Private ESPN cookies (S2/SWID) authenticate ingestion of your roster, weekly opponent matchups, and free agents."
       },
       {
         "id": "scheduled-pipeline",
         "label": "Automated Weekly Cadence",
-        "focus": ["scheduler", "fastapi", "espn_adapter", "engines", "gemini", "sendgrid", "user"],
-        "note": "Tuesday 7AM Film Room, Thursday TNF inactives, Friday injury lock, and Sunday kickoff alerts."
+        "focus": ["scheduler", "fastapi", "espn_adapter", "engines", "trade_engine", "gemini_negotiator", "sendgrid", "user"],
+        "note": "Tuesday 7AM Film Room, Thursday TNF inactives, Friday injury lock, and Sunday kickoff alerts — all with temporal roster lock enforcement."
       },
       {
         "id": "on-demand-optimization",
         "label": "Live Command Center & AI Reasoning",
-        "focus": ["user", "fastapi", "engines", "ext_context", "gemini"],
-        "note": "On-demand start/sit, waiver priority, and VORP trade evaluations synthesized by Gemini 2.5 Pro."
+        "focus": ["user", "fastapi", "engines", "trade_engine", "ext_context", "gemini_negotiator", "deterministic_fallback"],
+        "note": "On-demand start/sit, waiver priority, and holistic trade evaluations with asymmetric advantage mandate."
+      },
+      {
+        "id": "ai-resilience",
+        "label": "AI Model Negotiation & Resilience",
+        "focus": ["gemini_negotiator", "gemini_31_preview", "gemini_31_pro", "gemini_25_pro", "deterministic_fallback"],
+        "note": "Dynamic model probe ladder with 429 exponential backoff retry (5s→10s→20s) and automatic deterministic fallback."
       }
     ]
   },
   "components": [
     { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Triggers (ET)", "pos": [40, 90], "size": [130, 60] },
     { "id": "user", "type": "external", "label": "Manager (Mad Dawg)", "sublabel": "Mobile / Web Browser", "pos": [40, 200], "size": [130, 60] },
-    { "id": "sendgrid", "type": "external", "label": "SendGrid Mail API", "sublabel": "Responsive HTML", "pos": [40, 310], "size": [130, 60] },
+    { "id": "sendgrid", "type": "external", "label": "SendGrid Mail API", "sublabel": "Responsive HTML Digest", "pos": [40, 310], "size": [130, 60] },
     { "id": "fastapi", "type": "backend", "label": "FastAPI Engine", "sublabel": "Cloud Run :8080", "pos": [260, 200], "size": [150, 60] },
     { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN S2/SWID & Keys", "pos": [260, 420], "size": [150, 60], "tag": "IAM Protected" },
-    { "id": "gemini", "type": "backend", "label": "Gemini 2.5 Pro", "sublabel": "Flagship Reasoning", "pos": [490, 90], "size": [160, 60], "tag": "Pydantic Contract" },
-    { "id": "engines", "type": "backend", "label": "Decision Engines", "sublabel": "Lineup, Waivers, Recap", "pos": [490, 200], "size": [160, 60] },
-    { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 310], "size": [160, 60] },
-    { "id": "ext_context", "type": "external", "label": "Vegas Odds & Weather", "sublabel": "The Odds & Open-Meteo", "pos": [740, 90], "size": [180, 60] },
-    { "id": "espn_my_team", "type": "external", "label": "My Team Rosters", "sublabel": "Starters, Bench & IR", "pos": [740, 200], "size": [180, 60] },
-    { "id": "espn_opp", "type": "external", "label": "Weekly Opponents", "sublabel": "Matchup & Live Scores", "pos": [740, 310], "size": [180, 60] },
-    { "id": "espn_waivers", "type": "external", "label": "Free Agent Pool", "sublabel": "Top 25 Available Wire", "pos": [740, 420], "size": [180, 60] }
+    { "id": "gemini_negotiator", "type": "backend", "label": "Model Negotiator", "sublabel": "Auto-Probe & 429 Retry", "pos": [490, 40], "size": [160, 50] },
+    { "id": "gemini_31_preview", "type": "backend", "label": "gemini-3.1-pro-preview", "sublabel": "Primary Target", "pos": [700, 20], "size": [170, 40], "tag": "Preview" },
+    { "id": "gemini_31_pro", "type": "backend", "label": "gemini-3.1-pro", "sublabel": "GA Alias", "pos": [700, 70], "size": [170, 40] },
+    { "id": "gemini_25_pro", "type": "backend", "label": "gemini-2.5-pro", "sublabel": "Stable Fallback (EOL Oct 2026)", "pos": [700, 120], "size": [170, 40], "tag": "Active" },
+    { "id": "engines", "type": "backend", "label": "Analysis Engines", "sublabel": "Lineup · Waivers · Recap", "pos": [490, 200], "size": [160, 60] },
+    { "id": "trade_engine", "type": "backend", "label": "Trade Engine", "sublabel": "Holistic VORP · Optimal Starters", "pos": [490, 290], "size": [160, 60], "tag": "Asymmetric Mandate" },
+    { "id": "deterministic_fallback", "type": "backend", "label": "Deterministic Fallback", "sublabel": "Rules Engine (No-AI Safe)", "pos": [490, 370], "size": [160, 50] },
+    { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 440], "size": [160, 60] },
+    { "id": "ext_context", "type": "external", "label": "Vegas Odds & Weather", "sublabel": "ESPN Scoreboard · Open-Meteo", "pos": [740, 200], "size": [180, 60] },
+    { "id": "espn_my_team", "type": "external", "label": "My Team Rosters", "sublabel": "Starters, Bench & IR", "pos": [740, 290], "size": [180, 60] },
+    { "id": "espn_opp", "type": "external", "label": "Weekly Opponents", "sublabel": "Matchup & Live Scores", "pos": [740, 370], "size": [180, 60] },
+    { "id": "espn_waivers", "type": "external", "label": "Free Agent Pool", "sublabel": "Top 25 Available Wire", "pos": [740, 440], "size": [180, 60] },
+    { "id": "sleeper", "type": "external", "label": "Sleeper Fantasy API", "sublabel": "Trending Adds · Injury Status", "pos": [740, 510], "size": [180, 60] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["fastapi", "secrets", "gemini", "engines", "espn_adapter"] },
-    { "kind": "security-group", "label": "Cloud Run Service (fantasy-agent)", "wraps": ["fastapi", "engines", "espn_adapter"] },
+    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["fastapi", "secrets", "gemini_negotiator", "engines", "trade_engine", "deterministic_fallback", "espn_adapter"] },
+    { "kind": "security-group", "label": "Cloud Run Service (fantasy-agent)", "wraps": ["fastapi", "engines", "trade_engine", "deterministic_fallback", "espn_adapter"] },
+    { "kind": "security-group", "label": "Gemini Model Ladder (Vertex AI)", "wraps": ["gemini_negotiator", "gemini_31_preview", "gemini_31_pro", "gemini_25_pro"] },
     { "kind": "security-group", "label": "ESPN Fantasy Platform (Private v3 API)", "wraps": ["espn_my_team", "espn_opp", "espn_waivers"] }
   ],
   "connections": [
@@ -50,40 +63,52 @@
     { "id": "cron-triggers", "from": "scheduler", "to": "fastapi", "label": "cron :8080" },
     { "id": "secrets-to-adapter", "from": "secrets", "to": "espn_adapter", "label": "ESPN_S2 & SWID", "variant": "security" },
     { "id": "dispatch-analysis", "from": "fastapi", "to": "engines", "label": "evaluate" },
-    { "id": "ai-reasoning", "from": "engines", "to": "gemini", "label": "Pydantic contract", "variant": "emphasis" },
+    { "id": "dispatch-trades", "from": "fastapi", "to": "trade_engine", "label": "propose / evaluate" },
+    { "id": "ai-negotiation", "from": "engines", "to": "gemini_negotiator", "label": "Pydantic contract", "variant": "emphasis" },
+    { "id": "trade-ai", "from": "trade_engine", "to": "gemini_negotiator", "label": "structured prompt", "variant": "emphasis" },
+    { "id": "probe-31-preview", "from": "gemini_negotiator", "to": "gemini_31_preview", "label": "probe 1st" },
+    { "id": "probe-31-pro", "from": "gemini_negotiator", "to": "gemini_31_pro", "label": "probe 2nd" },
+    { "id": "probe-25-pro", "from": "gemini_negotiator", "to": "gemini_25_pro", "label": "fallback" },
+    { "id": "det-fallback", "from": "engines", "to": "deterministic_fallback", "label": "on AI failure" },
+    { "id": "trade-det-fallback", "from": "trade_engine", "to": "deterministic_fallback", "label": "on AI failure" },
     { "id": "parsed-data", "from": "espn_adapter", "to": "engines", "label": "rosters & matchups" },
+    { "id": "parsed-trade-data", "from": "espn_adapter", "to": "trade_engine", "label": "all league rosters" },
     { "id": "fetch-my-team", "from": "espn_adapter", "to": "espn_my_team", "label": "player status" },
     { "id": "fetch-opponent", "from": "espn_adapter", "to": "espn_opp", "label": "opponent lineup" },
     { "id": "fetch-waivers", "from": "espn_adapter", "to": "espn_waivers", "label": "waiver targets" },
+    { "id": "fetch-sleeper", "from": "espn_adapter", "to": "sleeper", "label": "trending & injuries" },
     { "id": "context-odds", "from": "ext_context", "to": "engines", "label": "spreads & weather" },
     { "id": "send-email", "from": "fastapi", "to": "sendgrid", "label": "dispatch digest" },
-    { "id": "deliver-digest", "from": "sendgrid", "to": "user", "label": "Tuesday 7AM Digest", "variant": "emphasis" }
+    { "id": "deliver-digest", "from": "sendgrid", "to": "user", "label": "Automated Digests", "variant": "emphasis" }
   ],
   "cards": [
     {
       "dot": "cyan",
       "title": "Ingress & Automation",
       "items": [
-        "Google Cloud Scheduler triggers Tuesday, Thursday, Friday, and Sunday jobs",
-        "Manager accesses real-time Command Center from phone or browser"
+        "Cloud Scheduler triggers Tuesday, Thursday, Friday, and Sunday jobs",
+        "Manager accesses real-time Command Center from phone or browser",
+        "Temporal roster lock enforcement prevents stale recommendations for locked players"
       ]
     },
     {
       "dot": "emerald",
-      "title": "ESPN Ingestion & Optimization",
+      "title": "ESPN Ingestion & Intelligence",
       "items": [
         "Ingests My Team Roster, Opponent Lineups, and Free Agent Wire via private ESPN API",
-        "Deterministic VORP, lineup hole checks, and 3-state Film Room engine",
-        "Gemini 2.5 Pro generates structured game-theory analysis and coach commentary"
+        "Holistic roster evaluation via compute_optimal_starters() — never assumes bench = unvalued",
+        "Dynamic model negotiation: probes gemini-3.1-pro-preview first, falls back through ladder to gemini-2.5-pro",
+        "429 exponential backoff retry (5s→10s→20s) before model failover"
       ]
     },
     {
       "dot": "rose",
-      "title": "Security & Upstream Market Context",
+      "title": "Trade Engine & Resilience",
       "items": [
-        "All ESPN session tokens and API keys secured in GCP Secret Manager",
-        "Vegas implied totals and stadium weather feed into game-script strategy",
-        "Automated delivery to manager's mailbox via SendGrid v3 Mail API"
+        "Asymmetric advantage mandate: trades must benefit Mad Dawg disproportionately",
+        "Fair-value return safeguard: premium assets (≥13.0 pts) refuse discounted returns",
+        "Deterministic VORP-based fallback when all AI models are unavailable",
+        "Sleeper trending data cross-referenced for waiver wire market velocity"
       ]
     }
   ]

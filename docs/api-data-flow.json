@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mad Dawg's Fantasy Agent — API Endpoints & Data Flow",
+    "output": "api-data-flow.html",
+    "quality_profile": "standard",
+    "views": [
+      {
+        "id": "scheduled-endpoints",
+        "label": "Scheduled Automation Endpoints",
+        "focus": ["scheduler", "run_weekly", "run_sunday", "espn_api", "sendgrid_api", "email_recipient"],
+        "note": "Cloud Scheduler triggers POST endpoints for Tuesday Film Room, Thursday TNF, Friday Injury Lock, and Sunday Pregame."
+      },
+      {
+        "id": "on-demand-endpoints",
+        "label": "On-Demand Query Endpoints",
+        "focus": ["browser", "start_sit", "propose_trades", "evaluate_trade", "waivers", "weekly_recap", "roster_players", "espn_api", "gemini_api"],
+        "note": "Manager-initiated AJAX queries from the Command Center dashboard."
+      },
+      {
+        "id": "external-data-sources",
+        "label": "External Data Source Integrations",
+        "focus": ["espn_api", "sleeper_api", "espn_scoreboard", "weather_api", "gemini_api", "sendgrid_api"],
+        "note": "All upstream data providers the agent consumes — stateless, no database storage."
+      }
+    ]
+  },
+  "components": [
+    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Jobs (ET)", "pos": [40, 60], "size": [130, 50] },
+    { "id": "browser", "type": "external", "label": "Mad Dawg (Browser)", "sublabel": "Command Center UI", "pos": [40, 170], "size": [130, 50] },
+    { "id": "email_recipient", "type": "external", "label": "Email Inbox", "sublabel": "damiththa@gmail.com", "pos": [40, 500], "size": [130, 50] },
+
+    { "id": "health", "type": "backend", "label": "GET /health", "sublabel": "System Status & Model", "pos": [230, 30], "size": [150, 40] },
+    { "id": "health_models", "type": "backend", "label": "GET /health/models", "sublabel": "Live Model Probe", "pos": [230, 80], "size": [150, 40] },
+    { "id": "run_weekly", "type": "backend", "label": "POST /run/weekly", "sublabel": "Tue·Thu·Fri Automation", "pos": [230, 140], "size": [150, 40], "tag": "Scheduled" },
+    { "id": "run_sunday", "type": "backend", "label": "POST /run/sunday-pregame", "sublabel": "Sun 11:45AM & 2:45PM", "pos": [230, 190], "size": [150, 40], "tag": "Scheduled" },
+    { "id": "start_sit", "type": "backend", "label": "POST /query/start-sit", "sublabel": "Lineup Optimizer", "pos": [230, 250], "size": [150, 40] },
+    { "id": "propose_trades", "type": "backend", "label": "POST /query/propose-trades", "sublabel": "League Trade Scanner", "pos": [230, 300], "size": [150, 40] },
+    { "id": "evaluate_trade", "type": "backend", "label": "POST /query/trade", "sublabel": "VORP Delta Evaluator", "pos": [230, 350], "size": [150, 40] },
+    { "id": "waivers", "type": "backend", "label": "POST /query/waivers", "sublabel": "Waiver Wire Analyzer", "pos": [230, 400], "size": [150, 40] },
+    { "id": "weekly_recap", "type": "backend", "label": "GET /query/weekly-recap", "sublabel": "Film Room Engine", "pos": [230, 450], "size": [150, 40] },
+    { "id": "roster_players", "type": "backend", "label": "GET /query/roster-players", "sublabel": "Player Quick-Select", "pos": [230, 500], "size": [150, 40] },
+
+    { "id": "espn_api", "type": "external", "label": "ESPN Fantasy v3 API", "sublabel": "lm-api-reads.fantasy.espn.com", "pos": [500, 100], "size": [180, 50] },
+    { "id": "espn_scoreboard", "type": "external", "label": "ESPN Scoreboard API", "sublabel": "site.api.espn.com (Vegas/Odds)", "pos": [500, 170], "size": [180, 50] },
+    { "id": "sleeper_api", "type": "external", "label": "Sleeper Fantasy API", "sublabel": "api.sleeper.app (Trending + Injuries)", "pos": [500, 240], "size": [180, 50] },
+    { "id": "weather_api", "type": "external", "label": "Open-Meteo Weather API", "sublabel": "api.open-meteo.com (Stadium Wx)", "pos": [500, 310], "size": [180, 50] },
+    { "id": "gemini_api", "type": "backend", "label": "Gemini Pro (Vertex AI)", "sublabel": "Model Ladder + 429 Retry", "pos": [500, 380], "size": [180, 50], "tag": "Pydantic Schema" },
+    { "id": "sendgrid_api", "type": "external", "label": "SendGrid v3 Mail API", "sublabel": "api.sendgrid.com", "pos": [500, 450], "size": [180, 50] },
+    { "id": "secret_manager", "type": "security", "label": "Secret Manager", "sublabel": "ESPN_S2 · SWID · API Keys", "pos": [500, 520], "size": [180, 50], "tag": "IAM" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Google Cloud Platform — us-central1 (Serverless $0.00 Idle)", "wraps": ["health", "health_models", "run_weekly", "run_sunday", "start_sit", "propose_trades", "evaluate_trade", "waivers", "weekly_recap", "roster_players", "gemini_api", "secret_manager"] },
+    { "kind": "security-group", "label": "Cloud Run: fantasy-agent (FastAPI + Uvicorn)", "wraps": ["health", "health_models", "run_weekly", "run_sunday", "start_sit", "propose_trades", "evaluate_trade", "waivers", "weekly_recap", "roster_players"] },
+    { "kind": "security-group", "label": "Upstream Data Providers (Stateless — No Database)", "wraps": ["espn_api", "espn_scoreboard", "sleeper_api", "weather_api", "sendgrid_api"] }
+  ],
+  "connections": [
+    { "id": "cron-weekly", "from": "scheduler", "to": "run_weekly", "label": "Tue 7AM · Thu 6:50PM · Fri 7PM" },
+    { "id": "cron-sunday", "from": "scheduler", "to": "run_sunday", "label": "Sun 11:45AM & 2:45PM" },
+    { "id": "user-startsit", "from": "browser", "to": "start_sit", "label": "AJAX POST", "variant": "emphasis" },
+    { "id": "user-trades", "from": "browser", "to": "propose_trades", "label": "AJAX POST" },
+    { "id": "user-eval", "from": "browser", "to": "evaluate_trade", "label": "AJAX POST" },
+    { "id": "user-waivers", "from": "browser", "to": "waivers", "label": "AJAX POST" },
+    { "id": "user-recap", "from": "browser", "to": "weekly_recap", "label": "AJAX" },
+    { "id": "user-roster", "from": "browser", "to": "roster_players", "label": "AJAX GET" },
+    { "id": "user-health", "from": "browser", "to": "health_models", "label": "Brain badge click" },
+
+    { "id": "startsit-espn", "from": "start_sit", "to": "espn_api", "label": "rosters & matchup" },
+    { "id": "startsit-odds", "from": "start_sit", "to": "espn_scoreboard", "label": "spreads & totals" },
+    { "id": "startsit-wx", "from": "start_sit", "to": "weather_api", "label": "stadium forecast" },
+    { "id": "startsit-gemini", "from": "start_sit", "to": "gemini_api", "label": "LineupRecommendation" },
+    { "id": "trades-espn", "from": "propose_trades", "to": "espn_api", "label": "all league rosters" },
+    { "id": "trades-gemini", "from": "propose_trades", "to": "gemini_api", "label": "LeagueTradeReport" },
+    { "id": "eval-espn", "from": "evaluate_trade", "to": "espn_api", "label": "rosters" },
+    { "id": "eval-gemini", "from": "evaluate_trade", "to": "gemini_api", "label": "TradeEvaluation" },
+    { "id": "waivers-espn", "from": "waivers", "to": "espn_api", "label": "free agents" },
+    { "id": "waivers-sleeper", "from": "waivers", "to": "sleeper_api", "label": "trending adds" },
+    { "id": "waivers-gemini", "from": "waivers", "to": "gemini_api", "label": "WaiverReport" },
+    { "id": "recap-espn", "from": "weekly_recap", "to": "espn_api", "label": "box scores" },
+    { "id": "recap-gemini", "from": "weekly_recap", "to": "gemini_api", "label": "WeeklyRecapReport" },
+    { "id": "weekly-espn", "from": "run_weekly", "to": "espn_api", "label": "full league data" },
+    { "id": "weekly-sleeper", "from": "run_weekly", "to": "sleeper_api", "label": "injuries & trending" },
+    { "id": "weekly-gemini", "from": "run_weekly", "to": "gemini_api", "label": "structured analysis" },
+    { "id": "weekly-email", "from": "run_weekly", "to": "sendgrid_api", "label": "HTML digest", "variant": "emphasis" },
+    { "id": "sunday-espn", "from": "run_sunday", "to": "espn_api", "label": "inactives & roster" },
+    { "id": "sunday-wx", "from": "run_sunday", "to": "weather_api", "label": "game-day weather" },
+    { "id": "sunday-odds", "from": "run_sunday", "to": "espn_scoreboard", "label": "live spreads" },
+    { "id": "sunday-email", "from": "run_sunday", "to": "sendgrid_api", "label": "pregame alert", "variant": "emphasis" },
+    { "id": "email-deliver", "from": "sendgrid_api", "to": "email_recipient", "label": "email delivery", "variant": "emphasis" },
+    { "id": "roster-espn", "from": "roster_players", "to": "espn_api", "label": "roster data" },
+    { "id": "secrets-bind", "from": "secret_manager", "to": "run_weekly", "label": "env vars", "variant": "security" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "API Endpoints (12 Total)",
+      "items": [
+        "2 health endpoints: /health (basic status) and /health/models (live model probe with force re-negotiate)",
+        "2 scheduled endpoints: /run/weekly (multi-day automation) and /run/sunday-pregame (game-day alerts)",
+        "6 on-demand query endpoints: start-sit, propose-trades, trade eval, waivers, weekly-recap, roster-players",
+        "All endpoints accept league_id to switch between PNA 2026 (991059191) and Chips Ahoy (735288)"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "External Data Sources (6 APIs)",
+      "items": [
+        "ESPN Fantasy v3 Private API: Rosters, matchups, box scores, free agents (authenticated via S2/SWID cookies)",
+        "ESPN Scoreboard API: Vegas spreads, over/under totals, implied team totals for game-script strategy",
+        "Sleeper API: Real-time trending adds/drops (market velocity) and NFL injury practice reports",
+        "Open-Meteo Weather API: Stadium-specific forecasts with wind, precipitation, and temperature data"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Data Architecture: Stateless",
+      "items": [
+        "NO database, NO Firebase, NO Firestore — fully stateless architecture",
+        "All data fetched live from ESPN, Sleeper, and weather APIs on each request",
+        "Gemini structured outputs conform to 6 Pydantic schemas (JSON mode enforced)",
+        "SendGrid delivers responsive HTML digests to damiththa@gmail.com"
+      ]
+    }
+  ]
+}

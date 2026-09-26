@@ -1,9 +1,10 @@
-name: Render Architecture Diagram (Archify)
+name: Render Architecture Diagrams (Archify)
 
 on:
   push:
     paths:
       - "docs/architecture.json"
+      - "docs/api-data-flow.json"
       - ".github/workflows/archify.yml"
   workflow_dispatch:
 
@@ -27,7 +28,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/tt-a1i/archify.git /tmp/archify
 
-      - name: Render Architecture Diagram
+      - name: Render System Architecture Diagram
         run: |
           node /tmp/archify/archify/bin/archify.mjs render architecture docs/architecture.json docs/architecture.html
           if [ ! -f docs/architecture.html ]; then
@@ -35,23 +36,39 @@ jobs:
             exit 1
           fi
 
-      - name: Extract Standalone SVG
+      - name: Render API & Data Flow Diagram
+        run: |
+          if [ -f docs/api-data-flow.json ]; then
+            node /tmp/archify/archify/bin/archify.mjs render architecture docs/api-data-flow.json docs/api-data-flow.html
+            if [ ! -f docs/api-data-flow.html ]; then
+              echo "::error::Archify failed to produce docs/api-data-flow.html"
+              exit 1
+            fi
+          fi
+
+      - name: Extract Standalone SVGs
         run: |
           python3 -c "
-          import re, xml.etree.ElementTree as ET
-          with open('docs/architecture.html', 'r', encoding='utf-8') as f:
-              html = f.read()
-          styles = re.findall(r'<style[^>]*>(.*?)</style>', html, re.DOTALL)
-          combined_style = styles[0] + '\n' + styles[1]
-          svg_match = re.search(r'<svg([^>]*)>(.*?)</svg>', html, re.DOTALL)
-          svg_attrs = svg_match.group(1)
-          if 'xmlns=' not in svg_attrs:
-              svg_attrs = ' xmlns=\"http://www.w3.org/2000/svg\"' + svg_attrs
-          svg_full = f'<svg{svg_attrs}>\n<style><![CDATA[\n{combined_style}\n]]></style>\n<rect width=\"100%\" height=\"100%\" fill=\"#020617\" rx=\"12\"/>\n{svg_match.group(2)}\n</svg>'
-          with open('docs/architecture.svg', 'w', encoding='utf-8') as out:
-              out.write(svg_full)
-          tree = ET.parse('docs/architecture.svg')
-          print('Extracted valid standalone docs/architecture.svg')
+          import re, xml.etree.ElementTree as ET, os
+
+          def extract_svg(html_path, svg_path):
+              with open(html_path, 'r', encoding='utf-8') as f:
+                  html = f.read()
+              styles = re.findall(r'<style[^>]*>(.*?)</style>', html, re.DOTALL)
+              combined_style = styles[0] + '\n' + styles[1]
+              svg_match = re.search(r'<svg([^>]*)>(.*?)</svg>', html, re.DOTALL)
+              svg_attrs = svg_match.group(1)
+              if 'xmlns=' not in svg_attrs:
+                  svg_attrs = ' xmlns=\"http://www.w3.org/2000/svg\"' + svg_attrs
+              svg_full = f'<svg{svg_attrs}>\n<style><![CDATA[\n{combined_style}\n]]></style>\n<rect width=\"100%\" height=\"100%\" fill=\"#020617\" rx=\"12\"/>\n{svg_match.group(2)}\n</svg>'
+              with open(svg_path, 'w', encoding='utf-8') as out:
+                  out.write(svg_full)
+              tree = ET.parse(svg_path)
+              print(f'Extracted valid standalone {svg_path}')
+
+          extract_svg('docs/architecture.html', 'docs/architecture.svg')
+          if os.path.exists('docs/api-data-flow.html'):
+              extract_svg('docs/api-data-flow.html', 'docs/api-data-flow.svg')
           "
 
       - name: Commit & Push Rendered Diagrams
@@ -59,6 +76,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/architecture.html docs/architecture.svg
+          git add docs/api-data-flow.html docs/api-data-flow.svg 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "Diagrams are up to date, no changes to commit."
           else
