@@ -116,6 +116,23 @@ def propose_league_trades(
     }
 
     fallback_err: Optional[str] = None
+
+    # Retrieve historical lessons for trade proposal context
+    prior_lessons: Optional[str] = None
+    try:
+        from src.config import get_current_season
+        from src.data.lessons_store import get_lessons_store
+
+        store = get_lessons_store()
+        prior_lessons = store.format_lessons_for_trades(
+            league_id=league.league_id,
+            season=get_current_season(),
+            current_week=week,
+            lookback=4,
+        )
+    except Exception as e:
+        logger.warning("Could not load historical trade lessons for league %s: %s", league.league_id, e)
+
     # If Gemini client provided, use AI reasoning to craft smart win-win packages
     if client is not None:
         prompt = format_league_trade_prompt(
@@ -123,6 +140,7 @@ def propose_league_trades(
             week=week,
             your_roster=user_roster_data,
             other_teams=other_teams_data,
+            prior_lessons=prior_lessons,
         )
         try:
             report = client.generate_structured(prompt=prompt, response_schema=LeagueTradeReport)

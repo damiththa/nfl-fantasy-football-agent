@@ -476,6 +476,104 @@ class LessonsMemoryStore:
 
         return "\n".join(lines)
 
+    def format_lessons_for_trades(
+        self,
+        league_id: int,
+        season: Optional[int] = None,
+        current_week: int = 1,
+        lookback: int = 4,
+    ) -> Optional[str]:
+        """Generate structured past-tape context to inject into trade evaluation and proposal prompts.
+
+        Directly highlights:
+        - Season record and trajectory (winning/losing/rebuilding)
+        - Recurring bench mistakes indicating undervalued roster assets
+        - Positional weaknesses exposed by recent losses
+        - Past lessons that should inform trade strategy (buy-low/sell-high signals)
+        """
+        history = self.get_recent_history(
+            league_id=league_id,
+            season=season,
+            current_week=current_week,
+            lookback=lookback,
+        )
+        if not history:
+            return None
+
+        summary = self.get_season_summary(league_id=league_id, season=season)
+
+        lines: list[str] = [
+            "HISTORICAL TAPE & TRADE INTELLIGENCE (LESSONS FROM PRIOR WEEKS):",
+            "Use this data to inform trade strategy — who to target, who to sell, and roster construction priorities:",
+        ]
+
+        # Season record context
+        record = summary.get("record", "0-0")
+        total_weeks = summary.get("total_completed_weeks", 0)
+        avg_bench = summary.get("avg_bench_pts_lost", 0.0)
+        lines.append(f"- Season Record: {record} through {total_weeks} completed weeks.")
+        if avg_bench > 8.0:
+            lines.append(
+                f"  ⚠️ CHRONIC BENCH INEFFICIENCY: Averaging {avg_bench:.1f} pts/wk left on bench. "
+                "This signals we may have undervalued starters rotting on our bench — consider "
+                "trading bench depth for starting upgrades rather than hoarding talent."
+            )
+
+        # Recurring bench mistakes → trade signals
+        recurring = summary.get("recurring_missed_players", [])
+        if recurring:
+            lines.append("- RECURRING BENCH OUTPERFORMERS (Trade Signal — These players keep proving value on our bench):")
+            for entry in recurring[:3]:
+                player = entry.get("player", "Unknown")
+                count = entry.get("times_benched_suboptimally", 0)
+                lines.append(
+                    f"  * {player}: Outscored our starter {count}x this season while benched. "
+                    "If we can't start them, their trade value is high — leverage this."
+                )
+
+        # Recent week-by-week context for trade timing
+        for entry in history[:3]:
+            w = entry.get("week")
+            res = entry.get("result", "FINAL")
+            u_score = entry.get("user_score", 0.0)
+            o_score = entry.get("opponent_score", 0.0)
+            pts_bench = entry.get("points_left_on_bench", 0.0)
+
+            lines.append(
+                f"- Week {w} ({res}, {u_score:.1f}-{o_score:.1f}): "
+                f"{pts_bench:.1f} pts left on bench."
+            )
+
+            # Extract positional weaknesses from busts
+            busts = entry.get("busts") or []
+            for b in busts:
+                pos = b.get("position", "")
+                p_name = b.get("player_name", "")
+                diff = b.get("point_differential", 0.0)
+                if abs(diff) >= 5.0:
+                    lines.append(
+                        f"  * POSITIONAL WEAKNESS: {p_name} ({pos}) busted by {abs(diff):.1f} pts below projection. "
+                        "Consider trading for an upgrade at this position."
+                    )
+
+            # Extract lessons relevant to trades
+            lessons = entry.get("lessons_learned") or []
+            for lesson_text in lessons[:2]:
+                lt = lesson_text.lower()
+                if any(kw in lt for kw in ["trade", "roster", "depth", "upgrade", "position", "bench", "waiver"]):
+                    lines.append(f"  * Prior Coaching Lesson: \"{lesson_text}\"")
+
+        lines.extend([
+            "",
+            "TRADE STRATEGY MANDATE INFORMED BY HISTORICAL TAPE:",
+            "- If our season record is losing, prioritize win-now trades that upgrade starters immediately.",
+            "- If we have recurring bench outperformers we cannot start, package them for starting-caliber upgrades.",
+            "- Target positions where we have experienced repeated starter busts or underperformance.",
+            "- Do NOT trade away assets at positions where we have historically been thin and vulnerable.",
+        ])
+
+        return "\n".join(lines)
+
 
 # Singleton factory for clean access across modules
 _STORE_INSTANCE: Optional[LessonsMemoryStore] = None

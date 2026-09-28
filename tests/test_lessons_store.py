@@ -420,3 +420,111 @@ def test_query_lessons_endpoints(temp_store_dir):
         assert hist["count"] == 2
         assert hist["history"][0]["week"] == 2
         assert hist["history"][1]["week"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 7. Trade Lessons Integration Tests
+# ---------------------------------------------------------------------------
+
+
+def test_format_lessons_for_trades_no_history(memory_store):
+    """format_lessons_for_trades returns None when no history exists."""
+    result = memory_store.format_lessons_for_trades(
+        league_id=991059191, season=2026, current_week=1,
+    )
+    assert result is None
+
+
+def test_format_lessons_for_trades_with_history(memory_store):
+    """format_lessons_for_trades produces trade-specific context with season record and bench signals."""
+    recap1 = _make_sample_recap(week=1, result="LOSS", bench_pts=16.5)
+    recap2 = _make_sample_recap(week=2, result="LOSS", bench_pts=12.0)
+    recap3 = _make_sample_recap(week=3, result="WIN", bench_pts=3.0)
+    memory_store.save_week_recap(recap1, season=2026)
+    memory_store.save_week_recap(recap2, season=2026)
+    memory_store.save_week_recap(recap3, season=2026)
+
+    result = memory_store.format_lessons_for_trades(
+        league_id=991059191, season=2026, current_week=4, lookback=4,
+    )
+    assert result is not None
+
+    # Must contain trade-specific headers
+    assert "HISTORICAL TAPE & TRADE INTELLIGENCE" in result
+    assert "TRADE STRATEGY MANDATE" in result
+
+    # Must contain season record context
+    assert "Season Record: 1-2" in result
+
+    # Must contain bench inefficiency warning (avg > 8.0)
+    assert "CHRONIC BENCH INEFFICIENCY" in result
+
+    # Must contain recurring bench outperformer (Jayden Reed appears in all 3 weeks)
+    assert "Jayden Reed" in result
+    assert "RECURRING BENCH OUTPERFORMERS" in result
+
+    # Must contain positional weakness from busts (Zamir White bust with -8.8 diff)
+    assert "POSITIONAL WEAKNESS" in result
+    assert "Zamir White" in result
+
+
+def test_format_lessons_for_trades_season_record_context(memory_store):
+    """Verify winning record doesn't trigger the bench inefficiency warning."""
+    recap_w1 = _make_sample_recap(week=1, result="WIN", bench_pts=3.0)
+    recap_w2 = _make_sample_recap(week=2, result="WIN", bench_pts=2.0)
+    memory_store.save_week_recap(recap_w1, season=2026)
+    memory_store.save_week_recap(recap_w2, season=2026)
+
+    result = memory_store.format_lessons_for_trades(
+        league_id=991059191, season=2026, current_week=3, lookback=3,
+    )
+    assert result is not None
+    assert "Season Record: 2-0" in result
+    # Low bench pts avg (2.5) should NOT trigger chronic bench warning
+    assert "CHRONIC BENCH INEFFICIENCY" not in result
+
+
+def test_trade_prompt_accepts_prior_lessons():
+    """format_trade_prompt includes prior_lessons in the generated prompt."""
+    from src.intelligence.prompts import format_trade_prompt
+
+    lessons_text = "HISTORICAL TAPE & TRADE INTELLIGENCE: Test trade lesson context."
+    prompt = format_trade_prompt(
+        league=PNA_2026,
+        your_roster={"players": [{"name": "TestPlayer", "pos": "RB", "pts": 15.0}]},
+        giving_players=["PlayerA"],
+        receiving_players=["PlayerB"],
+        prior_lessons=lessons_text,
+    )
+    assert "HISTORICAL TAPE & TRADE INTELLIGENCE" in prompt
+    assert "Test trade lesson context" in prompt
+
+
+def test_league_trade_prompt_accepts_prior_lessons():
+    """format_league_trade_prompt includes prior_lessons in the generated prompt."""
+    from src.intelligence.prompts import format_league_trade_prompt
+
+    lessons_text = "HISTORICAL TAPE & TRADE INTELLIGENCE: Test league trade context."
+    prompt = format_league_trade_prompt(
+        league=PNA_2026,
+        week=5,
+        your_roster={"team_name": "Mad Dawg", "optimal_starters": []},
+        other_teams=[],
+        prior_lessons=lessons_text,
+    )
+    assert "HISTORICAL TAPE & TRADE INTELLIGENCE" in prompt
+    assert "Test league trade context" in prompt
+
+
+def test_trade_prompt_no_lessons():
+    """format_trade_prompt works correctly without prior_lessons (backward compatible)."""
+    from src.intelligence.prompts import format_trade_prompt
+
+    prompt = format_trade_prompt(
+        league=PNA_2026,
+        your_roster={"players": []},
+        giving_players=["PlayerA"],
+        receiving_players=["PlayerB"],
+    )
+    assert "CRITICAL EVALUATION MANDATE" in prompt
+    assert "HISTORICAL TAPE" not in prompt

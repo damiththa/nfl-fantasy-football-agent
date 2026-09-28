@@ -185,6 +185,7 @@ def format_trade_prompt(
     receiving_players: list[str],
     opponent_roster: dict[str, Any] | None = None,
     simulated_impact: dict[str, Any] | None = None,
+    prior_lessons: str | None = None,
 ) -> str:
     """Format prompt for evaluating a prospective trade against the current roster."""
     sim_info = ""
@@ -205,6 +206,10 @@ ROSTER-CONTEXTUAL STARTING LINEUP SIMULATION:
   {depth}
 """
 
+    prior_lessons_section = ""
+    if prior_lessons and prior_lessons.strip():
+        prior_lessons_section = f"\n{prior_lessons.strip()}\n"
+
     return f"""Evaluate a proposed trade for league '{league.name}'.
 
 LEAGUE CONTEXT:
@@ -223,7 +228,7 @@ YOUR CURRENT ROSTER:
 {sim_info}
 OPPONENT ROSTER (If known):
 {opponent_roster or "Not provided"}
-
+{prior_lessons_section}
 CRITICAL EVALUATION MANDATE (ROSTER-CONTEXTUAL, NOT 1-TO-1):
 Do NOT evaluate this trade as an isolated 1-to-1 player comparison in a vacuum.
 A trade is only good if it is OVERALL GOOD FOR OUR TEAM AND STARTING LINEUP.
@@ -305,8 +310,13 @@ def format_league_trade_prompt(
     week: int,
     your_roster: dict[str, Any],
     other_teams: list[dict[str, Any]],
+    prior_lessons: str | None = None,
 ) -> str:
     """Format prompt for scanning the entire league to find proactive, winning trade proposals."""
+    prior_lessons_section = ""
+    if prior_lessons and prior_lessons.strip():
+        prior_lessons_section = f"\n{prior_lessons.strip()}\n"
+
     return f"""Analyze the entire league rosters in '{league.name}' (Week {week}) as a veteran fantasy strategist looking after our team.
 
 LEAGUE FORMAT:
@@ -319,7 +329,7 @@ OUR ROSTER (Mad Dawg):
 
 OTHER TEAMS IN THE LEAGUE (Rosters, optimal starters, and true surplus depth):
 {other_teams}
-
+{prior_lessons_section}
 CRITICAL ROSTER EVALUATION & ANTI-BENCH ASSUMPTION MANDATE:
 1. NEVER assume an opponent's player is 'benched', unvalued, or available for cheap simply because of their current ESPN slot. Opponents frequently have NOT set their lineups yet (especially early or mid-week), or have stars temporarily sitting in a bench slot.
 2. Look at each team's OVERALL OPTIMAL LINEUP (provided under `optimal_starters`) and their true surplus depth (under `true_surplus_bench`) across all positions.

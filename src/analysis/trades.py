@@ -409,7 +409,27 @@ def evaluate_trade(
     net_vorp = round(receiving_vorp - giving_vorp, 2)
 
     fallback_err: Optional[str] = None
-    # 4. LLM Analysis via Gemini Pro if available
+    # 4. Retrieve historical lessons for trade context
+    prior_lessons: Optional[str] = None
+    try:
+        from src.config import get_current_season
+        from src.data.lessons_store import get_lessons_store
+
+        store = get_lessons_store()
+        # Determine current week from espn_league if available
+        trade_week = 1
+        if espn_league and hasattr(espn_league, "current_week"):
+            trade_week = getattr(espn_league, "current_week", 1) or 1
+        prior_lessons = store.format_lessons_for_trades(
+            league_id=league.league_id,
+            season=get_current_season(),
+            current_week=trade_week,
+            lookback=4,
+        )
+    except Exception as e:
+        logger.warning("Could not load historical trade lessons for league %s: %s", league.league_id, e)
+
+    # 5. LLM Analysis via Gemini Pro if available
     if client is not None:
         roster_data = [
             {"name": p.name, "pos": p.position, "pts": p.projected_points, "slot": p.slot}
@@ -436,6 +456,7 @@ def evaluate_trade(
                 "positional_depth_impact": depth_impact,
                 "net_vorp": net_vorp,
             },
+            prior_lessons=prior_lessons,
         )
 
         try:
