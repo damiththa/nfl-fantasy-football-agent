@@ -61,7 +61,7 @@
     { "id": "query-to-pipeline", "from": "api_queries", "to": "espn_pipeline" },
 
     { "id": "pipeline-to-odds", "from": "espn_pipeline", "to": "odds_weather" },
-    { "id": "pipeline-to-espn", "from": "espn_pipeline", "to": "espn_v3", "label": "rosters & wire" },
+    { "id": "pipeline-to-espn", "from": "espn_pipeline", "to": "espn_v3" },
     { "id": "pipeline-to-sleeper", "from": "espn_pipeline", "to": "sleeper_wire", "label": "trending adds" }
   ],
   "cards": [
