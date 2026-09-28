@@ -56,9 +56,9 @@
     { "kind": "security-group", "label": "ESPN Fantasy Platform (Private v3 API)", "wraps": ["espn_my_team", "espn_opp", "espn_waivers"] }
   ],
   "connections": [
-    { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS :443", "variant": "emphasis" },
+    { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS :443", "variant": "emphasis", "labelAt": [204, 192] },
     { "id": "cron-triggers", "from": "scheduler", "to": "fastapi", "label": "cron :8080" },
-    { "id": "memory-store", "from": "fastapi", "to": "gcs_memory", "label": "lessons & memory", "variant": "emphasis" },
+    { "id": "memory-store", "from": "fastapi", "to": "gcs_memory", "label": "lessons & memory", "variant": "emphasis", "labelDx": 55 },
     { "id": "secrets-to-adapter", "from": "secrets", "to": "espn_adapter", "label": "ESPN_S2 & SWID", "variant": "security" },
     { "id": "dispatch-analysis", "from": "fastapi", "to": "engines", "label": "evaluate" },
     { "id": "ai-reasoning", "from": "engines", "to": "gemini", "label": "Pydantic contract", "variant": "emphasis" },
