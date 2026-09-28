@@ -1,0 +1,11 @@
+Architecture layout validation failed:
+- Label "HTTPS :443" overlaps component "user" — adjust labelDx/labelDy/labelSegment or set labelAt.
+  label rect: [175, 237, 58, 14]
+  component "user" rect: [40, 200, 140, 60]
+  Suggested fix: set labelAt [204, 274] or set labelDy 27 (below); or set labelAt [204, 192] or set labelDy -55 (above)
+- Boundary label "Cloud Run Service (fantasy-agent)" overlaps connection label "lessons & memory" — move the boundary title rail by adjusting wrapped component positions, or move the connection label with labelAt/labelDx/labelDy/labelSegment.
+[layout/constraint] Label "HTTPS :443" overlaps component "user" — adjust labelDx/labelDy/labelSegment or set labelAt.
+  label rect: [175, 237, 58, 14]
+  component "user" rect: [40, 200, 140, 60]
+  Suggested fix: set labelAt [204, 274] or set labelDy 27 (below); or set labelAt [204, 192] or set labelDy -55 (above)
+[layout/constraint] Boundary label "Cloud Run Service (fantasy-agent)" overlaps connection label "lessons & memory" — move the boundary title rail by adjusting wrapped component positions, or move the connection label with labelAt/labelDx/labelDy/labelSegment.
