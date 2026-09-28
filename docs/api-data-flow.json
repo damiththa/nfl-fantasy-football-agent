@@ -9,20 +9,20 @@
       {
         "id": "scheduled-flow",
         "label": "Scheduled Pipeline Flow",
-        "focus": ["scheduler", "api_automated", "gemini_ladder", "espn_pipeline", "sendgrid_egress"],
-        "note": "Tuesday Film Room, Thursday TNF, Friday Injury Lock, and Sunday kickoff alerts triggered via Cloud Scheduler."
+        "focus": ["scheduler", "api_automated", "gemini_ladder", "gcs_memory_store", "espn_pipeline", "sendgrid_egress"],
+        "note": "Tuesday Film Room, Thursday TNF, Friday Injury Lock, and Sunday kickoff alerts with GCS memory persistence."
       },
       {
         "id": "ondemand-flow",
         "label": "On-Demand REST Flow",
-        "focus": ["browser_user", "api_queries", "pydantic_contracts", "gemini_ladder", "espn_pipeline"],
-        "note": "Start/sit recommendations, waiver priorities, and VORP trade proposals queried live via browser."
+        "focus": ["browser_user", "api_queries", "pydantic_contracts", "gemini_ladder", "gcs_memory_store", "espn_pipeline"],
+        "note": "Start/sit recommendations, waiver priorities, VORP trade proposals, and lessons-summary queried live."
       },
       {
         "id": "stateless-lineage",
-        "label": "Stateless Data Lineage",
-        "focus": ["api_stateless", "espn_pipeline", "espn_v3", "sleeper_wire", "odds_weather"],
-        "note": "100% Stateless: live upstream fetching on every request — NO Firebase, Firestore, or database tables."
+        "label": "Memory & Stateless Data Lineage",
+        "focus": ["gcs_memory_store", "espn_pipeline", "espn_v3", "sleeper_wire", "odds_weather"],
+        "note": "GCS JSON memory preserves weekly tape & lessons; all live roster/waiver feeds remain 100% stateless."
       }
     ]
   },
@@ -32,8 +32,8 @@
     { "id": "sendgrid_egress", "type": "external", "label": "SendGrid Mail API", "sublabel": "damiththa@gmail.com", "pos": [40, 310], "size": [130, 60], "tag": "HTML Digest" },
 
     { "id": "api_automated", "type": "backend", "label": "Automated Endpoints", "sublabel": "/run/weekly • /run/sunday", "pos": [250, 90], "size": [150, 60], "tag": "Cron Ingress" },
-    { "id": "api_queries", "type": "backend", "label": "REST Query Endpoints", "sublabel": "start-sit • trade • waivers", "pos": [250, 200], "size": [150, 60], "tag": "AJAX Ingress" },
-    { "id": "api_stateless", "type": "backend", "label": "Stateless Runtime", "sublabel": "Zero Firebase / Firestore", "pos": [250, 310], "size": [150, 60], "tag": "NO DB TABLES" },
+    { "id": "api_queries", "type": "backend", "label": "REST Query Endpoints", "sublabel": "start-sit • lessons • trade", "pos": [250, 200], "size": [150, 60], "tag": "AJAX Ingress" },
+    { "id": "gcs_memory_store", "type": "storage", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [250, 310], "size": [150, 60], "tag": "Zero DB Tables" },
 
     { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "429 Retry Safe" },
     { "id": "pydantic_contracts", "type": "backend", "label": "6 Pydantic Contracts", "sublabel": "JSON Schema Enforcement", "pos": [510, 200], "size": [160, 60] },
@@ -44,8 +44,8 @@
     { "id": "sleeper_wire", "type": "external", "label": "Sleeper Fantasy API", "sublabel": "Trending Adds & Injuries", "pos": [770, 310], "size": [170, 60] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["api_automated", "api_queries", "api_stateless", "gemini_ladder", "pydantic_contracts", "espn_pipeline"] },
-    { "kind": "security-group", "label": "Cloud Run: fantasy-agent (FastAPI + Uvicorn)", "wraps": ["api_automated", "api_queries", "api_stateless", "pydantic_contracts", "espn_pipeline"] },
+    { "kind": "region", "label": "Google Cloud Platform: us-central1 ($0.00 Idle)", "wraps": ["api_automated", "api_queries", "gcs_memory_store", "gemini_ladder", "pydantic_contracts", "espn_pipeline"] },
+    { "kind": "security-group", "label": "Cloud Run: fantasy-agent (FastAPI + Uvicorn)", "wraps": ["api_automated", "api_queries", "pydantic_contracts", "espn_pipeline"] },
     { "kind": "security-group", "label": "Upstream External APIs (Stateless Feeds)", "wraps": ["odds_weather", "espn_v3", "sleeper_wire"] }
   ],
   "connections": [
@@ -56,7 +56,8 @@
     { "id": "auto-to-gemini", "from": "api_automated", "to": "gemini_ladder", "label": "AI digest", "variant": "emphasis" },
     { "id": "query-to-pydantic", "from": "api_queries", "to": "pydantic_contracts", "label": "contracts" },
     { "id": "pydantic-to-gemini", "from": "pydantic_contracts", "to": "gemini_ladder", "label": "JSON mode", "variant": "emphasis" },
-    { "id": "stateless-to-pipeline", "from": "api_stateless", "to": "espn_pipeline", "label": "stateless" },
+    { "id": "auto-to-memory", "from": "api_automated", "to": "gcs_memory_store", "label": "save recap", "variant": "emphasis" },
+    { "id": "query-to-memory", "from": "api_queries", "to": "gcs_memory_store", "label": "query lessons" },
     { "id": "query-to-pipeline", "from": "api_queries", "to": "espn_pipeline", "label": "fetch rosters" },
 
     { "id": "pipeline-to-odds", "from": "espn_pipeline", "to": "odds_weather", "label": "odds & wx" },
@@ -66,10 +67,11 @@
   "cards": [
     {
       "dot": "cyan",
-      "title": "API Endpoints (12 Total)",
+      "title": "API Endpoints (14 Total)",
       "items": [
         "Automated: /run/weekly (Tue/Thu/Fri) & /run/sunday-pregame (Sun)",
         "On-Demand: /query/start-sit, /query/trade, /query/propose-trades, /query/waivers, /query/weekly-recap",
+        "Lessons Memory: /query/lessons-summary (season trends) & /query/lessons (historical tape)",
         "Diagnostics: /health (system health) & /health/models (live probe)"
       ]
     },
@@ -79,15 +81,17 @@
       "items": [
         "ESPN Fantasy v3 Private API: Team rosters, weekly opponents, free agents via S2/SWID",
         "ESPN Scoreboard API: Live Vegas spreads, totals, and implied points",
-        "Sleeper & Open-Meteo: Real-time add/drop market velocity and stadium weather"
+        "Sleeper & Open-Meteo: Real-time add/drop market velocity and stadium weather",
+        "GCS JSON Store: Season memory, missed opportunities, and starter bust accountability"
       ]
     },
     {
       "dot": "rose",
-      "title": "Stateless Architecture (No Database)",
+      "title": "Persistent Memory (Zero Database Tables)",
       "items": [
-        "NO Firebase, NO Firestore, NO external database tables",
-        "100% Stateless execution: fresh live data fetched on every API call",
+        "NO Firebase, NO Firestore, NO complex SQL tables",
+        "GCS JSON store preserves weekly film room lessons without database overhead",
+        "Historical accountability automatically injected into start/sit lineup optimization",
         "Structured AI contracts enforced via 6 Pydantic JSON schemas"
       ]
     }

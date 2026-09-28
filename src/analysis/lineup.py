@@ -1008,6 +1008,22 @@ def optimize_lineup(
                     }
                 )
 
+        # Retrieve historical start/sit lessons and bench accountability
+        prior_lessons: Optional[str] = None
+        try:
+            from src.config import get_current_season
+            from src.data.lessons_store import get_lessons_store
+
+            store = get_lessons_store()
+            prior_lessons = store.format_lessons_for_lineup(
+                league_id=league.league_id,
+                season=get_current_season(),
+                current_week=week,
+                lookback=3,
+            )
+        except Exception as e:
+            logger.warning("Could not load historical lineup lessons for league %s: %s", league.league_id, e)
+
         prompt = format_lineup_prompt(
             league=league,
             week=week,
@@ -1018,6 +1034,7 @@ def optimize_lineup(
             weather_reports=weather_data,
             injuries=injury_data,
             lineup_hole_alerts=[h.model_dump() for h in detected_holes],
+            prior_lessons=prior_lessons,
         )
 
         try:

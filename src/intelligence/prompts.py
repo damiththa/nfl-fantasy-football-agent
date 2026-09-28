@@ -58,6 +58,7 @@ def format_lineup_prompt(
     weather_reports: list[dict[str, Any]],
     injuries: list[dict[str, Any]],
     lineup_hole_alerts: list[dict[str, Any]] | None = None,
+    prior_lessons: str | None = None,
 ) -> str:
     """Format prompt for starting lineup and start/sit decisions."""
     hole_section = ""
@@ -73,6 +74,10 @@ def format_lineup_prompt(
                 hole_section += f"  * Waiver Option: {h['waiver_recommendation']}\n"
             if h.get("trade_recommendation"):
                 hole_section += f"  * Trade Option: {h['trade_recommendation']}\n"
+
+    prior_lessons_section = ""
+    if prior_lessons and prior_lessons.strip():
+        prior_lessons_section = f"\n{prior_lessons.strip()}\n"
 
     return f"""Analyze Week {week} lineup decisions for league '{league.name}'.
 
@@ -99,7 +104,7 @@ GAME-DAY WEATHER FOR RELEVANT OUTDOOR STADIUMS:
 
 PLAYER INJURY & PRACTICE STATUSES:
 {injuries}
-
+{prior_lessons_section}
 TASK - DELIVER A COMPLETE START 'EM / SIT 'EM MASTER REPORT:
 1. START 'EM (recommended_starters): Select the optimal starting lineup adhering to the game theory strategy. Every starter must be active and healthy (or Questionable with explicit warning).
 2. SIT 'EM (bench_players): Every single bench player must be accounted for with a specific, concise reason why they are benched.
@@ -376,6 +381,7 @@ def format_weekly_recap_prompt(
     matchup_status: str = "FINAL",
     completed_starters: list[dict[str, Any]] | None = None,
     upcoming_starters: list[dict[str, Any]] | None = None,
+    prior_lessons: str | None = None,
 ) -> str:
     """Format prompt for post-game weekly recap or mid-week matchup checkpoint."""
     completed = (
@@ -445,6 +451,10 @@ All Week {week} games are officially in the books.
 7. `next_week_priorities`: Detail 2-3 immediate, actionable directives for Tuesday night waiver wire claims, lineup tweaks, and trade targets heading into Week {week + 1}.
 """
 
+    prior_lessons_block = ""
+    if prior_lessons and prior_lessons.strip():
+        prior_lessons_block = f"\n{prior_lessons.strip()}\n"
+
     return f"""Deliver a 'Film Room' analysis for Week {week} in league '{league.name}'.
 
 MATCHUP SCOREBOARD:
@@ -462,6 +472,6 @@ UPCOMING STARTERS YET TO PLAY ({len(upcoming)} pending):
 
 BENCH PLAYERS:
 {bench_performance}
-
+{prior_lessons_block}
 {instructions}
 """

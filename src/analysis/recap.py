@@ -295,6 +295,22 @@ def generate_weekly_recap(
     ]
 
     fallback_err: Optional[str] = None
+    # Retrieve historical recap takeaways and accountability
+    prior_lessons: Optional[str] = None
+    try:
+        from src.config import get_current_season
+        from src.data.lessons_store import get_lessons_store
+
+        store = get_lessons_store()
+        prior_lessons = store.format_lessons_for_recap(
+            league_id=league.league_id,
+            season=get_current_season(),
+            current_week=week,
+            lookback=2,
+        )
+    except Exception as e:
+        logger.warning("Could not load historical recap lessons for league %s: %s", league.league_id, e)
+
     # AI Reasoning with Gemini Pro
     if client is not None:
         try:
@@ -314,6 +330,7 @@ def generate_weekly_recap(
                 matchup_status=matchup_status,
                 completed_starters=completed_perf,
                 upcoming_starters=upcoming_perf,
+                prior_lessons=prior_lessons,
             )
             report = client.generate_structured(prompt=prompt, response_schema=WeeklyRecapReport)
             report.league_id = league.league_id
@@ -346,6 +363,17 @@ def generate_weekly_recap(
                 report.missed_opportunities = []
                 if not report.upcoming_starters and upcoming_structured:
                     report.upcoming_starters = upcoming_structured
+
+            # Persist completed recap report for future memory
+            if report.matchup_status == "FINAL":
+                try:
+                    from src.config import get_current_season
+                    from src.data.lessons_store import get_lessons_store
+
+                    store = get_lessons_store()
+                    store.save_week_recap(recap=report, season=get_current_season())
+                except Exception as save_err:
+                    logger.warning("Could not persist weekly recap to memory store: %s", save_err)
 
             return report
         except Exception as e:
@@ -406,7 +434,7 @@ def generate_weekly_recap(
             "Identify opposing league rosters suffering critical injuries to explore win-win trade proposals.",
         ]
 
-    return WeeklyRecapReport(
+    report = WeeklyRecapReport(
         league_id=league.league_id,
         league_name=league.name,
         week=week,
@@ -434,4 +462,16 @@ def generate_weekly_recap(
         intelligence_backend="deterministic_fallback",
         fallback_reason=fallback_err or "Gemini client was not provided",
     )
+
+    if report.matchup_status == "FINAL":
+        try:
+            from src.config import get_current_season
+            from src.data.lessons_store import get_lessons_store
+
+            store = get_lessons_store()
+            store.save_week_recap(recap=report, season=get_current_season())
+        except Exception as save_err:
+            logger.warning("Could not persist weekly recap to memory store: %s", save_err)
+
+    return report
 

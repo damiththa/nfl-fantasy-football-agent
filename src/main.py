@@ -2173,4 +2173,55 @@ def query_weekly_recap(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/query/lessons-summary")
+def query_lessons_summary(
+    league_id: int = Query(991059191, description="ESPN League ID"),
+    season: Optional[int] = Query(None, description="NFL Season year (defaults to current)"),
+) -> dict[str, Any]:
+    """Retrieve seasonal coaching memory summary, trends, and recurring lessons."""
+    from src.data.lessons_store import get_lessons_store
+
+    league_config = ALL_LEAGUES.get(league_id)
+    if not league_config:
+        raise HTTPException(
+            status_code=404, detail=f"League {league_id} not found in configuration."
+        )
+
+    store = get_lessons_store()
+    summary = store.get_season_summary(league_id=league_id, season=season)
+    summary["league_name"] = league_config.name
+    return summary
+
+
+@app.get("/query/lessons")
+def query_lessons_history(
+    league_id: int = Query(991059191, description="ESPN League ID"),
+    season: Optional[int] = Query(None, description="NFL Season year (defaults to current)"),
+    current_week: int = Query(99, description="Fetch weeks prior to this week number"),
+    lookback: int = Query(10, description="Max weeks to return"),
+) -> dict[str, Any]:
+    """Retrieve detailed historical week-by-week lessons and missed opportunities."""
+    from src.data.lessons_store import get_lessons_store
+
+    league_config = ALL_LEAGUES.get(league_id)
+    if not league_config:
+        raise HTTPException(
+            status_code=404, detail=f"League {league_id} not found in configuration."
+        )
+
+    store = get_lessons_store()
+    history = store.get_recent_history(
+        league_id=league_id,
+        season=season,
+        current_week=current_week,
+        lookback=lookback,
+    )
+    return {
+        "league_id": league_id,
+        "league_name": league_config.name,
+        "count": len(history),
+        "history": history,
+    }
+
+
 

@@ -39,3 +39,4 @@ htmlcov/
 
 # Data cache (runtime generated)
 data/cache/
+data/memory/
