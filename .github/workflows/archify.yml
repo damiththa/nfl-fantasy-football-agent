@@ -30,7 +30,16 @@ jobs:
 
       - name: Render System Architecture Diagram
         run: |
-          node /tmp/archify/archify/bin/archify.mjs render architecture docs/architecture.json docs/architecture.html
+          node /tmp/archify/archify/bin/archify.mjs render architecture docs/architecture.json docs/architecture.html > /tmp/archify-err.log 2>&1 || {
+            cat /tmp/archify-err.log
+            cp /tmp/archify-err.log docs/archify-error.log
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add docs/archify-error.log
+            git commit -m "ci: capture archify error log [skip ci]" || true
+            git push || true
+            exit 1
+          }
           if [ ! -f docs/architecture.html ]; then
             echo "::error::Archify failed to produce docs/architecture.html"
             exit 1
@@ -39,7 +48,16 @@ jobs:
       - name: Render API & Data Flow Diagram
         run: |
           if [ -f docs/api-data-flow.json ]; then
-            node /tmp/archify/archify/bin/archify.mjs render architecture docs/api-data-flow.json docs/api-data-flow.html
+            node /tmp/archify/archify/bin/archify.mjs render architecture docs/api-data-flow.json docs/api-data-flow.html > /tmp/archify-api-err.log 2>&1 || {
+              cat /tmp/archify-api-err.log
+              cp /tmp/archify-api-err.log docs/archify-error.log
+              git config --local user.email "action@github.com"
+              git config --local user.name "GitHub Action"
+              git add docs/archify-error.log
+              git commit -m "ci: capture archify api error log [skip ci]" || true
+              git push || true
+              exit 1
+            }
             if [ ! -f docs/api-data-flow.html ]; then
               echo "::error::Archify failed to produce docs/api-data-flow.html"
               exit 1
