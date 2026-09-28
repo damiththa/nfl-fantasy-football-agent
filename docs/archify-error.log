@@ -1,0 +1,9 @@
+Architecture layout validation failed:
+- Label "rosters & wire" overlaps component "pydantic_contracts" — adjust labelDx/labelDy/labelSegment or set labelAt.
+  label rect: [622, 243, 77, 14]
+  component "pydantic_contracts" rect: [510, 200, 160, 60]
+  Suggested fix: set labelAt [661, 274] or set labelDy 21 (below); or set labelAt [661, 192] or set labelDy -61 (above)
+[layout/constraint] Label "rosters & wire" overlaps component "pydantic_contracts" — adjust labelDx/labelDy/labelSegment or set labelAt.
+  label rect: [622, 243, 77, 14]
+  component "pydantic_contracts" rect: [510, 200, 160, 60]
+  Suggested fix: set labelAt [661, 274] or set labelDy 21 (below); or set labelAt [661, 192] or set labelDy -61 (above)
