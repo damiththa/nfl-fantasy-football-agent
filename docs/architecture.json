@@ -38,12 +38,12 @@
     { "id": "sendgrid", "type": "external", "label": "SendGrid Mail API", "sublabel": "Responsive HTML", "pos": [40, 310], "size": [140, 60] },
 
     { "id": "fastapi", "type": "backend", "label": "FastAPI Engine", "sublabel": "Cloud Run • Brain Badge", "pos": [260, 200], "size": [160, 60] },
-    { "id": "gcs_memory", "type": "storage", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [260, 310], "size": [160, 60], "tag": "Season History" },
-    { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN S2/SWID & Keys", "pos": [260, 420], "size": [160, 60], "tag": "IAM Protected" },
+    { "id": "gcs_memory", "type": "database", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [260, 420], "size": [160, 60], "tag": "Season History" },
 
     { "id": "gemini", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [490, 90], "size": [170, 60], "tag": "429 Retry Safe" },
     { "id": "engines", "type": "backend", "label": "Decision & Trade Engines", "sublabel": "Lineup • Trade • Waivers", "pos": [490, 200], "size": [170, 60], "tag": "Optimal Starters" },
     { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 310], "size": [170, 60] },
+    { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN S2/SWID & Keys", "pos": [490, 420], "size": [170, 60], "tag": "IAM Protected" },
 
     { "id": "ext_context", "type": "external", "label": "Vegas Odds & Weather", "sublabel": "ESPN & Open-Meteo", "pos": [740, 90], "size": [180, 60] },
     { "id": "espn_my_team", "type": "external", "label": "My Team Rosters", "sublabel": "Starters, Bench & IR", "pos": [740, 200], "size": [180, 60] },
@@ -63,7 +63,7 @@
     { "id": "ai-reasoning", "from": "engines", "to": "gemini", "label": "Pydantic contract", "variant": "emphasis" },
     { "id": "parsed-data", "from": "espn_adapter", "to": "engines", "label": "rosters & matchups" },
     { "id": "recap-to-memory", "from": "engines", "to": "gcs_memory", "label": "save recap JSON", "variant": "emphasis" },
-    { "id": "memory-to-lineup", "from": "gcs_memory", "to": "engines", "label": "inject lessons" },
+    { "id": "memory-to-fastapi", "from": "gcs_memory", "to": "fastapi", "label": "inject lessons" },
     { "id": "fetch-my-team", "from": "espn_adapter", "to": "espn_my_team", "label": "player status" },
     { "id": "fetch-opponent", "from": "espn_adapter", "to": "espn_opp", "label": "opponent lineup" },
     { "id": "fetch-waivers", "from": "espn_adapter", "to": "espn_waivers", "label": "waiver targets" },

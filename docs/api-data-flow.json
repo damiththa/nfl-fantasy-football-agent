@@ -33,7 +33,7 @@
 
     { "id": "api_automated", "type": "backend", "label": "Automated Endpoints", "sublabel": "/run/weekly • /run/sunday", "pos": [250, 90], "size": [150, 60], "tag": "Cron Ingress" },
     { "id": "api_queries", "type": "backend", "label": "REST Query Endpoints", "sublabel": "start-sit • lessons • trade", "pos": [250, 200], "size": [150, 60], "tag": "AJAX Ingress" },
-    { "id": "gcs_memory_store", "type": "storage", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [250, 310], "size": [150, 60], "tag": "Zero DB Tables" },
+    { "id": "gcs_memory_store", "type": "database", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [250, 310], "size": [150, 60], "tag": "Zero DB Tables" },
 
     { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "429 Retry Safe" },
     { "id": "pydantic_contracts", "type": "backend", "label": "6 Pydantic Contracts", "sublabel": "JSON Schema Enforcement", "pos": [510, 200], "size": [160, 60] },
