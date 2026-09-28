@@ -51,16 +51,16 @@
   "connections": [
     { "id": "cron-to-auto", "from": "scheduler", "to": "api_automated", "label": "cron trigger", "variant": "emphasis" },
     { "id": "user-to-query", "from": "browser_user", "to": "api_queries", "label": "HTTPS :443", "variant": "emphasis" },
-    { "id": "auto-to-email", "from": "api_automated", "to": "sendgrid_egress", "label": "send digest" },
+    { "id": "auto-to-email", "from": "api_automated", "to": "sendgrid_egress" },
 
     { "id": "auto-to-gemini", "from": "api_automated", "to": "gemini_ladder", "label": "AI digest", "variant": "emphasis" },
     { "id": "query-to-pydantic", "from": "api_queries", "to": "pydantic_contracts", "label": "contracts" },
     { "id": "pydantic-to-gemini", "from": "pydantic_contracts", "to": "gemini_ladder", "label": "JSON mode", "variant": "emphasis" },
-    { "id": "query-to-memory", "from": "api_queries", "to": "gcs_memory_store", "label": "query lessons", "variant": "emphasis" },
+    { "id": "query-to-memory", "from": "api_queries", "to": "gcs_memory_store", "variant": "emphasis" },
     { "id": "memory-to-pipeline", "from": "gcs_memory_store", "to": "espn_pipeline", "label": "lessons & tape" },
-    { "id": "query-to-pipeline", "from": "api_queries", "to": "espn_pipeline", "label": "fetch rosters" },
+    { "id": "query-to-pipeline", "from": "api_queries", "to": "espn_pipeline" },
 
-    { "id": "pipeline-to-odds", "from": "espn_pipeline", "to": "odds_weather", "label": "odds & wx" },
+    { "id": "pipeline-to-odds", "from": "espn_pipeline", "to": "odds_weather" },
     { "id": "pipeline-to-espn", "from": "espn_pipeline", "to": "espn_v3", "label": "rosters & wire" },
     { "id": "pipeline-to-sleeper", "from": "espn_pipeline", "to": "sleeper_wire", "label": "trending adds" }
   ],
