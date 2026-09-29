@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from src.config import LeagueConfig
-from src.espn.roster import ParsedRoster, parse_roster
+from src.espn.roster import ParsedRoster, RosterPlayer, parse_roster
 
 
 @dataclass
@@ -24,6 +24,20 @@ class MatchupData:
     is_favorite: bool
     your_score: float = 0.0
     opp_score: float = 0.0
+
+    @property
+    def your_lineup(self) -> list[RosterPlayer]:
+        """Convenience property returning starters from your_team (or all players if starters not separated)."""
+        if self.your_team and self.your_team.starters:
+            return self.your_team.starters
+        return self.your_team.players if self.your_team else []
+
+    @property
+    def opponent_lineup(self) -> list[RosterPlayer]:
+        """Convenience property returning starters from opponent_team."""
+        if self.opponent_team and self.opponent_team.starters:
+            return self.opponent_team.starters
+        return self.opponent_team.players if self.opponent_team else []
 
 
 def get_current_week(league: Any) -> int:

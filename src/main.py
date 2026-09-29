@@ -1734,32 +1734,57 @@ def run_weekly_analysis() -> dict[str, Any]:
             matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
 
             if weekday == 1:  # Tuesday: Weekly Recap (Film Room) + Waiver Wire Analysis
+                # 1. Post-Game Film Room & Weekly Recap
                 recap_week = current_week
                 recap_matchup = matchup
-                if matchup and current_week > 1:
-                    your_lineup = matchup.your_lineup or []
-                    played_count = sum(
-                        1 for p in your_lineup if getattr(p, "actual_points", 0) > 0
+                if current_week > 1:
+                    your_starters = (
+                        matchup.your_team.starters
+                        if matchup and matchup.your_team and matchup.your_team.starters
+                        else (matchup.your_team.players if matchup and matchup.your_team else [])
                     )
-                    if played_count == 0:
-                        recap_week = current_week - 1
-                        recap_matchup = get_weekly_matchup(
-                            espn, league_config.team_id, recap_week, league_config
+                    played_count = sum(
+                        1
+                        for p in your_starters
+                        if getattr(p, "actual_points", 0.0) > 0 or getattr(p, "has_played", False)
+                    )
+                    # If current week has 0 played starters (or no matchup yet), recap previous completed week
+                    if played_count == 0 or recap_matchup is None:
+                        prev_week = current_week - 1
+                        prev_matchup = get_weekly_matchup(
+                            espn, league_config.team_id, prev_week, league_config
                         )
-                        logger.info(
-                            "ESPN week rolled to %d — recapping completed Week %d instead",
-                            current_week,
-                            recap_week,
-                        )
+                        if prev_matchup:
+                            recap_week = prev_week
+                            recap_matchup = prev_matchup
+                            logger.info(
+                                "ESPN week rolled to %d with 0 played starters — recapping completed Week %d instead",
+                                current_week,
+                                recap_week,
+                            )
 
                 if recap_matchup:
-                    recap = generate_weekly_recap(
-                        league=league_config,
-                        week=recap_week,
-                        matchup=recap_matchup,
-                        client=client,
+                    try:
+                        recap = generate_weekly_recap(
+                            league=league_config,
+                            week=recap_week,
+                            matchup=recap_matchup,
+                            client=client,
+                        )
+                        league_res[f"{league_config.short_name} Film Room"] = recap.model_dump()
+                    except Exception as recap_err:
+                        logger.error(
+                            "Error generating weekly recap for %s: %s",
+                            league_config.short_name,
+                            recap_err,
+                            exc_info=True,
+                        )
+                else:
+                    logger.warning(
+                        "No matchup data found for %s week %d for recap.",
+                        league_config.short_name,
+                        recap_week,
                     )
-                    league_res[f"{league_config.short_name} Film Room"] = recap.model_dump()
 
                 # 2. Waiver Wire Analysis
                 free_agents = [
