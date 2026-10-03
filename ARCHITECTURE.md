@@ -14,7 +14,7 @@ The **NFL Fantasy Football Intelligence Agent** is an autonomous, event-driven d
 
 ### Core Architectural Principles
 1. **Zero-Cost Serverless Execution:** Runs on Google Cloud Run configured with `min-instances=0`. Cold instances provision in <3 seconds on request and terminate immediately after processing, achieving \$0.00 idle cost.
-2. **Hybrid Probabilistic-Deterministic Intelligence:** Core mathematical valuations (VORP, points differentials, starter replacement thresholds, injury status) are computed deterministically. The LLM (dynamically negotiated — currently **Gemini 2.5 Pro** with auto-upgrade probing for **Gemini 3.1 Pro**) is utilized strictly for contextual reasoning, game-script synthesis, game-theory weighting, and executive coaching commentary, constrained by strict Pydantic JSON schemas.
+2. **Hybrid Probabilistic-Deterministic Intelligence:** Core mathematical valuations (VORP, points differentials, starter replacement thresholds, injury status) are computed deterministically. The LLM (dynamically negotiated — currently **Gemini 3.1 Pro Preview** via Vertex AI `global` with automated fallback to **Gemini 2.5 Pro**) is utilized strictly for contextual reasoning, game-script synthesis, game-theory weighting, and executive coaching commentary, constrained by strict Pydantic JSON schemas.
 3. **Resilient Fail-Safe Operation:** If the LLM provider experiences network latency, rate limits (429 errors trigger exponential backoff retries), or service degradation, the engine seamlessly falls back to 100% deterministic optimization without crashing or missing automated weekly deadlines.
 4. **State-Aware Temporal Dynamics:** Matchup analysis differentiates between `PRE_KICKOFF`, `IN_PROGRESS`, and `FINAL` game states. Tuesday morning routines automatically guard against ESPN week rollover race conditions. Temporal roster lock enforcement prevents stale recommendations for already-locked players.
 5. **Zero Trust Security & Zero Hardcoded Secrets:** All credentials (ESPN session tokens, Gemini API keys, SendGrid API keys) are managed in Google Cloud Secret Manager and mounted as container environment variables at runtime.
@@ -88,10 +88,8 @@ flowchart TB
     end
 
     subgraph External_Services ["🌐 External APIs & Upstream Providers"]
-        ESPN_API["ESPN Fantasy Private API<br/>(lm-api-reads.fantasy.espn.com)"]
-        Gemini_31_Preview["gemini-3.1-pro-preview<br/>(Primary Target — Preview)"]
-        Gemini_31_Pro["gemini-3.1-pro<br/>(GA Alias)"]
-        Gemini_25_Pro["gemini-2.5-pro<br/>(Stable Fallback — Active)"]
+        Gemini_31_Preview["gemini-3.1-pro-preview<br/>(Vertex Global — Primary Active)"]
+        Gemini_25_Pro["gemini-2.5-pro<br/>(Stable Fallback — EOL Oct 2026)"]
         SendGrid_API["SendGrid v3 Mail API<br/>(api.sendgrid.com)"]
         Odds_API["ESPN Scoreboard API<br/>(Vegas Spreads & Totals)"]
         Weather_API["Open-Meteo Weather API"]

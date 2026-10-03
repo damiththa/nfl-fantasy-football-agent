@@ -95,8 +95,8 @@
       "title": "GCS Lessons Store & Accountability",
       "items": [
         "Google Cloud Storage JSON bucket preserves weekly film room lessons & bench mistakes",
-        "Historical accountability automatically injected into start/sit lineup optimization",
-        "Asymmetric trade mandate: trades must decisively benefit user roster",
+        "Historical memory automatically injected into start/sit lineups, trade evaluations & weekly recaps",
+        "Asymmetric trade discipline: trades must decisively benefit user roster or HOLD_ROSTER",
         "Automated delivery to manager's mailbox via SendGrid v3 Mail API"
       ]
     }
