@@ -1812,6 +1812,13 @@ def run_weekly_analysis() -> dict[str, Any]:
                 roster_names = [p.name for p in parsed_roster.players]
                 injuries = get_injury_report(roster_names)
                 odds = fetch_week_odds()
+                weather_map = {}
+                for p in parsed_roster.players:
+                    if p.team and p.team not in weather_map:
+                        try:
+                            weather_map[p.team] = fetch_game_weather(p.team, datetime.now())
+                        except Exception:
+                            pass
                 lineup = optimize_lineup(
                     league_config,
                     current_week,
@@ -1819,6 +1826,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                     matchup=matchup,
                     injuries=injuries,
                     odds=odds,
+                    weather_map=weather_map,
                     client=client,
                     espn_league=espn,
                 )
@@ -1976,6 +1984,13 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
         roster_names = [p.name for p in parsed_roster.players]
         injuries = get_injury_report(roster_names)
         odds = fetch_week_odds()
+        weather_map = {}
+        for p in parsed_roster.players:
+            if p.team and p.team not in weather_map:
+                try:
+                    weather_map[p.team] = fetch_game_weather(p.team, datetime.now())
+                except Exception:
+                    pass
 
         client = None
         try:
@@ -1990,6 +2005,7 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
             matchup=matchup,
             injuries=injuries,
             odds=odds,
+            weather_map=weather_map,
             client=client,
             espn_league=espn,
         )
