@@ -21,9 +21,10 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 # Retry configuration for 429 RESOURCE_EXHAUSTED rate-limiting
-MAX_RETRIES_429 = 3
-INITIAL_BACKOFF_SECONDS = 5.0
-BACKOFF_MULTIPLIER = 2.0
+# Fast failover: 2 retries with 1.0s backoff so rate-limited models fail over rapidly to stable backup
+MAX_RETRIES_429 = 2
+INITIAL_BACKOFF_SECONDS = 1.0
+BACKOFF_MULTIPLIER = 1.5
 
 PREFERRED_MODELS: list[str] = [
     "gemini-3.1-pro-preview",  # Primary target: served from the Vertex AI `global` endpoint only
@@ -50,6 +51,17 @@ def resolve_temperature(model_id: str, requested: float) -> float:
     if model_id.startswith("gemini-3"):
         return 1.0
     return requested
+
+
+def resolve_thinking_config(model_id: str) -> Optional[types.ThinkingConfig]:
+    """Return thinking configuration tailored for the model.
+
+    For Gemini 3 models, cap the thinking budget at 2048 tokens to provide deep analytical
+    reasoning while preventing unbounded latency on mobile client connections.
+    """
+    if model_id.startswith("gemini-3"):
+        return types.ThinkingConfig(thinking_budget=2048)
+    return None
 
 
 def clean_json_text(raw_text: str) -> str:
@@ -227,6 +239,7 @@ class GeminiIntelligenceClient:
                 response_mime_type="application/json",
                 response_schema=response_schema,
                 temperature=resolve_temperature(model_id, temperature),
+                thinking_config=resolve_thinking_config(model_id),
             )
             backoff = INITIAL_BACKOFF_SECONDS
             for attempt in range(MAX_RETRIES_429 + 1):
@@ -302,6 +315,7 @@ class GeminiIntelligenceClient:
             config = types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 temperature=resolve_temperature(model_id, temperature),
+                thinking_config=resolve_thinking_config(model_id),
             )
             backoff = INITIAL_BACKOFF_SECONDS
             for attempt in range(MAX_RETRIES_429 + 1):

@@ -636,11 +636,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         renderOutput(data);
       } catch (err) {
         clearInterval(activeTimer);
-        resTitle.textContent = title + " — ⚠️ Request Error";
+        resTitle.textContent = title + " — ⚠️ Connection / Timeout Notice";
         resContent.innerHTML = `
           <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin: 12px 0;">
-            <h3 style="color: #ef4444; margin: 0 0 8px 0;">🚨 Network Error</h3>
-            <p style="color: #fca5a5; font-size: 14px; margin: 0;">${err.message}</p>
+            <h3 style="color: #ef4444; margin: 0 0 8px 0;">🚨 Connection / Timeout Notice</h3>
+            <p style="color: #fca5a5; font-size: 14px; margin: 0 0 8px 0; line-height: 1.4;">${err.message}</p>
+            <p style="font-size: 12px; color: #cbd5e1; margin: 0;">Mobile browsers (such as iOS Safari) close idle connections after 60 seconds. The server has been optimized with capped thinking budgets for fast responses. Tap the button again to reload.</p>
           </div>
         `;
       }
