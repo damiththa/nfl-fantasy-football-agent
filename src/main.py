@@ -3,14 +3,16 @@ FastAPI application serving the NFL Fantasy Football Agent on Google Cloud Run.
 Exposes endpoints for Cloud Scheduler cron triggers and on-demand analysis queries.
 """
 
+import asyncio
 import concurrent.futures
+import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from src.analysis.lineup import optimize_lineup
@@ -641,7 +643,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin: 12px 0;">
             <h3 style="color: #ef4444; margin: 0 0 8px 0;">🚨 Connection / Timeout Notice</h3>
             <p style="color: #fca5a5; font-size: 14px; margin: 0 0 8px 0; line-height: 1.4;">${err.message}</p>
-            <p style="font-size: 12px; color: #cbd5e1; margin: 0;">Mobile browsers (such as iOS Safari) close idle connections after 60 seconds. The server has been optimized with capped thinking budgets for fast responses. Tap the button again to reload.</p>
+            <p style="font-size: 12px; color: #cbd5e1; margin: 0;">Mobile browsers (such as iOS Safari) close idle connections after 60 seconds. The server streams keep-alive pulses to preserve unconstrained Gemini 3.1 Pro reasoning depth. If your connection dropped due to local device signal, tap the button again to reload.</p>
           </div>
         `;
       }
@@ -1961,9 +1963,53 @@ def run_sunday_pregame() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(fatal_err))
 
 
+async def stream_with_heartbeat(
+    compute_fn: Callable[[], Any],
+    heartbeat_interval: float = 5.0,
+):
+    """Execute a synchronous compute function in a background worker thread while
+    streaming keep-alive whitespace heartbeats over the HTTP socket.
+
+    This prevents mobile browsers (such as iOS Safari) and cloud ingress proxies
+    from closing the connection on 60-second idle timeouts while Gemini 3.1 Pro
+    reasons with unconstrained thinking depth. Insignificant whitespace before JSON
+    is fully compliant with RFC 8259 and standard JSON parsers.
+    """
+    loop = asyncio.get_running_loop()
+    future = loop.run_in_executor(None, compute_fn)
+
+    # Immediately emit an initial whitespace byte to commit HTTP 200 headers
+    yield b" "
+
+    while not future.done():
+        try:
+            await asyncio.wait_for(asyncio.shield(future), timeout=heartbeat_interval)
+            break
+        except asyncio.TimeoutError:
+            # Yield periodic whitespace heartbeat
+            yield b" \n"
+
+    try:
+        result = await future
+        if isinstance(result, str):
+            yield result.encode("utf-8")
+        elif isinstance(result, (dict, list)):
+            yield json.dumps(result).encode("utf-8")
+        elif hasattr(result, "model_dump_json"):
+            yield result.model_dump_json().encode("utf-8")
+        elif hasattr(result, "model_dump"):
+            yield json.dumps(result.model_dump()).encode("utf-8")
+        else:
+            yield json.dumps(result).encode("utf-8")
+    except Exception as exc:
+        logger.error("Error during streaming compute: %s", exc, exc_info=True)
+        err_payload = {"error": str(exc), "detail": str(exc)}
+        yield json.dumps(err_payload).encode("utf-8")
+
+
 @app.post("/query/start-sit")
 @app.post("/query/lineup")
-def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
+def query_lineup(league_id: int = Query(..., description="ESPN League ID")):
     """On-demand Start 'Em, Sit 'Em master report for a specific league."""
     league_config = ALL_LEAGUES.get(league_id)
     if not league_config:
@@ -1971,7 +2017,7 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
             status_code=404, detail=f"League {league_id} not found in configuration."
         )
 
-    try:
+    def _compute() -> dict[str, Any]:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
@@ -2011,9 +2057,8 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")) -> d
             espn_league=espn,
         )
         return lineup.model_dump()
-    except Exception as e:
-        logger.error(f"Error querying lineup: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return StreamingResponse(stream_with_heartbeat(_compute), media_type="application/json")
 
 
 @app.get("/query/roster-players")
@@ -2052,18 +2097,17 @@ def query_roster_players(league_id: int = Query(..., description="ESPN League ID
 
 
 @app.post("/query/trade")
-def query_trade(req: TradeRequest) -> dict[str, Any]:
+def query_trade(req: TradeRequest):
     """On-demand trade evaluation evaluated against your current roster."""
     league_config = ALL_LEAGUES.get(req.league_id)
     if not league_config:
         raise HTTPException(status_code=404, detail=f"League {req.league_id} not found.")
 
-    try:
+    def _compute() -> dict[str, Any]:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
         parsed_roster = parse_roster(my_team, league_config, week=current_week) if my_team else None
-
 
         client = None
         try:
@@ -2080,13 +2124,12 @@ def query_trade(req: TradeRequest) -> dict[str, Any]:
             espn_league=espn,
         )
         return verdict.model_dump()
-    except Exception as e:
-        logger.error(f"Error evaluating trade: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return StreamingResponse(stream_with_heartbeat(_compute), media_type="application/json")
 
 
 @app.post("/query/propose-trades")
-def query_propose_trades(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
+def query_propose_trades(league_id: int = Query(..., description="ESPN League ID")):
     """On-demand proactive trade proposals scanning all teams across the league."""
     league_config = ALL_LEAGUES.get(league_id)
     if not league_config:
@@ -2094,7 +2137,7 @@ def query_propose_trades(league_id: int = Query(..., description="ESPN League ID
             status_code=404, detail=f"League {league_id} not found in configuration."
         )
 
-    try:
+    def _compute() -> dict[str, Any]:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
 
@@ -2111,13 +2154,12 @@ def query_propose_trades(league_id: int = Query(..., description="ESPN League ID
             client=client,
         )
         return report.model_dump()
-    except Exception as e:
-        logger.error(f"Error proposing trades for league {league_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return StreamingResponse(stream_with_heartbeat(_compute), media_type="application/json")
 
 
 @app.post("/query/waivers")
-def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
+def query_waivers(league_id: int = Query(..., description="ESPN League ID")):
     """On-demand waiver wire analysis with veteran head-coach discipline."""
     league_config = ALL_LEAGUES.get(league_id)
     if not league_config:
@@ -2125,7 +2167,7 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> 
             status_code=404, detail=f"League {league_id} not found in configuration."
         )
 
-    try:
+    def _compute() -> dict[str, Any]:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
@@ -2166,9 +2208,8 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> 
             client=client,
         )
         return report.model_dump()
-    except Exception as e:
-        logger.error(f"Error querying waivers for league {league_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return StreamingResponse(stream_with_heartbeat(_compute), media_type="application/json")
 
 
 @app.post("/query/weekly-recap")
@@ -2176,7 +2217,7 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")) -> 
 def query_weekly_recap(
     league_id: int = Query(..., description="ESPN League ID"),
     week: Optional[int] = Query(None, description="NFL week (defaults to current week)"),
-) -> dict[str, Any]:
+):
     """On-demand Weekly Post-Game Film Room and Recap for a specific league."""
     league_config = ALL_LEAGUES.get(league_id)
     if not league_config:
@@ -2184,7 +2225,7 @@ def query_weekly_recap(
             status_code=404, detail=f"League {league_id} not found in configuration."
         )
 
-    try:
+    def _compute() -> dict[str, Any]:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
         target_week = week if week is not None else current_week
@@ -2208,11 +2249,8 @@ def query_weekly_recap(
             client=client,
         )
         return report.model_dump()
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error querying weekly recap for league {league_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return StreamingResponse(stream_with_heartbeat(_compute), media_type="application/json")
 
 
 @app.get("/query/lessons-summary")

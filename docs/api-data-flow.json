@@ -16,7 +16,7 @@
         "id": "ondemand-flow",
         "label": "On-Demand REST Flow",
         "focus": ["browser_user", "api_queries", "pydantic_contracts", "gemini_ladder", "gcs_memory_store", "espn_pipeline"],
-        "note": "Start/sit recommendations, waiver priorities, VORP trade proposals, and lessons-summary queried live."
+        "note": "Start/sit recommendations, waiver priorities, VORP trade proposals, and lessons-summary queried live with HTTP keep-alive streaming and unconstrained Gemini 3.1 Pro reasoning."
       },
       {
         "id": "stateless-lineage",
@@ -32,10 +32,10 @@
     { "id": "sendgrid_egress", "type": "external", "label": "SendGrid Mail API", "sublabel": "damiththa@gmail.com", "pos": [40, 310], "size": [130, 60], "tag": "HTML Digest" },
 
     { "id": "api_automated", "type": "backend", "label": "Automated Endpoints", "sublabel": "/run/weekly • /run/sunday", "pos": [250, 90], "size": [150, 60], "tag": "Cron Ingress" },
-    { "id": "api_queries", "type": "backend", "label": "REST Query Endpoints", "sublabel": "start-sit • lessons • trade", "pos": [250, 200], "size": [150, 60], "tag": "AJAX Ingress" },
+    { "id": "api_queries", "type": "backend", "label": "REST Query Endpoints", "sublabel": "streaming • keep-alive", "pos": [250, 200], "size": [150, 60], "tag": "Heartbeat Stream" },
     { "id": "gcs_memory_store", "type": "database", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [250, 310], "size": [150, 60], "tag": "Zero DB Tables" },
 
-    { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "429 Retry Safe" },
+    { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "Uncapped Reasoning" },
     { "id": "pydantic_contracts", "type": "backend", "label": "6 Pydantic Contracts", "sublabel": "JSON Schema Enforcement", "pos": [510, 200], "size": [160, 60] },
     { "id": "espn_pipeline", "type": "backend", "label": "Data Ingestion Layer", "sublabel": "Rosters, Wire, Odds, Wx", "pos": [510, 310], "size": [160, 60] },
 
@@ -50,7 +50,7 @@
   ],
   "connections": [
     { "id": "cron-to-auto", "from": "scheduler", "to": "api_automated", "label": "cron trigger", "variant": "emphasis" },
-    { "id": "user-to-query", "from": "browser_user", "to": "api_queries", "label": "HTTPS :443", "variant": "emphasis" },
+    { "id": "user-to-query", "from": "browser_user", "to": "api_queries", "label": "HTTPS Stream :443", "variant": "emphasis" },
     { "id": "auto-to-email", "from": "api_automated", "to": "sendgrid_egress" },
 
     { "id": "auto-to-gemini", "from": "api_automated", "to": "gemini_ladder", "label": "AI digest", "variant": "emphasis" },
@@ -70,7 +70,7 @@
       "title": "API Endpoints (14 Total)",
       "items": [
         "Automated: /run/weekly (Tue/Thu/Fri) & /run/sunday-pregame (Sun)",
-        "On-Demand: /query/start-sit, /query/trade, /query/propose-trades, /query/waivers, /query/weekly-recap",
+        "On-Demand: /query/start-sit, /query/trade, /query/propose-trades, /query/waivers, /query/weekly-recap (HTTP Keep-Alive Streaming)",
         "Lessons Memory: /query/lessons-summary (season trends) & /query/lessons (historical tape)",
         "Diagnostics: /health (system health) & /health/models (live probe)"
       ]

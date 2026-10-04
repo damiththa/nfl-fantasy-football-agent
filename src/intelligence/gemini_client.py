@@ -56,11 +56,18 @@ def resolve_temperature(model_id: str, requested: float) -> float:
 def resolve_thinking_config(model_id: str) -> Optional[types.ThinkingConfig]:
     """Return thinking configuration tailored for the model.
 
-    For Gemini 3 models, cap the thinking budget at 2048 tokens to provide deep analytical
-    reasoning while preventing unbounded latency on mobile client connections.
+    By default, allows unconstrained reasoning for Gemini 3 models to maximize analytical
+    depth and decision quality. If GEMINI_THINKING_BUDGET is explicitly set in the
+    environment, that budget will be applied.
     """
-    if model_id.startswith("gemini-3"):
-        return types.ThinkingConfig(thinking_budget=2048)
+    budget_env = os.environ.get("GEMINI_THINKING_BUDGET")
+    if budget_env:
+        try:
+            budget = int(budget_env)
+            if budget > 0:
+                return types.ThinkingConfig(thinking_budget=budget)
+        except ValueError:
+            pass
     return None
 
 

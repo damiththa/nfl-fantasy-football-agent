@@ -279,3 +279,20 @@ def test_is_rate_limit_error_detection():
     assert not GeminiIntelligenceClient._is_rate_limit_error(RuntimeError("404 Model not found"))
     assert not GeminiIntelligenceClient._is_rate_limit_error(RuntimeError("500 Internal Server Error"))
 
+
+def test_resolve_thinking_config_unconstrained_default(monkeypatch):
+    """Test that resolve_thinking_config defaults to unconstrained thinking (None) for Gemini 3."""
+    from src.intelligence.gemini_client import resolve_thinking_config
+    monkeypatch.delenv("GEMINI_THINKING_BUDGET", raising=False)
+    assert resolve_thinking_config("gemini-3.1-pro-preview") is None
+    assert resolve_thinking_config("gemini-2.5-pro") is None
+
+
+def test_resolve_thinking_config_env_override(monkeypatch):
+    """Test that resolve_thinking_config respects GEMINI_THINKING_BUDGET if set."""
+    from src.intelligence.gemini_client import resolve_thinking_config
+    monkeypatch.setenv("GEMINI_THINKING_BUDGET", "4096")
+    cfg = resolve_thinking_config("gemini-3.1-pro-preview")
+    assert cfg is not None
+    assert cfg.thinking_budget == 4096
+

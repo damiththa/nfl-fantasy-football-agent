@@ -204,4 +204,41 @@ def test_run_weekly_tuesday_recap_no_attribute_error(client):
                     assert "your_lineup" not in v["error"]
 
 
+@pytest.mark.anyio
+async def test_stream_with_heartbeat_success():
+    import json
 
+    from src.main import stream_with_heartbeat
+
+    def mock_calc():
+        return {"status": "ok", "starters": ["Josh Allen"]}
+
+    chunks = []
+    async for chunk in stream_with_heartbeat(mock_calc, heartbeat_interval=0.05):
+        chunks.append(chunk)
+
+    assert chunks[0] == b" "
+    full_body = b"".join(chunks).decode("utf-8")
+    data = json.loads(full_body)
+    assert data["status"] == "ok"
+    assert data["starters"] == ["Josh Allen"]
+
+
+@pytest.mark.anyio
+async def test_stream_with_heartbeat_error_handling():
+    import json
+
+    from src.main import stream_with_heartbeat
+
+    def mock_failing_calc():
+        raise RuntimeError("Simulated upstream error")
+
+    chunks = []
+    async for chunk in stream_with_heartbeat(mock_failing_calc, heartbeat_interval=0.05):
+        chunks.append(chunk)
+
+    assert chunks[0] == b" "
+    full_body = b"".join(chunks).decode("utf-8")
+    data = json.loads(full_body)
+    assert "error" in data
+    assert "Simulated upstream error" in data["error"]
