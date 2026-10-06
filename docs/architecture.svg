@@ -4913,7 +4913,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </g>
         <g data-graph-role="automatic-crossover" style="--step:10">
           <path data-graph-role="automatic-crossover-underlay" d="M 740 120 L 708 120 Q 700 120 700 128 L 700 222 Q 700 230 692 230 L 660 230" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="ext_context" data-edge-to="engines" data-edge-label="spreads &amp; weather" data-edge-key="10" data-edge-id="context-odds" data-composition-points="740,120;700,120;700,230;660,230" data-composition-crossover="halo" data-composition-independent="true" d="M 740 120 L 708 120 Q 700 120 700 128 L 700 222 Q 700 230 692 230 L 660 230" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="ext_context" data-edge-to="engines" data-edge-label="odds, weather &amp; stats" data-edge-key="10" data-edge-id="context-odds" data-composition-points="740,120;700,120;700,230;660,230" data-composition-crossover="halo" data-composition-independent="true" d="M 740 120 L 708 120 Q 700 120 700 128 L 700 222 Q 700 230 692 230 L 660 230" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:11">
           <path data-graph-role="automatic-crossover-underlay" d="M 260 237 L 228 237 Q 220 237 220 245 L 220 332 Q 220 340 212 340 L 180 340" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
@@ -4925,15 +4925,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </g>
 
         <!-- Components -->
-        <g id="node-scheduler" data-node-id="scheduler" data-node-label="Cloud Scheduler" tabindex="0" role="button" aria-label="Focus Cloud Scheduler, 4 Cron Triggers (ET), Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="4 Cron Triggers (ET)" data-node-context="Architecture component">
-          <title>Cloud Scheduler · 4 Cron Triggers (ET) · Architecture component</title>
+        <g id="node-scheduler" data-node-id="scheduler" data-node-label="Cloud Scheduler" tabindex="0" role="button" aria-label="Focus Cloud Scheduler, 5 Cron Triggers (ET), Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="5 Cron Triggers (ET)" data-node-context="Architecture component">
+          <title>Cloud Scheduler · 5 Cron Triggers (ET) · Architecture component</title>
           <rect x="40" y="90" width="140" height="60" rx="6" class="c-mask"/>
           <rect x="40" y="90" width="140" height="60" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(46 96) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="110" y="118" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Cloud Scheduler</text>
-        <text data-detail="context" x="110" y="134" class="t-muted" font-size="9" text-anchor="middle">4 Cron Triggers (ET)</text>
+        <text data-detail="context" x="110" y="134" class="t-muted" font-size="9" text-anchor="middle">5 Cron Triggers (ET)</text>
         </g>
 
         <g id="node-user" data-node-id="user" data-node-label="Manager (Mad Dawg)" tabindex="0" role="button" aria-label="Focus Manager (Mad Dawg), Mobile / Web Browser, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Mobile / Web Browser" data-node-context="Architecture component">
@@ -4973,15 +4973,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="340" y="142" class="t-database" font-size="7" text-anchor="middle">Season History</text>
         </g>
 
-        <g id="node-fastapi" data-node-id="fastapi" data-node-label="FastAPI Engine" tabindex="0" role="button" aria-label="Focus FastAPI Engine, Cloud Run • Brain Badge, Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Cloud Run • Brain Badge" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)">
-          <title>FastAPI Engine · Cloud Run • Brain Badge · Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)</title>
+        <g id="node-fastapi" data-node-id="fastapi" data-node-label="FastAPI Engine" tabindex="0" role="button" aria-label="Focus FastAPI Engine, Streaming • Keep-Alive, Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Streaming • Keep-Alive" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)">
+          <title>FastAPI Engine · Streaming • Keep-Alive · Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)</title>
           <rect x="260" y="200" width="160" height="60" rx="6" class="c-mask"/>
           <rect x="260" y="200" width="160" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(266 206) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="340" y="228" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FastAPI Engine</text>
-        <text data-detail="context" x="340" y="244" class="t-muted" font-size="9" text-anchor="middle">Cloud Run • Brain Badge</text>
+        <text data-detail="context" x="340" y="244" class="t-muted" font-size="9" text-anchor="middle">Streaming • Keep-Alive</text>
         </g>
 
         <g id="node-secrets" data-node-id="secrets" data-node-label="Secret Manager" tabindex="0" role="button" aria-label="Focus Secret Manager, ESPN S2/SWID &amp; Keys, Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="security" data-node-sublabel="ESPN S2/SWID &amp; Keys" data-node-tag="IAM Protected" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle)">
@@ -4997,8 +4997,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="340" y="472" class="t-security" font-size="7" text-anchor="middle">IAM Protected</text>
         </g>
 
-        <g id="node-gemini" data-node-id="gemini" data-node-label="Gemini Model Ladder" tabindex="0" role="button" aria-label="Focus Gemini Model Ladder, 3.1-preview ➔ 2.5-pro, Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="3.1-preview ➔ 2.5-pro" data-node-tag="429 Retry Safe" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle)">
-          <title>Gemini Model Ladder · 3.1-preview ➔ 2.5-pro · Google Cloud Platform: us-central1 ($0.00 Idle) · 429 Retry Safe</title>
+        <g id="node-gemini" data-node-id="gemini" data-node-label="Gemini Model Ladder" tabindex="0" role="button" aria-label="Focus Gemini Model Ladder, 3.1-preview ➔ 2.5-pro, Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="3.1-preview ➔ 2.5-pro" data-node-tag="Uncapped Reasoning" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle)">
+          <title>Gemini Model Ladder · 3.1-preview ➔ 2.5-pro · Google Cloud Platform: us-central1 ($0.00 Idle) · Uncapped Reasoning</title>
           <rect x="490" y="90" width="170" height="60" rx="6" class="c-mask"/>
           <rect x="490" y="90" width="170" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(496 96) scale(0.6875)">
@@ -5006,7 +5006,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           </g>
           <text data-node-label="" data-detail-anchor="" x="575" y="118" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Gemini Model Ladder</text>
         <text data-detail="context" x="575" y="134" class="t-muted" font-size="9" text-anchor="middle">3.1-preview ➔ 2.5-pro</text>
-        <text data-detail="fine" x="575" y="142" class="t-backend" font-size="7" text-anchor="middle">429 Retry Safe</text>
+        <text data-detail="fine" x="575" y="142" class="t-backend" font-size="7" text-anchor="middle">Uncapped Reasoning</text>
         </g>
 
         <g id="node-engines" data-node-id="engines" data-node-label="Decision &amp; Trade Engines" tabindex="0" role="button" aria-label="Focus Decision &amp; Trade Engines, Lineup • Trade • Waivers, Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Lineup • Trade • Waivers" data-node-tag="Optimal Starters" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle) › Cloud Run Service (fantasy-agent)">
@@ -5032,16 +5032,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="context" x="575" y="354" class="t-muted" font-size="9" text-anchor="middle">Roster &amp; Matchup Parser</text>
         </g>
 
-        <g id="node-ext_context" data-node-id="ext_context" data-node-label="Vegas Odds &amp; Weather" tabindex="0" role="button" aria-label="Focus Vegas Odds &amp; Weather, ESPN &amp; Open-Meteo, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="ESPN &amp; Open-Meteo" data-node-context="Architecture component">
-          <title>Vegas Odds &amp; Weather · ESPN &amp; Open-Meteo · Architecture component</title>
+        <g id="node-ext_context" data-node-id="ext_context" data-node-label="Vegas, Weather &amp; Stats" tabindex="0" role="button" aria-label="Focus Vegas, Weather &amp; Stats, Vegas • Meteo • nflverse, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Vegas • Meteo • nflverse" data-node-context="Architecture component">
+          <title>Vegas, Weather &amp; Stats · Vegas • Meteo • nflverse · Architecture component</title>
           <rect x="740" y="90" width="180" height="60" rx="6" class="c-mask"/>
           <rect x="740" y="90" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(746 96) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="830" y="118" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Vegas Odds &amp; Weather</text>
-        <text data-detail="context" x="830" y="134" class="t-muted" font-size="9" text-anchor="middle">ESPN &amp; Open-Meteo</text>
+          <text data-node-label="" data-detail-anchor="" x="830" y="118" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Vegas, Weather &amp; Stats</text>
+        <text data-detail="context" x="830" y="134" class="t-muted" font-size="9" text-anchor="middle">Vegas • Meteo • nflverse</text>
         </g>
 
         <g id="node-espn_my_team" data-node-id="espn_my_team" data-node-label="My Team Rosters" tabindex="0" role="button" aria-label="Focus My Team Rosters, Starters, Bench &amp; IR, ESPN Fantasy Platform (Private v3 API)" aria-pressed="false" data-node-kind="external" data-node-sublabel="Starters, Bench &amp; IR" data-node-context="ESPN Fantasy Platform (Private v3 API)">
@@ -5118,9 +5118,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <rect x="661.4" y="382" width="77.2" height="14" rx="3" class="c-mask"/>
           <text x="700" y="392" class="t-edge-default" font-size="8" text-anchor="middle">waiver targets</text>
         </g>
-        <g data-detail="context" data-edge-from="ext_context" data-edge-to="engines" data-edge-label="spreads &amp; weather" data-edge-key="10" data-edge-id="context-odds">
-          <rect x="654.2" y="155" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="700" y="165" class="t-edge-default" font-size="8" text-anchor="middle">spreads &amp; weather</text>
+        <g data-detail="context" data-edge-from="ext_context" data-edge-to="engines" data-edge-label="odds, weather &amp; stats" data-edge-key="10" data-edge-id="context-odds">
+          <rect x="644.6" y="155" width="110.8" height="14" rx="3" class="c-mask"/>
+          <text x="700" y="165" class="t-edge-default" font-size="8" text-anchor="middle">odds, weather &amp; stats</text>
         </g>
         <g data-detail="context" data-edge-from="fastapi" data-edge-to="sendgrid" data-edge-label="dispatch digest" data-edge-key="11" data-edge-id="send-email">
           <rect x="179" y="268.5" width="82" height="14" rx="3" class="c-mask"/>
