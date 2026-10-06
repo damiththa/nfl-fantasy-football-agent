@@ -126,3 +126,101 @@ def test_evaluate_waivers_gemini_stand_pat():
     assert len(report.targets) == 0
     assert "burn waiver priority" in report.stand_pat_reasoning
 
+
+def test_evaluate_waivers_filters_out_ir_and_injured_players():
+    bench = [
+        RosterPlayer("Fringe Bench Player", "WR", "NE", "Bench", 2.0, 0.0, "NORMAL", 14, 5.0),
+    ]
+    roster = ParsedRoster(team_name="Mad Dawg Team", players=bench, bench=bench)
+
+    free_agents = [
+        {
+            "name": "De'Von Achane",
+            "position": "RB",
+            "team": "MIA",
+            "projected_points": 0.0,
+            "percent_owned": 48.8,
+            "injury_status": "INJURY_RESERVE",
+            "injured": True,
+        },
+        {
+            "name": "Jadarian Price",
+            "position": "RB",
+            "team": "SEA",
+            "projected_points": 0.0,
+            "percent_owned": 82.5,
+            "injury_status": "IR",
+            "injured": True,
+        },
+        {
+            "name": "Tyreek Hill",
+            "position": "WR",
+            "team": "FA",
+            "projected_points": 0.0,
+            "percent_owned": 29.2,
+            "injury_status": "OUT",
+            "injured": True,
+        },
+        {
+            "name": "Active Healthy Sleeper",
+            "position": "RB",
+            "team": "DEN",
+            "projected_points": 12.0,
+            "percent_owned": 15.0,
+            "injury_status": "ACTIVE",
+            "injured": False,
+        },
+    ]
+
+    report = evaluate_waivers(PNA_2026, 2, roster, free_agents)
+    # The high-owned IR/Out players must be filtered out despite high ownership
+    target_names = [t.player_name for t in report.targets]
+    assert "De'Von Achane" not in target_names
+    assert "Jadarian Price" not in target_names
+    assert "Tyreek Hill" not in target_names
+    assert "Active Healthy Sleeper" in target_names
+
+
+def test_evaluate_waivers_gemini_sanitizer_rejects_ir_target():
+    bench = [
+        RosterPlayer("Reserve RB", "RB", "BAL", "Bench", 0.0, 0.0, "NORMAL", 14, 5.0),
+    ]
+    roster = ParsedRoster(team_name="Mad Dawg Team", players=bench, bench=bench)
+
+    free_agents = [
+        {
+            "name": "De'Von Achane",
+            "position": "RB",
+            "team": "MIA",
+            "projected_points": 0.0,
+            "percent_owned": 48.8,
+            "injury_status": "INJURY_RESERVE",
+            "injured": True,
+        },
+    ]
+
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            class Response:
+                text = (
+                    '{"league_id": 991059191, "week": 2, "is_move_recommended": true, '
+                    '"coach_verdict": "EXECUTE_CLAIMS", '
+                    '"targets": [{"player_name": "De\'Von Achane", "position": "RB", "team": "MIA", "priority": "MUST_ADD", "recommended_drop": "Reserve RB", "reasoning": "Elite stud", "upside_summary": "Top pickup"}], '
+                    '"roster_drop_candidates": ["Reserve RB"], "overall_waiver_strategy": "Add Achane"}'
+                )
+
+            return Response()
+
+    class MockSdk:
+        models = MockModels()
+
+    client = GeminiIntelligenceClient(mock_client=MockSdk())
+    report = evaluate_waivers(PNA_2026, 2, roster, free_agents, client=client)
+
+    # Post-sanitizer must reject De'Von Achane and flip to STAND_PAT
+    target_names = [t.player_name for t in report.targets]
+    assert "De'Von Achane" not in target_names
+    assert report.coach_verdict == "STAND_PAT"
+    assert report.is_move_recommended is False
+
+

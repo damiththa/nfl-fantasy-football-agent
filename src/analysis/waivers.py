@@ -8,7 +8,7 @@ import logging
 from typing import Any, Optional
 
 from src.config import LeagueConfig
-from src.data.injuries import PlayerInjuryInfo
+from src.data.injuries import PlayerInjuryInfo, normalize_name
 from src.data.trending import TrendingPlayer
 from src.espn.roster import ParsedRoster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
@@ -16,6 +16,16 @@ from src.intelligence.prompts import format_waiver_prompt
 from src.intelligence.schemas import WaiverRecommendation, WaiverReport
 
 logger = logging.getLogger(__name__)
+
+INELIGIBLE_INJURY_STATUSES = {
+    "INJURY_RESERVE",
+    "IR",
+    "OUT",
+    "PUP",
+    "SUS",
+    "SUSPENSION",
+    "SUSPENDED",
+}
 
 
 def evaluate_waivers(
@@ -42,6 +52,50 @@ def evaluate_waivers(
         WaiverReport with ranked targets, drop candidates, and strategy.
     """
     fallback_err: Optional[str] = None
+
+    # Build injury lookup map
+    injuries_map: dict[str, PlayerInjuryInfo] = {}
+    if injuries:
+        for inj in injuries:
+            if inj.full_name:
+                injuries_map[normalize_name(inj.full_name)] = inj
+
+    # Filter out ineligible, IR, Out, or season-ending injured players
+    eligible_free_agents: list[dict[str, Any]] = []
+    for fa in free_agents:
+        fa_copy = dict(fa)
+        name = fa_copy.get("name", "")
+        espn_inj = str(fa_copy.get("injury_status") or "ACTIVE").upper().strip()
+        is_injured = bool(fa_copy.get("injured", False))
+        proj_pts = float(fa_copy.get("projected_points", 0.0) or 0.0)
+
+        sl_info = injuries_map.get(normalize_name(name)) if injuries_map else None
+        sl_status = str(getattr(sl_info, "injury_status", "") or fa_copy.get("sleeper_status") or "").upper().strip()
+        sl_notes = str(getattr(sl_info, "injury_notes", "") or fa_copy.get("injury_notes") or "").lower()
+
+        fa_copy["injury_status"] = espn_inj
+        if sl_status:
+            fa_copy["sleeper_status"] = sl_status
+        if sl_notes:
+            fa_copy["injury_notes"] = sl_notes
+
+        # 1. Hard filter: Inactive/IR/Out/PUP/Suspended in ESPN or Sleeper
+        if espn_inj in INELIGIBLE_INJURY_STATUSES or sl_status in INELIGIBLE_INJURY_STATUSES:
+            logger.info("Excluding waiver candidate %s: inactive status (ESPN=%s, Sleeper=%s)", name, espn_inj, sl_status)
+            continue
+
+        # 2. Hard filter: marked injured with 0 projection
+        if is_injured and proj_pts <= 0.0:
+            logger.info("Excluding waiver candidate %s: marked injured with 0.0 projected points", name)
+            continue
+
+        # 3. Hard filter: severe injury notes with 0 projection
+        if proj_pts <= 0.0 and any(kw in sl_notes for kw in ("surgery", "acl", "mcl", "achilles", "season-ending", "ir", "reserve")):
+            logger.info("Excluding waiver candidate %s: severe injury notes (%s) with 0.0 projected points", name, sl_notes)
+            continue
+
+        eligible_free_agents.append(fa_copy)
+
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
         roster_data = [
@@ -83,11 +137,23 @@ def evaluate_waivers(
                     }
                 )
 
+        available_players_data = [
+            {
+                "name": fa["name"],
+                "position": fa["position"],
+                "team": fa.get("team") or fa.get("proTeam", "FA"),
+                "projected_points": fa.get("projected_points", 0.0),
+                "percent_owned": fa.get("percent_owned", 0.0),
+                "injury_status": fa.get("injury_status", "ACTIVE"),
+            }
+            for fa in eligible_free_agents[:35]
+        ]
+
         prompt = format_waiver_prompt(
             league=league,
             week=week,
             your_roster={"players": roster_data},
-            available_players=free_agents[:35],
+            available_players=available_players_data,
             trending_adds=trending_data[:20],
             injuries=injury_data[:20],
         )
@@ -98,6 +164,30 @@ def evaluate_waivers(
             report.week = week
             report.intelligence_backend = client.model
             report.fallback_reason = None
+
+            # Post-validation safety net: Reject any target that is on IR, Out, or injured with 0 projection
+            sanitized_targets = []
+            for t in report.targets:
+                fa_match = next((fa for fa in free_agents if fa.get("name", "").lower() == t.player_name.lower()), None)
+                if fa_match:
+                    espn_inj = str(fa_match.get("injury_status") or "").upper().strip()
+                    sl_info = injuries_map.get(normalize_name(fa_match.get("name", ""))) if injuries_map else None
+                    sl_status = str(getattr(sl_info, "injury_status", "") or fa_match.get("sleeper_status") or "").upper().strip()
+                    is_inj = bool(fa_match.get("injured", False))
+                    proj = float(fa_match.get("projected_points", 0.0) or 0.0)
+                    if (
+                        espn_inj in INELIGIBLE_INJURY_STATUSES
+                        or sl_status in INELIGIBLE_INJURY_STATUSES
+                        or (is_inj and proj <= 0.0)
+                    ):
+                        logger.warning(
+                            "Sanitizer rejected AI waiver target %s: player is on IR/injured (ESPN=%s, Sleeper=%s, proj=%.1f)",
+                            t.player_name, espn_inj, sl_status, proj
+                        )
+                        continue
+                sanitized_targets.append(t)
+            report.targets = sanitized_targets
+
             if report.coach_verdict == "STAND_PAT" or not report.targets:
                 report.coach_verdict = "STAND_PAT"
                 report.is_move_recommended = False
@@ -106,7 +196,7 @@ def evaluate_waivers(
                 if not report.stand_pat_reasoning:
                     report.stand_pat_reasoning = (
                         "Your active starters are healthy and your bench provides crucial high-upside depth. "
-                        "None of the available free agents represent a meaningful upgrade over your current assets. "
+                        "None of the available healthy free agents represent a meaningful upgrade over your current assets. "
                         "Preserve your waiver priority and hold your bench."
                     )
             else:
@@ -157,7 +247,7 @@ def evaluate_waivers(
 
     # 3. Filter and rank available free agents
     sorted_fa = sorted(
-        free_agents,
+        eligible_free_agents,
         key=lambda fa: (
             (float(fa.get("projected_points", 0.0) or 0.0) * 0.7)
             + (float(fa.get("percent_owned", 0.0) or 0.0) * 0.3)
@@ -210,8 +300,8 @@ def evaluate_waivers(
         name = fa.get("name", "Unknown Player")
         team = fa.get("team", "UNK")
 
-        # Skip sub-replacement FA if user has no starting hole
-        if not has_unfilled_starter_hole and proj < 7.0:
+        # Skip players with zero projection or sub-replacement FA if user has no starting hole
+        if proj <= 0.0 or (not has_unfilled_starter_hole and proj < 7.0):
             continue
 
         priority = "MUST_ADD" if (has_unfilled_starter_hole and i == 0) or proj > 11.0 else ("HIGH" if proj > 8.5 else "MEDIUM")

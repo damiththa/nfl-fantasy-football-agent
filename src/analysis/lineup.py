@@ -246,6 +246,15 @@ def detect_lineup_holes_and_solutions(
         try:
             fa_list = espn_league.free_agents(size=50)
             for fa in fa_list:
+                inj = str(getattr(fa, "injuryStatus", "") or "").upper().strip()
+                is_inj = bool(getattr(fa, "injured", False))
+                pts = float(getattr(fa, "projected_points", 0.0) or 0.0)
+                if (
+                    inj in ("INJURY_RESERVE", "IR", "OUT", "PUP", "SUS", "SUSPENSION", "SUSPENDED")
+                    or (is_inj and pts <= 0.0)
+                    or pts <= 0.0
+                ):
+                    continue
                 pos = (getattr(fa, "position", "") or "FLEX").upper()
                 free_agents_by_pos.setdefault(pos, []).append(fa)
         except Exception:

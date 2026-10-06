@@ -1943,16 +1943,22 @@ def run_weekly_analysis() -> dict[str, Any]:
                         "team": p.proTeam,
                         "projected_points": getattr(p, "projected_points", 0.0),
                         "percent_owned": getattr(p, "percent_owned", 0.0),
+                        "injury_status": getattr(p, "injuryStatus", "ACTIVE") or "ACTIVE",
+                        "injured": getattr(p, "injured", False),
                     }
                     for p in espn.free_agents(size=50)
                 ]
                 trending = fetch_trending_adds(lookback_hours=24, limit=25)
+                roster_names = [p.name for p in parsed_roster.players]
+                fa_names = [fa["name"] for fa in free_agents]
+                injuries = get_injury_report(roster_names + fa_names)
                 report = evaluate_waivers(
                     league_config,
                     current_week,
                     parsed_roster,
                     free_agents,
                     trending_adds=trending,
+                    injuries=injuries,
                     client=client,
                 )
                 league_res[league_config.short_name] = report.model_dump()
@@ -2338,12 +2344,15 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")):
                 "team": p.proTeam,
                 "projected_points": getattr(p, "projected_points", 0.0),
                 "percent_owned": getattr(p, "percent_owned", 0.0),
+                "injury_status": getattr(p, "injuryStatus", "ACTIVE") or "ACTIVE",
+                "injured": getattr(p, "injured", False),
             }
             for p in espn.free_agents(size=50)
         ]
         trending = fetch_trending_adds(lookback_hours=24, limit=25)
         roster_names = [p.name for p in parsed_roster.players]
-        injuries = get_injury_report(roster_names)
+        fa_names = [fa["name"] for fa in free_agents]
+        injuries = get_injury_report(roster_names + fa_names)
 
         client = None
         try:
