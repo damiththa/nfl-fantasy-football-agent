@@ -22,7 +22,7 @@
         "id": "on-demand-optimization",
         "label": "Live Command Center & AI Reasoning",
         "focus": ["user", "fastapi", "engines", "gcs_memory", "ext_context", "gemini"],
-        "note": "On-demand start/sit, waiver priority, and VORP trade evaluations with HTTP keep-alive streaming to support unconstrained Gemini 3.1 Pro reasoning with zero mobile browser drops."
+        "note": "On-demand start/sit, waiver priority & trade reviews with HTTP keep-alive streaming and unconstrained Gemini 3.1 Pro reasoning."
       },
       {
         "id": "ai-resilience",

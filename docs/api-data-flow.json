@@ -16,7 +16,7 @@
         "id": "ondemand-flow",
         "label": "On-Demand REST Flow",
         "focus": ["browser_user", "api_queries", "pydantic_contracts", "gemini_ladder", "gcs_memory_store", "espn_pipeline"],
-        "note": "Start/sit recommendations, waiver priorities, VORP trade proposals, and lessons-summary queried live with HTTP keep-alive streaming and unconstrained Gemini 3.1 Pro reasoning."
+        "note": "Live start/sit, waiver priority, trade proposals & lessons queried via HTTP keep-alive streaming with unconstrained Gemini 3.1 Pro."
       },
       {
         "id": "stateless-lineage",

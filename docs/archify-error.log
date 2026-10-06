@@ -1,3 +1,0 @@
-architecture schema validation failed:
-  /meta/views/2/note (id/label: "on-demand-optimization") must NOT have more than 140 characters {"limit":140}
-[schema/maxLength] /meta/views/2/note (id/label: "on-demand-optimization") must NOT have more than 140 characters {"limit":140} Fix: provide at most 140 character(s).
