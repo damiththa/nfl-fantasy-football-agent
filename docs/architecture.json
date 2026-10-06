@@ -56,7 +56,7 @@
     { "kind": "security-group", "label": "ESPN Fantasy Platform (Private v3 API)", "wraps": ["espn_my_team", "espn_opp", "espn_waivers"] }
   ],
   "connections": [
-    { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS Stream :443", "variant": "emphasis", "labelAt": [204, 192] },
+    { "id": "user-to-app", "from": "user", "to": "fastapi", "label": "HTTPS :443", "variant": "emphasis", "labelAt": [204, 192] },
     { "id": "cron-triggers", "from": "scheduler", "to": "fastapi", "label": "cron :8080" },
     { "id": "memory-store", "from": "fastapi", "to": "gcs_memory", "variant": "emphasis" },
     { "id": "secrets-to-adapter", "from": "secrets", "to": "espn_adapter", "label": "ESPN_S2 & SWID", "variant": "security" },

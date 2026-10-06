@@ -1,3 +1,0 @@
-Architecture layout validation failed:
-- Boundary label "Cloud Run Service (fantasy-agent)" overlaps connection label "HTTPS Stream :443" — move the boundary title rail by adjusting wrapped component positions, or move the connection label with labelAt/labelDx/labelDy/labelSegment.
-[layout/constraint] Boundary label "Cloud Run Service (fantasy-agent)" overlaps connection label "HTTPS Stream :443" — move the boundary title rail by adjusting wrapped component positions, or move the connection label with labelAt/labelDx/labelDy/labelSegment.

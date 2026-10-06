@@ -50,7 +50,7 @@
   ],
   "connections": [
     { "id": "cron-to-auto", "from": "scheduler", "to": "api_automated", "label": "cron trigger", "variant": "emphasis" },
-    { "id": "user-to-query", "from": "browser_user", "to": "api_queries", "label": "HTTPS Stream :443", "variant": "emphasis" },
+    { "id": "user-to-query", "from": "browser_user", "to": "api_queries", "label": "HTTPS :443", "variant": "emphasis" },
     { "id": "auto-to-email", "from": "api_automated", "to": "sendgrid_egress" },
 
     { "id": "auto-to-gemini", "from": "api_automated", "to": "gemini_ladder", "label": "AI digest", "variant": "emphasis" },
