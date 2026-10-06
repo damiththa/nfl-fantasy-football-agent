@@ -124,3 +124,27 @@ def test_parse_roster_bench_and_ir_slots():
     assert len(parsed.ir) == 1
     assert parsed.ir[0].name == "Injured Star"
     assert len(parsed.starters) == 0
+
+
+def test_parse_roster_opponent_and_dvp_rank():
+    mock_p = MagicMock()
+    mock_p.name = "Amon-Ra St. Brown"
+    mock_p.position = "WR"
+    mock_p.proTeam = "DET"
+    mock_p.lineupSlot = "WR"
+    mock_p.points = None
+    mock_p.projected_points = 18.5
+    mock_p.injuryStatus = "NORMAL"
+    mock_p.pro_opponent = "GB"
+    mock_p.pro_pos_rank = 28
+    mock_p.stats = {}
+
+    mock_team = MagicMock()
+    mock_team.team_name = "Mad Dawg"
+    mock_team.roster = [mock_p]
+
+    parsed = parse_roster(mock_team, PNA_2026, week=1)
+    rp = parsed.players[0]
+    assert rp.pro_opponent == "GB"
+    assert rp.opponent_pos_rank == 28
+

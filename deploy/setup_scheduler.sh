@@ -46,6 +46,7 @@ upsert_cron_job() {
             --time-zone="America/New_York" \
             --uri="${target_uri}" \
             --http-method="POST" \
+            --attempt-deadline="600s" \
             --description="${description}" \
             --project="${PROJECT_ID}" >/dev/null
     else
@@ -56,6 +57,7 @@ upsert_cron_job() {
             --time-zone="America/New_York" \
             --uri="${target_uri}" \
             --http-method="POST" \
+            --attempt-deadline="600s" \
             --description="${description}" \
             --project="${PROJECT_ID}" >/dev/null
     fi
@@ -79,6 +81,14 @@ upsert_cron_job \
     "/run/weekly" \
     "Friday 7:00 PM ET weekend injury designations and lineup lock"
 
+# 1c. Saturday Matchup Scouting & Lineup Preview (10:00 AM ET)
+# Generates comprehensive opponent breakdown, Vegas game theory projections, and scouting preview
+upsert_cron_job \
+    "saturday-scouting-preview" \
+    "0 10 * * 6" \
+    "/run/weekly" \
+    "Saturday 10:00 AM ET full matchup scouting and projection preview"
+
 # 2. Thursday Night Football Inactives (6:50 PM ET - 5 mins after official 90-min inactives drop)
 upsert_cron_job \
     "thursday-tnf-lock" \
@@ -97,6 +107,7 @@ upsert_cron_job \
 
 echo ""
 echo "============================================================"
-echo "✅ All 4 Cloud Scheduler cron triggers configured successfully!"
+echo "✅ All 5 Cloud Scheduler cron triggers configured successfully!"
 echo "   All jobs are within GCP's free tier."
 echo "============================================================"
+

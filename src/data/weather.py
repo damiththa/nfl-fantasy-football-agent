@@ -182,3 +182,85 @@ def fetch_game_weather(team_abbr: str, game_datetime: datetime) -> GameWeather:
         return GameWeather(
             stadium_name=name, city=city, is_dome=False, conditions_summary="API Error"
         )
+
+
+def build_roster_weather_map(
+    players: Any,
+    odds: Optional[list[Any]] = None,
+    target_dt: Optional[datetime] = None,
+) -> dict[str, GameWeather]:
+    """Build a map of team abbreviation -> GameWeather for all unique teams in a roster.
+
+    For away teams, cross-references Vegas game odds to resolve the host stadium
+    and kickoff time so away players receive accurate stadium weather (e.g. dome vs cold).
+
+    Args:
+        players: An iterable of players (with .team or .team_abbr attribute, or string abbrs),
+                 or a ParsedRoster object.
+        odds: Optional list of GameOdds objects to cross-reference game locations.
+        target_dt: Optional fallback target datetime if game time is unknown (defaults to now).
+
+    Returns:
+        Dictionary mapping team abbreviation -> GameWeather object.
+    """
+    from src.data.vegas import get_player_game_odds
+
+    player_list = getattr(players, "players", players)
+    if not hasattr(player_list, "__iter__"):
+        return {}
+
+    teams: set[str] = set()
+    for p in player_list:
+        team = None
+        if isinstance(p, str):
+            team = p
+        elif hasattr(p, "team"):
+            team = getattr(p, "team")
+        elif hasattr(p, "team_abbr"):
+            team = getattr(p, "team_abbr")
+        elif isinstance(p, dict):
+            team = p.get("team") or p.get("team_abbr")
+
+        if team and isinstance(team, str):
+            clean_team = team.strip().upper()
+            if clean_team and clean_team not in ("FA", "BYE", "FREE AGENT", "NONE", ""):
+                teams.add(clean_team)
+
+    fallback_dt = target_dt or datetime.now()
+    weather_map: dict[str, GameWeather] = {}
+    stadium_cache: dict[tuple[str, str], GameWeather] = {}
+
+    for team in sorted(teams):
+        host_team = team
+        game_dt = fallback_dt
+
+        if odds:
+            try:
+                game = get_player_game_odds(team, odds)
+                if game and getattr(game, "home_team", None):
+                    host_team = game.home_team
+                    if getattr(game, "game_time", None):
+                        game_dt = game.game_time
+            except Exception as e:
+                logger.debug("Failed resolving host team odds for %s: %s", team, e)
+
+        cache_key = (host_team, game_dt.strftime("%Y-%m-%d-%H"))
+        if cache_key in stadium_cache:
+            weather_map[team] = stadium_cache[cache_key]
+            continue
+
+        try:
+            weather = fetch_game_weather(host_team, game_dt)
+            stadium_cache[cache_key] = weather
+            weather_map[team] = weather
+        except Exception as e:
+            logger.warning("Failed fetching weather for %s at host %s: %s", team, host_team, e)
+            weather_map[team] = GameWeather(
+                stadium_name="Unknown",
+                city="Unknown",
+                is_dome=False,
+                conditions_summary="Unavailable",
+            )
+
+    return weather_map
+

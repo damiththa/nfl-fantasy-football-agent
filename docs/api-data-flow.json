@@ -10,7 +10,7 @@
         "id": "scheduled-flow",
         "label": "Scheduled Pipeline Flow",
         "focus": ["scheduler", "api_automated", "gemini_ladder", "gcs_memory_store", "espn_pipeline", "sendgrid_egress"],
-        "note": "Tuesday Film Room, Thursday TNF, Friday Injury Lock, and Sunday kickoff alerts with GCS memory persistence."
+        "note": "Tuesday Film Room, Thursday TNF, Friday Injury Lock, Saturday Scouting, and Sunday kickoff alerts with GCS memory persistence."
       },
       {
         "id": "ondemand-flow",
@@ -27,7 +27,7 @@
     ]
   },
   "components": [
-    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Jobs (ET)", "pos": [40, 90], "size": [130, 60] },
+    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "5 Cron Jobs (ET)", "pos": [40, 90], "size": [130, 60] },
     { "id": "browser_user", "type": "external", "label": "Mad Dawg (Browser)", "sublabel": "Web Command Center", "pos": [40, 200], "size": [130, 60] },
     { "id": "sendgrid_egress", "type": "external", "label": "SendGrid Mail API", "sublabel": "damiththa@gmail.com", "pos": [40, 310], "size": [130, 60], "tag": "HTML Digest" },
 
@@ -37,9 +37,9 @@
 
     { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "Uncapped Reasoning" },
     { "id": "pydantic_contracts", "type": "backend", "label": "6 Pydantic Contracts", "sublabel": "JSON Schema Enforcement", "pos": [510, 200], "size": [160, 60] },
-    { "id": "espn_pipeline", "type": "backend", "label": "Data Ingestion Layer", "sublabel": "Rosters, Wire, Odds, Wx", "pos": [510, 310], "size": [160, 60] },
+    { "id": "espn_pipeline", "type": "backend", "label": "Data Ingestion Layer", "sublabel": "Rosters, Wire, Odds, Wx, Stats", "pos": [510, 310], "size": [160, 60] },
 
-    { "id": "odds_weather", "type": "external", "label": "Vegas Odds & Weather", "sublabel": "ESPN Scoreboard & Meteo", "pos": [770, 90], "size": [170, 60] },
+    { "id": "odds_weather", "type": "external", "label": "Vegas, Weather & Stats", "sublabel": "ESPN, Open-Meteo, nflverse", "pos": [770, 90], "size": [170, 60] },
     { "id": "espn_v3", "type": "external", "label": "ESPN Fantasy v3 API", "sublabel": "Private Auth (S2/SWID)", "pos": [770, 200], "size": [170, 60] },
     { "id": "sleeper_wire", "type": "external", "label": "Sleeper Fantasy API", "sublabel": "Trending Adds & Injuries", "pos": [770, 310], "size": [170, 60] }
   ],
@@ -69,7 +69,7 @@
       "dot": "cyan",
       "title": "API Endpoints (14 Total)",
       "items": [
-        "Automated: /run/weekly (Tue/Thu/Fri) & /run/sunday-pregame (Sun)",
+        "Automated: /run/weekly (Tue/Thu/Fri/Sat) & /run/sunday-pregame (Sun)",
         "On-Demand: /query/start-sit, /query/trade, /query/propose-trades, /query/waivers, /query/weekly-recap (HTTP Keep-Alive Streaming)",
         "Lessons Memory: /query/lessons-summary (season trends) & /query/lessons (historical tape)",
         "Diagnostics: /health (system health) & /health/models (live probe)"
@@ -81,7 +81,7 @@
       "items": [
         "ESPN Fantasy v3 Private API: Team rosters, weekly opponents, free agents via S2/SWID",
         "ESPN Scoreboard API: Live Vegas spreads, totals, and implied points",
-        "Sleeper & Open-Meteo: Real-time add/drop market velocity and stadium weather",
+        "Sleeper, Open-Meteo & nflverse: Market velocity, stadium weather, snap % and WOPR",
         "GCS JSON Store: Season memory, missed opportunities, and starter bust accountability"
       ]
     },

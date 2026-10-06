@@ -30,6 +30,7 @@ from src.data.vegas import (
 )
 from src.data.weather import (
     GameWeather,
+    build_roster_weather_map,
     classify_conditions,
     fetch_game_weather,
     load_stadiums,
@@ -58,7 +59,9 @@ __all__ = [
     "get_player_trends",
     # Weather
     "GameWeather",
+    "build_roster_weather_map",
     "classify_conditions",
     "fetch_game_weather",
     "load_stadiums",
 ]
+

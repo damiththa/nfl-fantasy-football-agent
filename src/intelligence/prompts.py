@@ -119,7 +119,11 @@ TASK - DELIVER A COMPLETE START 'EM / SIT 'EM MASTER REPORT:
 
 CRITICAL WRITE-UP MANDATE (MAKE THE VETERAN EXPERT CASE):
 In the `reasoning` field for each player, write as a seasoned fantasy expert making the definitive case:
-- Synthesize the data points: Vegas team totals, spread, defensive matchup difficulty, touch/target volume, and red-zone equity.
+- Synthesize all available quantitative intelligence:
+  * Vegas team totals & spread (projected pace, scoring script, and negative/positive game script).
+  * Defense vs Position matchup (`opponent_defense_rank`, e.g. 30/32 = smash spot vs bottom-5 secondary; 2/32 = brutal shutdown front).
+  * Advanced Opportunity Metrics (when provided in roster data): `snap_pct` (every-down workhorse vs rotational risk), `target_share`, `air_yards_share`, `wopr` (Weighted Opportunity Rating), and `red_zone_opps` (high-leverage goal line / red-zone looks).
+  * Stadium weather (heavy wind >20mph or freezing rain downgrading perimeter passing).
 - For starters: Explain precisely why this player is in a smash spot or volume-secure role.
 - For bench players: Explain the specific structural vulnerability (e.g. brutal defensive front, bad game script, low snap share, or inactive status) that demands they sit.
 

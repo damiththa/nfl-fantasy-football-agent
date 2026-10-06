@@ -60,7 +60,7 @@ $GCLOUD run deploy "${SERVICE_NAME}" \
 
 # 4. Ensure Cloud Scheduler jobs have sufficient deadline (600s) to prevent timeouts
 echo "--> Updating Cloud Scheduler job deadlines to 600s..."
-for JOB in sunday-gameday-inactives thursday-tnf-lock tuesday-film-room friday-injury-lock; do
+for JOB in sunday-gameday-inactives thursday-tnf-lock tuesday-film-room friday-injury-lock saturday-scouting-preview; do
     $GCLOUD scheduler jobs update http "${JOB}" \
         --location="${REGION}" \
         --project="${PROJECT_ID}" \

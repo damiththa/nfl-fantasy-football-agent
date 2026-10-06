@@ -5,7 +5,7 @@ Models and functions for parsing ESPN roster data.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Optional
 
 from src.config import SLOT_DISPLAY_NAMES, LeagueConfig
 
@@ -26,6 +26,8 @@ class RosterPlayer:
     has_played: bool = False
     is_locked: bool = False
     lock_status: str = "UNLOCKED_ACTIONABLE"
+    pro_opponent: str = ""
+    opponent_pos_rank: Optional[int] = None
 
     def __post_init__(self):
         if self.has_played:
@@ -174,6 +176,12 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         else:
             lock_status = "UNLOCKED_ACTIONABLE"
 
+        pro_opp = getattr(player, "pro_opponent", "") or getattr(player, "proOpponent", "")
+        opp_rank = getattr(player, "pro_pos_rank", None) or getattr(player, "proPosRank", None)
+        opp_pos_rank = None
+        if isinstance(opp_rank, (int, float)) and opp_rank > 0:
+            opp_pos_rank = int(opp_rank)
+
         rp = RosterPlayer(
             name=getattr(player, "name", "Unknown Player") or "Unknown Player",
             position=getattr(player, "position", "UNK") or "UNK",
@@ -187,6 +195,8 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
             has_played=has_played,
             is_locked=is_locked,
             lock_status=lock_status,
+            pro_opponent=str(pro_opp) if pro_opp else "",
+            opponent_pos_rank=opp_pos_rank,
         )
 
         parsed.players.append(rp)

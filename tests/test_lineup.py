@@ -341,3 +341,62 @@ def test_player_cards_include_matchup_and_game_time():
         assert p.home_away == "HOME"
         assert p.matchup_display == "vs. LAR"
         assert p.game_time == "Sun 1:00 PM ET"
+
+
+def test_optimize_lineup_injects_stats_and_dvp_into_gemini(monkeypatch):
+    from src.data.stats import PlayerStats
+
+    roster = _create_mock_roster(num_rb=2, num_wr=2)
+    # Set opponent and DvP on Patrick Mahomes
+    roster.players[0].pro_opponent = "LV"
+    roster.players[0].opponent_pos_rank = 30  # Easy matchup
+
+    mock_ps = {
+        "Patrick Mahomes": PlayerStats(
+            player_name="Patrick Mahomes",
+            player_id="1",
+            team="KC",
+            position="QB",
+            snap_pct=99.2,
+            target_share=0.0,
+            wopr=0.0,
+            red_zone_carries=2,
+            red_zone_targets=0,
+        )
+    }
+    monkeypatch.setattr("src.analysis.lineup.fetch_player_stats", lambda season: mock_ps)
+    monkeypatch.setattr("src.analysis.lineup.fetch_snap_counts", lambda season: mock_ps)
+
+    captured_prompts = []
+
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            class Response:
+                text = (
+                    '{"league_id": 991059191, "week": 1, "game_theory_strategy": "BALANCED", '
+                    '"recommended_starters": [], "bench_players": []}'
+                )
+
+            return Response()
+
+    class MockSdk:
+        models = MockModels()
+
+    client = GeminiIntelligenceClient(mock_client=MockSdk())
+
+    def mock_format_prompt(*args, **kwargs):
+        captured_prompts.append(kwargs)
+        return "mock prompt"
+
+    monkeypatch.setattr("src.analysis.lineup.format_lineup_prompt", mock_format_prompt)
+
+    optimize_lineup(PNA_2026, 1, roster, client=client)
+
+    assert len(captured_prompts) == 1
+    your_roster_data = captured_prompts[0]["your_roster"]["players"]
+    mahomes_data = next(p for p in your_roster_data if p["name"] == "Patrick Mahomes")
+    assert mahomes_data["opponent"] == "LV"
+    assert "30/32" in mahomes_data["opponent_defense_rank"]
+    assert "99.2%" in mahomes_data["snap_pct"]
+    assert mahomes_data["red_zone_opps"] == 2
+

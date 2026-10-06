@@ -25,7 +25,7 @@ from src.config import ALL_LEAGUES, get_current_season, get_gemini_model
 from src.data.injuries import get_injury_report
 from src.data.trending import fetch_trending_adds
 from src.data.vegas import fetch_week_odds
-from src.data.weather import fetch_game_weather
+from src.data.weather import build_roster_weather_map
 from src.espn.client import LeagueClient
 from src.espn.matchup import get_current_week, get_weekly_matchup
 from src.espn.roster import parse_roster
@@ -486,8 +486,24 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=991059191', 'PNA 2026 Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
         </button>
-        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/weekly-recap?league_id=991059191', 'PNA 2026 Film Room & Weekly Recap')">
-          🎬 Weekly Recap (Film Room)
+        <div style="display: flex; gap: 6px; margin-top: 10px;">
+          <select id="recap-week-991059191" style="flex: 1; min-height: 44px; font-size: 13px; padding: 6px 10px; background: #090d16; border: 1px solid var(--border); border-radius: 8px; color: white;">
+            <option value="">Current / Latest Week</option>
+            <option value="1">Week 1 Film Room</option>
+            <option value="2">Week 2 Film Room</option>
+            <option value="3">Week 3 Film Room</option>
+            <option value="4">Week 4 Film Room</option>
+            <option value="5">Week 5 Film Room</option>
+            <option value="6">Week 6 Film Room</option>
+            <option value="7">Week 7 Film Room</option>
+            <option value="8">Week 8 Film Room</option>
+          </select>
+          <button class="btn btn-secondary" style="flex: 0 0 110px; min-height: 44px; font-size: 13px; margin: 0; padding: 6px 10px;" onclick="loadPastRecap(991059191, 'PNA 2026')">
+            🎬 Film Room
+          </button>
+        </div>
+        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/lessons-summary?league_id=991059191', 'PNA 2026 Season Lessons & Film Room Tape')">
+          🧠 Season Tape & Lessons Summary
         </button>
         <button class="btn btn-secondary" onclick="fetchEndpoint('/query/waivers?league_id=991059191', 'PNA 2026 Waiver Wire Intel')">
           🔄 Waiver Wire Intel
@@ -506,8 +522,24 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <button class="btn" onclick="fetchEndpoint('/query/start-sit?league_id=735288', 'Chips Ahoy Start Em, Sit Em Report')">
           🎯 Start 'Em, Sit 'Em Master Report
         </button>
-        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/weekly-recap?league_id=735288', 'Chips Ahoy Film Room & Weekly Recap')">
-          🎬 Weekly Recap (Film Room)
+        <div style="display: flex; gap: 6px; margin-top: 10px;">
+          <select id="recap-week-735288" style="flex: 1; min-height: 44px; font-size: 13px; padding: 6px 10px; background: #090d16; border: 1px solid var(--border); border-radius: 8px; color: white;">
+            <option value="">Current / Latest Week</option>
+            <option value="1">Week 1 Film Room</option>
+            <option value="2">Week 2 Film Room</option>
+            <option value="3">Week 3 Film Room</option>
+            <option value="4">Week 4 Film Room</option>
+            <option value="5">Week 5 Film Room</option>
+            <option value="6">Week 6 Film Room</option>
+            <option value="7">Week 7 Film Room</option>
+            <option value="8">Week 8 Film Room</option>
+          </select>
+          <button class="btn btn-secondary" style="flex: 0 0 110px; min-height: 44px; font-size: 13px; margin: 0; padding: 6px 10px;" onclick="loadPastRecap(735288, 'Chips Ahoy')">
+            🎬 Film Room
+          </button>
+        </div>
+        <button class="btn btn-secondary" onclick="fetchEndpoint('/query/lessons-summary?league_id=735288', 'Chips Ahoy Season Lessons & Film Room Tape')">
+          🧠 Season Tape & Lessons Summary
         </button>
         <button class="btn btn-secondary" onclick="fetchEndpoint('/query/waivers?league_id=735288', 'Chips Ahoy Waiver Wire Intel')">
           🔄 Waiver Wire Intel
@@ -871,6 +903,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       }
     }
 
+    function loadPastRecap(leagueId, leagueName) {
+      const sel = document.getElementById('recap-week-' + leagueId);
+      const weekVal = sel ? sel.value : '';
+      const url = weekVal
+        ? `/query/weekly-recap?league_id=${leagueId}&week=${weekVal}`
+        : `/query/weekly-recap?league_id=${leagueId}`;
+      const title = weekVal
+        ? `${leagueName} Week ${weekVal} Film Room Recap`
+        : `${leagueName} Film Room & Weekly Recap`;
+      fetchEndpoint(url, title);
+    }
+
     function renderOutput(data) {
       const resContent = document.getElementById('results-content');
       let html = '';
@@ -997,6 +1041,108 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <span style="background: #f59e0b; color: #0b0f19; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;">CONFIDENCE: MODERATE</span>
           </div>
           ${friendlyReason}
+        </div>`;
+      }
+
+      // Section: Season Lessons & Coaching Memory Summary
+      if (data.all_lessons !== undefined && (data.record !== undefined || data.total_completed_weeks !== undefined)) {
+        const winsLosses = data.record || '0-0';
+        const totalBench = data.total_bench_pts_lost !== undefined ? Number(data.total_bench_pts_lost).toFixed(1) : '0.0';
+        const avgBench = data.avg_bench_pts_lost !== undefined ? Number(data.avg_bench_pts_lost).toFixed(1) : '0.0';
+        const weeksCount = data.total_completed_weeks || 0;
+
+        html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 24px;">🧠</span>
+              <div>
+                <h3 style="margin: 0; color: var(--accent); font-size: 18px;">Season Coaching Tape & Strategic Memory</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 2px 0 0 0;">${data.league_name || 'Fantasy League'} • 2026 NFL Season (${weeksCount} Weeks Completed)</p>
+              </div>
+            </div>
+            <span style="background: var(--accent-dark); color: white; font-weight: 800; padding: 6px 14px; border-radius: 9999px; font-size: 14px; letter-spacing: 0.5px;">
+              Record: ${winsLosses}
+            </span>
+          </div>
+
+          <!-- Metric Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
+            <div style="background: #090d16; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 11px; color: #7dd3fc; text-transform: uppercase; font-weight: 600;">Season Record</span>
+              <div style="font-size: 24px; font-weight: 800; color: #38bdf8; margin: 4px 0;">${winsLosses}</div>
+              <span style="font-size: 11px; color: var(--text-muted);">${weeksCount} Games Logged</span>
+            </div>
+            <div style="background: #090d16; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 11px; color: #fde047; text-transform: uppercase; font-weight: 600;">Total Bench Pts Left</span>
+              <div style="font-size: 24px; font-weight: 800; color: #eab308; margin: 4px 0;">${totalBench} <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">pts</span></div>
+              <span style="font-size: 11px; color: #fde047;">Avg ${avgBench} pts / week</span>
+            </div>
+            <div style="background: #090d16; border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 11px; color: #c084fc; text-transform: uppercase; font-weight: 600;">Recurring Patterns</span>
+              <div style="font-size: 24px; font-weight: 800; color: #a855f7; margin: 4px 0;">${data.recurring_missed_players ? data.recurring_missed_players.length : 0}</div>
+              <span style="font-size: 11px; color: var(--text-muted);">Suboptimal Repeat Sits</span>
+            </div>
+          </div>
+
+          <!-- Recurring Missed Players -->
+          ${data.recurring_missed_players && data.recurring_missed_players.length > 0 ? `
+            <div style="margin-bottom: 16px;">
+              <h4 style="color: #f59e0b; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                ⚠️ Recurring Bench Dilemmas (Suboptimally Benched 2+ Weeks)
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+                ${data.recurring_missed_players.map(p => `
+                  <div style="background: #090d16; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="color: #fde047; font-size: 14px;">${p.player}</strong>
+                    <span style="background: rgba(245, 158, 11, 0.2); color: #fde047; font-size: 12px; font-weight: bold; padding: 3px 8px; border-radius: 4px;">${p.times_benched_suboptimally}x outscored starter</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Cumulative Film Room Lessons -->
+          ${data.all_lessons && data.all_lessons.length > 0 ? `
+            <div style="margin-bottom: 16px;">
+              <h4 style="color: #38bdf8; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                📋 Cumulative Film Room Takeaways & Coaching Lessons
+              </h4>
+              <div style="background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+                <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #cbd5e1; line-height: 1.6;">
+                  ${data.all_lessons.map(l => `<li style="margin-bottom: 6px;"><strong style="color: #7dd3fc;">Week ${l.week}:</strong> ${l.lesson}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Week-by-Week Matchup Tape Timeline -->
+          ${data.weekly_timeline && data.weekly_timeline.length > 0 ? `
+            <div>
+              <h4 style="color: #22c55e; font-size: 14px; text-transform: uppercase; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                📅 Week-by-Week Matchup Film Archive
+              </h4>
+              <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                ${data.weekly_timeline.map(e => {
+                  const outcomeBg = e.result === 'WIN' ? '#22c55e' : (e.result === 'LOSS' ? '#ef4444' : '#38bdf8');
+                  return `
+                    <div style="background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <span style="background: ${outcomeBg}; color: black; font-weight: bold; font-size: 11px; padding: 2px 7px; border-radius: 4px;">${e.result || 'FINAL'}</span>
+                          <strong style="color: white; font-size: 14px;">Week ${e.week} vs ${e.opponent_team_name || 'Opponent'}</strong>
+                        </div>
+                        <div style="font-size: 12px; color: #cbd5e1;">
+                          Score: <strong style="color: #38bdf8;">${e.user_score !== undefined ? Number(e.user_score).toFixed(1) : '--'}</strong> - <strong style="color: #f43f5e;">${e.opponent_score !== undefined ? Number(e.opponent_score).toFixed(1) : '--'}</strong>
+                          <span style="color: #eab308; margin-left: 8px;">(Left on bench: ${e.points_left_on_bench !== undefined ? Number(e.points_left_on_bench).toFixed(1) : '0.0'} pts)</span>
+                        </div>
+                      </div>
+                      ${e.coach_game_summary ? `<p style="font-size: 12px; color: #94a3b8; line-height: 1.4; margin: 0;"><em>"${e.coach_game_summary}"</em></p>` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
         </div>`;
       }
 
@@ -1798,9 +1944,9 @@ def run_weekly_analysis() -> dict[str, Any]:
                         "projected_points": getattr(p, "projected_points", 0.0),
                         "percent_owned": getattr(p, "percent_owned", 0.0),
                     }
-                    for p in espn.free_agents(size=25)
+                    for p in espn.free_agents(size=50)
                 ]
-                trending = fetch_trending_adds(lookback_hours=24, limit=20)
+                trending = fetch_trending_adds(lookback_hours=24, limit=25)
                 report = evaluate_waivers(
                     league_config,
                     current_week,
@@ -1815,13 +1961,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                 roster_names = [p.name for p in parsed_roster.players]
                 injuries = get_injury_report(roster_names)
                 odds = fetch_week_odds()
-                weather_map = {}
-                for p in parsed_roster.players:
-                    if p.team and p.team not in weather_map:
-                        try:
-                            weather_map[p.team] = fetch_game_weather(p.team, datetime.now())
-                        except Exception:
-                            pass
+                weather_map = build_roster_weather_map(parsed_roster.players, odds)
                 lineup = optimize_lineup(
                     league_config,
                     current_week,
@@ -1837,9 +1977,15 @@ def run_weekly_analysis() -> dict[str, Any]:
 
             elif weekday == 5:  # Saturday: Full Matchup Preview & Scouting
                 odds = fetch_week_odds()
+                weather_map = build_roster_weather_map(parsed_roster.players, odds)
                 if matchup:
                     report = generate_matchup_preview(
-                        league_config, current_week, matchup, odds=odds, client=client
+                        league_config,
+                        current_week,
+                        matchup,
+                        odds=odds,
+                        weather_map=weather_map,
+                        client=client,
                     )
                     league_res[league_config.short_name] = report.model_dump()
 
@@ -1850,7 +1996,15 @@ def run_weekly_analysis() -> dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Error processing league {league_config.league_id}: {e}", exc_info=True)
-            league_res[league_config.short_name] = {"error": str(e)}
+            err_msg = str(e)
+            err_lower = err_msg.lower()
+            if any(k in err_lower for k in ("401", "unauthorized", "cookie", "swid", "espn_s2")):
+                send_error_alert_email(
+                    "espn_auth",
+                    f"ESPN authentication failed for {league_config.short_name} (ID: {league_config.league_id}). "
+                    f"Your ESPN login cookies (espn_s2 / SWID) may have expired. Error: {err_msg}",
+                )
+            league_res[league_config.short_name] = {"error": err_msg}
 
         return league_res
 
@@ -1916,10 +2070,7 @@ def run_sunday_pregame() -> dict[str, Any]:
             roster_names = [p.name for p in parsed_roster.players]
             injuries = get_injury_report(roster_names)
 
-            weather_map = {}
-            for p in parsed_roster.starters:
-                if p.team and p.team not in weather_map:
-                    weather_map[p.team] = fetch_game_weather(p.team, datetime.now())
+            weather_map = build_roster_weather_map(parsed_roster.players, odds)
 
             lineup = optimize_lineup(
                 league=league_config,
@@ -1936,7 +2087,15 @@ def run_sunday_pregame() -> dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Error in Sunday pregame for league {league_config.league_id}: {e}", exc_info=True)
-            league_res[league_config.short_name] = {"error": str(e)}
+            err_msg = str(e)
+            err_lower = err_msg.lower()
+            if any(k in err_lower for k in ("401", "unauthorized", "cookie", "swid", "espn_s2")):
+                send_error_alert_email(
+                    "espn_auth",
+                    f"ESPN authentication failed during Sunday pregame for {league_config.short_name} (ID: {league_config.league_id}). "
+                    f"Your ESPN login cookies (espn_s2 / SWID) may have expired. Error: {err_msg}",
+                )
+            league_res[league_config.short_name] = {"error": err_msg}
 
         return league_res
 
@@ -2031,13 +2190,7 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")):
         roster_names = [p.name for p in parsed_roster.players]
         injuries = get_injury_report(roster_names)
         odds = fetch_week_odds()
-        weather_map = {}
-        for p in parsed_roster.players:
-            if p.team and p.team not in weather_map:
-                try:
-                    weather_map[p.team] = fetch_game_weather(p.team, datetime.now())
-                except Exception:
-                    pass
+        weather_map = build_roster_weather_map(parsed_roster.players, odds)
 
         client = None
         try:
@@ -2186,9 +2339,9 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")):
                 "projected_points": getattr(p, "projected_points", 0.0),
                 "percent_owned": getattr(p, "percent_owned", 0.0),
             }
-            for p in espn.free_agents(size=30)
+            for p in espn.free_agents(size=50)
         ]
-        trending = fetch_trending_adds(lookback_hours=24, limit=20)
+        trending = fetch_trending_adds(lookback_hours=24, limit=25)
         roster_names = [p.name for p in parsed_roster.players]
         injuries = get_injury_report(roster_names)
 

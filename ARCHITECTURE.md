@@ -346,7 +346,9 @@ Automated jobs run on Google Cloud Scheduler in the `us-central1` region using t
 | **`tuesday-film-room`** | `0 7 * * 2`<br>*(Tue 7:00 AM ET)* | `POST /run/weekly` | Generates post-MNF Film Room recap and prioritizes waiver wire claims before overnight processing. |
 | **`thursday-tnf-lock`** | `50 18 * * 4`<br>*(Thu 6:50 PM ET)* | `POST /run/weekly` | Ingests official 90-minute TNF inactives, optimizes Thursday starters, and enforces FLEX slot discipline. |
 | **`friday-injury-lock`** | `0 19 * * 5`<br>*(Fri 7:00 PM ET)* | `POST /run/weekly` | Evaluates final Friday injury designations (Out/Doubtful/Questionable) and sets the baseline weekend lineup. |
+| **`saturday-scouting-preview`** | `0 10 * * 6`<br>*(Sat 10:00 AM ET)* | `POST /run/weekly` | Generates comprehensive opponent breakdown, Vegas game theory projections, and matchup preview. |
 | **`sunday-gameday-inactives`** | `45 11,14 * * 0`<br>*(Sun 11:45 AM & 2:45 PM ET)* | `POST /run/sunday-pregame` | Ingests 90-min inactives for 1:00 PM and 4:05/4:25 PM slates, flags severe stadium weather, and alerts manager. |
+
 
 ---
 

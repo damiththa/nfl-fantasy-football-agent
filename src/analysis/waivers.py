@@ -87,8 +87,8 @@ def evaluate_waivers(
             league=league,
             week=week,
             your_roster={"players": roster_data},
-            available_players=free_agents[:20],
-            trending_adds=trending_data[:15],
+            available_players=free_agents[:35],
+            trending_adds=trending_data[:20],
             injuries=injury_data[:20],
         )
 

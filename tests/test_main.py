@@ -242,3 +242,48 @@ async def test_stream_with_heartbeat_error_handling():
     data = json.loads(full_body)
     assert "error" in data
     assert "Simulated upstream error" in data["error"]
+
+
+def test_root_dashboard_has_season_lessons_and_recap_selector(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Season Tape &amp; Lessons Summary" in response.text or "Season Tape & Lessons Summary" in response.text
+    assert "recap-week-991059191" in response.text
+    assert "recap-week-735288" in response.text
+    assert "loadPastRecap" in response.text
+    assert "Season Coaching Tape &amp; Strategic Memory" in response.text or "Season Coaching Tape" in response.text
+
+
+def test_query_lessons_summary_endpoint(client):
+    response = client.get("/query/lessons-summary?league_id=991059191")
+    assert response.status_code == 200
+    data = response.json()
+    assert "season" in data
+    assert "league_id" in data
+    assert data["league_id"] == 991059191
+    assert "record" in data
+    assert "all_lessons" in data
+    assert "league_name" in data
+
+
+def test_weekly_analysis_triggers_espn_auth_alert_on_401(client, monkeypatch):
+    from unittest.mock import MagicMock
+
+    mock_alert = MagicMock()
+    monkeypatch.setattr("src.main.send_error_alert_email", mock_alert)
+    monkeypatch.setattr("src.main.send_digest_email", MagicMock())
+
+    class FailingLeagueClient:
+        def get_league(self, cfg):
+            raise ConnectionError("ESPN API Authentication failed (401). Your ESPN_S2 or SWID cookies may be expired.")
+
+    monkeypatch.setattr("src.main.LeagueClient", FailingLeagueClient)
+
+    response = client.post("/run/weekly")
+    assert response.status_code == 200
+
+    # Ensure espn_auth alert was dispatched
+    auth_alert_calls = [c for c in mock_alert.call_args_list if c[0][0] == "espn_auth"]
+    assert len(auth_alert_calls) >= 1
+    assert "cookies" in auth_alert_calls[0][0][1].lower()
+

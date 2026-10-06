@@ -68,3 +68,65 @@ def test_fetch_game_weather_api_error(monkeypatch):
     weather = fetch_game_weather("BAL", datetime.now())
     assert weather.is_dome is False
     assert weather.conditions_summary == "API Error"
+
+
+def test_build_roster_weather_map_away_game_in_dome():
+    from src.data.vegas import GameOdds
+    from src.data.weather import build_roster_weather_map
+    from src.espn.roster import RosterPlayer
+
+    # GB (outdoor) plays away at DET (dome)
+    gb_player = RosterPlayer("Jordan Love", "QB", "GB", "QB", 18.0)
+    det_player = RosterPlayer("Amon-Ra St. Brown", "WR", "DET", "WR", 16.0)
+
+    odds = [
+        GameOdds(
+            game_id="401",
+            home_team="DET",
+            away_team="GB",
+            spread=-3.0,
+            over_under=48.5,
+            home_implied_total=25.8,
+            away_implied_total=22.8,
+            game_time=datetime(2026, 11, 26, 12, 30),
+            status="pre",
+        )
+    ]
+
+    weather_map = build_roster_weather_map([gb_player, det_player], odds=odds)
+
+    # Both GB (away) and DET (home) should map to Ford Field (Indoor / Dome)
+    assert "GB" in weather_map
+    assert "DET" in weather_map
+    assert weather_map["GB"].is_dome is True
+    assert weather_map["GB"].stadium_name == "Ford Field"
+    assert weather_map["GB"].conditions_summary == "Indoor"
+    assert weather_map["DET"].is_dome is True
+    assert weather_map["DET"].stadium_name == "Ford Field"
+
+
+def test_build_roster_weather_map_no_odds_fallback():
+    from src.data.weather import build_roster_weather_map
+    from src.espn.roster import RosterPlayer
+
+    # ATL is a dome team
+    atl_player = RosterPlayer("Bijan Robinson", "RB", "ATL", "RB", 17.0)
+    weather_map = build_roster_weather_map([atl_player], odds=None)
+
+    assert "ATL" in weather_map
+    assert weather_map["ATL"].is_dome is True
+    assert weather_map["ATL"].stadium_name == "Mercedes-Benz Stadium"
+
+
+def test_build_roster_weather_map_handles_empty_or_bye():
+    from src.data.weather import build_roster_weather_map
+    from src.espn.roster import RosterPlayer
+
+    players = [
+        RosterPlayer("Free Agent", "RB", "FA", "Bench", 0.0),
+        RosterPlayer("Bye Player", "WR", "BYE", "Bench", 0.0),
+        RosterPlayer("No Team", "TE", "", "Bench", 0.0),
+    ]
+    weather_map = build_roster_weather_map(players)
+    assert len(weather_map) == 0
+

@@ -10,7 +10,8 @@ from datetime import datetime
 from typing import Any, Optional
 
 from src.config import LeagueConfig
-from src.data.injuries import PlayerInjuryInfo
+from src.data.injuries import PlayerInjuryInfo, normalize_name
+from src.data.stats import fetch_player_stats, fetch_snap_counts
 from src.data.vegas import GameOdds, get_player_game_odds, normalize_team_abbr
 from src.data.weather import GameWeather
 from src.espn.matchup import MatchupData
@@ -941,8 +942,22 @@ def optimize_lineup(
     fallback_err: Optional[str] = None
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
-        your_roster_data = [
-            {
+        # Ingest advanced opportunity stats (snap %, WOPR, target share, red zone touches)
+        norm_stats = {}
+        norm_snaps = {}
+        try:
+            player_stats = fetch_player_stats(league.season)
+            for k, v in player_stats.items():
+                norm_stats[normalize_name(k)] = v
+            snap_stats = fetch_snap_counts(league.season)
+            for k, v in snap_stats.items():
+                norm_snaps[normalize_name(k)] = v
+        except Exception as e:
+            logger.debug("Advanced opportunity stats unavailable for lineup: %s", e)
+
+        your_roster_data = []
+        for p in roster.players:
+            p_dict = {
                 "name": p.name,
                 "pos": p.position,
                 "team": p.team,
@@ -952,21 +967,48 @@ def optimize_lineup(
                 "is_locked": getattr(p, "is_locked", False),
                 "lock_status": getattr(p, "lock_status", "UNLOCKED_ACTIONABLE"),
             }
-            for p in roster.players
-        ]
+            if getattr(p, "pro_opponent", None):
+                p_dict["opponent"] = p.pro_opponent
+            if getattr(p, "opponent_pos_rank", None) is not None:
+                p_dict["opponent_defense_rank"] = (
+                    f"{p.opponent_pos_rank}/32 ({'Smash/Vulnerable' if p.opponent_pos_rank >= 24 else 'Tough/Shutdown' if p.opponent_pos_rank <= 8 else 'Neutral'})"
+                )
+
+            p_norm = normalize_name(p.name)
+            ps = norm_stats.get(p_norm)
+            snaps = norm_snaps.get(p_norm)
+            if snaps and getattr(snaps, "snap_pct", 0) > 0:
+                p_dict["snap_pct"] = f"{snaps.snap_pct:.1f}%"
+            elif ps and getattr(ps, "snap_pct", 0) > 0:
+                p_dict["snap_pct"] = f"{ps.snap_pct:.1f}%"
+            if ps:
+                if ps.target_share > 0:
+                    p_dict["target_share"] = f"{ps.target_share * 100:.1f}%"
+                if ps.air_yards_share > 0:
+                    p_dict["air_yards_share"] = f"{ps.air_yards_share * 100:.1f}%"
+                if ps.wopr > 0:
+                    p_dict["wopr"] = round(ps.wopr, 2)
+                rz_opps = ps.red_zone_targets + ps.red_zone_carries
+                if rz_opps > 0:
+                    p_dict["red_zone_opps"] = rz_opps
+            your_roster_data.append(p_dict)
 
         opp_roster_data = None
         if matchup and matchup.opponent_team:
-            opp_roster_data = [
-                {
+            opp_roster_data = []
+            for p in matchup.opponent_team.starters:
+                opp_dict = {
                     "name": p.name,
                     "pos": p.position,
                     "team": p.team,
                     "slot": p.slot,
                     "projected_pts": p.projected_points,
                 }
-                for p in matchup.opponent_team.starters
-            ]
+                if getattr(p, "pro_opponent", None):
+                    opp_dict["opponent"] = p.pro_opponent
+                if getattr(p, "opponent_pos_rank", None) is not None:
+                    opp_dict["opponent_defense_rank"] = f"{p.opponent_pos_rank}/32"
+                opp_roster_data.append(opp_dict)
 
         odds_data = []
         if odds:

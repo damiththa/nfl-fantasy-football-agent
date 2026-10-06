@@ -16,7 +16,7 @@
         "id": "scheduled-pipeline",
         "label": "Automated Weekly Cadence & Memory",
         "focus": ["scheduler", "fastapi", "espn_adapter", "engines", "gemini", "gcs_memory", "sendgrid", "user"],
-        "note": "Tuesday 7AM Film Room with GCS auto-save, Thursday/Sunday inactives with historical bench mistakes accountability."
+        "note": "Tuesday Film Room, Thursday TNF, Friday Injury Lock, Saturday Scouting Preview, Sunday Inactives with GCS auto-save."
       },
       {
         "id": "on-demand-optimization",
@@ -33,7 +33,7 @@
     ]
   },
   "components": [
-    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "4 Cron Triggers (ET)", "pos": [40, 90], "size": [140, 60] },
+    { "id": "scheduler", "type": "cloud", "label": "Cloud Scheduler", "sublabel": "5 Cron Triggers (ET)", "pos": [40, 90], "size": [140, 60] },
     { "id": "user", "type": "external", "label": "Manager (Mad Dawg)", "sublabel": "Mobile / Web Browser", "pos": [40, 200], "size": [140, 60] },
     { "id": "sendgrid", "type": "external", "label": "SendGrid Mail API", "sublabel": "Responsive HTML", "pos": [40, 310], "size": [140, 60] },
 
@@ -45,7 +45,7 @@
     { "id": "engines", "type": "backend", "label": "Decision & Trade Engines", "sublabel": "Lineup • Trade • Waivers", "pos": [490, 200], "size": [170, 60], "tag": "Optimal Starters" },
     { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 310], "size": [170, 60] },
 
-    { "id": "ext_context", "type": "external", "label": "Vegas Odds & Weather", "sublabel": "ESPN & Open-Meteo", "pos": [740, 90], "size": [180, 60] },
+    { "id": "ext_context", "type": "external", "label": "Vegas, Weather & Stats", "sublabel": "Vegas • Meteo • nflverse", "pos": [740, 90], "size": [180, 60] },
     { "id": "espn_my_team", "type": "external", "label": "My Team Rosters", "sublabel": "Starters, Bench & IR", "pos": [740, 200], "size": [180, 60] },
     { "id": "espn_opp", "type": "external", "label": "Weekly Opponents", "sublabel": "Matchups & All Rosters", "pos": [740, 310], "size": [180, 60] },
     { "id": "espn_waivers", "type": "external", "label": "Free Agents & Sleeper", "sublabel": "Top Wire & Trending", "pos": [740, 420], "size": [180, 60] }
@@ -66,7 +66,7 @@
     { "id": "fetch-my-team", "from": "espn_adapter", "to": "espn_my_team", "label": "player status" },
     { "id": "fetch-opponent", "from": "espn_adapter", "to": "espn_opp", "label": "opponent lineup" },
     { "id": "fetch-waivers", "from": "espn_adapter", "to": "espn_waivers", "label": "waiver targets" },
-    { "id": "context-odds", "from": "ext_context", "to": "engines", "label": "spreads & weather" },
+    { "id": "context-odds", "from": "ext_context", "to": "engines", "label": "odds, weather & stats" },
     { "id": "send-email", "from": "fastapi", "to": "sendgrid", "label": "dispatch digest" },
     { "id": "deliver-digest", "from": "sendgrid", "to": "user", "label": "Tuesday 7AM Digest", "variant": "emphasis" }
   ],
@@ -75,7 +75,7 @@
       "dot": "cyan",
       "title": "Ingress & Automation",
       "items": [
-        "Google Cloud Scheduler triggers Tuesday, Thursday, Friday, and Sunday jobs",
+        "Google Cloud Scheduler triggers Tuesday, Thursday, Friday, Saturday, and Sunday jobs",
         "Manager accesses real-time Command Center with HTTP keep-alive heartbeats preventing 60s mobile browser timeouts during uncapped AI thinking",
         "Temporal roster lock prevents stale adjustments for already-played starters"
       ]
@@ -85,7 +85,7 @@
       "title": "ESPN Ingestion & Optimization",
       "items": [
         "Ingests My Team Roster, Opponent Lineups, and Free Agent Wire via private ESPN API",
-        "Holistic roster evaluation via compute_optimal_starters() — eliminates bench bias",
+        "Advanced opportunity stats via nflverse (snap %, WOPR, red-zone equity) & ESPN DvP ranks",
         "Dynamic model ladder: gemini-3.1-pro-preview with automatic gemini-2.5-pro fallback",
         "429 RESOURCE_EXHAUSTED exponential backoff retry loop (5s ➔ 10s ➔ 20s)"
       ]
