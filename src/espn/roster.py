@@ -29,6 +29,11 @@ class RosterPlayer:
     pro_opponent: str = ""
     opponent_pos_rank: Optional[int] = None
 
+    @property
+    def is_zero_projection_unplayed(self) -> bool:
+        """Returns True if the player has not yet played and is projected for 0.0 points."""
+        return not self.has_played and self.projected_points <= 0.0
+
     def __post_init__(self):
         if self.has_played:
             self.is_locked = True
@@ -182,6 +187,11 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         if isinstance(opp_rank, (int, float)) and opp_rank > 0:
             opp_pos_rank = int(opp_rank)
 
+        detected_bye = getattr(player, "bye_week", 0) or 0
+        if not detected_bye and target_week and target_week > 0:
+            if not has_played and proj_pts <= 0.0 and (not pro_opp or str(pro_opp).upper() in ("BYE", "NONE", "")):
+                detected_bye = target_week
+
         rp = RosterPlayer(
             name=getattr(player, "name", "Unknown Player") or "Unknown Player",
             position=getattr(player, "position", "UNK") or "UNK",
@@ -190,7 +200,7 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
             projected_points=proj_pts,
             actual_points=actual_pts,
             injury_status=getattr(player, "injuryStatus", "NORMAL") or "NORMAL",
-            bye_week=getattr(player, "bye_week", 0) or 0,
+            bye_week=detected_bye,
             percent_owned=getattr(player, "percent_owned", 0.0) or 0.0,
             has_played=has_played,
             is_locked=is_locked,

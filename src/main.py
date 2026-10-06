@@ -113,6 +113,50 @@ class TradeRequest(BaseModel):
     receiving_players: list[str]
 
 
+def fetch_league_free_agents(espn_league: Any, week: int | None = None) -> list[dict[str, Any]]:
+    """Fetch free agents from ESPN, ensuring top overall plus K and D/ST streaming candidates are included."""
+    raw_players: list[Any] = []
+    try:
+        if week:
+            raw_players.extend(espn_league.free_agents(week=week, size=60))
+        else:
+            raw_players.extend(espn_league.free_agents(size=60))
+    except Exception:
+        try:
+            raw_players.extend(espn_league.free_agents(size=50))
+        except Exception:
+            pass
+
+    # Augment with top Kickers and D/ST options for streaming coverage
+    for pos_code in ("K", "D/ST"):
+        try:
+            if week:
+                raw_players.extend(espn_league.free_agents(week=week, size=15, position=pos_code))
+            else:
+                raw_players.extend(espn_league.free_agents(size=15, position=pos_code))
+        except Exception:
+            pass
+
+    seen_names = set()
+    result = []
+    for p in raw_players:
+        p_name = getattr(p, "name", "")
+        if p_name and p_name.lower() not in seen_names:
+            seen_names.add(p_name.lower())
+            result.append(
+                {
+                    "name": p_name,
+                    "position": getattr(p, "position", "UNK"),
+                    "team": getattr(p, "proTeam", "FA"),
+                    "projected_points": getattr(p, "projected_points", 0.0),
+                    "percent_owned": getattr(p, "percent_owned", 0.0),
+                    "injury_status": getattr(p, "injuryStatus", "ACTIVE") or "ACTIVE",
+                    "injured": getattr(p, "injured", False),
+                }
+            )
+    return result
+
+
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1936,18 +1980,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                     )
 
                 # 2. Waiver Wire Analysis
-                free_agents = [
-                    {
-                        "name": p.name,
-                        "position": p.position,
-                        "team": p.proTeam,
-                        "projected_points": getattr(p, "projected_points", 0.0),
-                        "percent_owned": getattr(p, "percent_owned", 0.0),
-                        "injury_status": getattr(p, "injuryStatus", "ACTIVE") or "ACTIVE",
-                        "injured": getattr(p, "injured", False),
-                    }
-                    for p in espn.free_agents(size=50)
-                ]
+                free_agents = fetch_league_free_agents(espn, week=current_week)
                 trending = fetch_trending_adds(lookback_hours=24, limit=25)
                 roster_names = [p.name for p in parsed_roster.players]
                 fa_names = [fa["name"] for fa in free_agents]
@@ -2337,18 +2370,7 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")):
             )
 
         parsed_roster = parse_roster(my_team, league_config, week=current_week)
-        free_agents = [
-            {
-                "name": p.name,
-                "position": p.position,
-                "team": p.proTeam,
-                "projected_points": getattr(p, "projected_points", 0.0),
-                "percent_owned": getattr(p, "percent_owned", 0.0),
-                "injury_status": getattr(p, "injuryStatus", "ACTIVE") or "ACTIVE",
-                "injured": getattr(p, "injured", False),
-            }
-            for p in espn.free_agents(size=50)
-        ]
+        free_agents = fetch_league_free_agents(espn, week=current_week)
         trending = fetch_trending_adds(lookback_hours=24, limit=25)
         roster_names = [p.name for p in parsed_roster.players]
         fa_names = [fa["name"] for fa in free_agents]

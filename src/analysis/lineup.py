@@ -185,14 +185,17 @@ def detect_lineup_holes_and_solutions(
             "DOUBTFUL",
         )
         is_bye = getattr(p, "bye_week", 0) == current_week and current_week > 0
+        is_zero_proj = not getattr(p, "has_played", False) and getattr(p, "projected_points", 0.0) <= 0.0
 
         inj_info = injury_map.get(p.name.lower())
         if inj_info and (inj_info.injury_status or "").upper() in ("OUT", "IR", "DOUBTFUL"):
             is_out = True
 
-        if is_out or is_bye:
+        if is_out or is_bye or is_zero_proj:
             if is_bye:
                 reason = f"BYE WEEK (Week {current_week})"
+            elif is_zero_proj and not is_out:
+                reason = f"ZERO PROJECTION / BYE (0.0 pts): Starter not playing or projected 0 in Week {current_week}"
             elif (p.injury_status or "").upper() in ("SUS", "SUSPENSION", "SUSPENDED"):
                 reason = "SUSPENDED"
             elif inj_info and inj_info.injury_status:
@@ -244,7 +247,10 @@ def detect_lineup_holes_and_solutions(
     free_agents_by_pos: dict[str, list[Any]] = {}
     if espn_league and hasattr(espn_league, "free_agents"):
         try:
-            fa_list = espn_league.free_agents(size=50)
+            try:
+                fa_list = espn_league.free_agents(size=100)
+            except Exception:
+                fa_list = espn_league.free_agents(size=50)
             for fa in fa_list:
                 inj = str(getattr(fa, "injuryStatus", "") or "").upper().strip()
                 is_inj = bool(getattr(fa, "injured", False))
@@ -256,6 +262,8 @@ def detect_lineup_holes_and_solutions(
                 ):
                     continue
                 pos = (getattr(fa, "position", "") or "FLEX").upper()
+                if pos in ("DEF", "D/ST"):
+                    pos = "DST"
                 free_agents_by_pos.setdefault(pos, []).append(fa)
         except Exception:
             pass
@@ -316,9 +324,10 @@ def detect_lineup_holes_and_solutions(
                 "DOUBTFUL",
             )
             b_bye = getattr(b, "bye_week", 0) == current_week and current_week > 0
+            b_zero_proj = not getattr(b, "has_played", False) and getattr(b, "projected_points", 0.0) <= 0.0
             b_locked = getattr(b, "is_locked", False) or getattr(b, "has_played", False)
 
-            if is_eligible and not b_out and not b_bye:
+            if is_eligible and not b_out and not b_bye and not b_zero_proj:
                 if b_locked:
                     locked_eligible_bench.append(b)
                 else:

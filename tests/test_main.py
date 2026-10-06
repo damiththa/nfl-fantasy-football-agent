@@ -287,3 +287,32 @@ def test_weekly_analysis_triggers_espn_auth_alert_on_401(client, monkeypatch):
     assert len(auth_alert_calls) >= 1
     assert "cookies" in auth_alert_calls[0][0][1].lower()
 
+
+def test_fetch_league_free_agents_augments_kickers_and_defenses():
+    from unittest.mock import MagicMock
+    from src.main import fetch_league_free_agents
+
+    mock_league = MagicMock()
+    kicker = MagicMock(name="Kicker", position="K", proTeam="SF", projected_points=8.0, percent_owned=30.0, injuryStatus="ACTIVE", injured=False)
+    kicker.name = "Test Kicker"
+    defense = MagicMock(name="Defense", position="D/ST", proTeam="DEN", projected_points=7.0, percent_owned=40.0, injuryStatus="NORMAL", injured=False)
+    defense.name = "Test Defense"
+    skill_p = MagicMock(name="Skill", position="WR", proTeam="KC", projected_points=12.0, percent_owned=70.0, injuryStatus="ACTIVE", injured=False)
+    skill_p.name = "Test Skill"
+
+    def mock_fa(week=None, size=50, position=None):
+        if position == "K":
+            return [kicker]
+        if position == "D/ST":
+            return [defense]
+        return [skill_p]
+
+    mock_league.free_agents.side_effect = mock_fa
+
+    fa_list = fetch_league_free_agents(mock_league, week=5)
+    names = [f["name"] for f in fa_list]
+    assert "Test Skill" in names
+    assert "Test Kicker" in names
+    assert "Test Defense" in names
+
+

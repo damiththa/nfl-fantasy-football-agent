@@ -596,3 +596,54 @@ def test_optimize_lineup_guardrail_demotes_hallucinated_locked_bench_starter():
 
     # Guardrail 3: Locked starter Bijan Robinson must be re-inserted!
     assert "Bijan Robinson" in rec_starter_names
+
+
+def test_detect_lineup_holes_zero_projection_unplayed_starter():
+    """Verify that unplayed starters with 0.0 projected points (e.g. bye weeks) are flagged as holes."""
+    starters = [
+        RosterPlayer("Patrick Mahomes", "QB", "KC", "QB", 22.0, 0.0, "NORMAL", 10, 99.0),
+        RosterPlayer("Christian McCaffrey", "RB", "SF", "RB", 19.5, 0.0, "NORMAL", 9, 99.0),
+        # Chuba Hubbard on bye / zero projection
+        RosterPlayer("Chuba Hubbard", "RB", "CAR", "RB", 0.0, 0.0, "ACTIVE", 0, 85.0),
+        RosterPlayer("Justin Jefferson", "WR", "MIN", "WR", 18.0, 0.0, "NORMAL", 6, 99.0),
+        RosterPlayer("CeeDee Lamb", "WR", "DAL", "WR", 17.5, 0.0, "NORMAL", 7, 99.0),
+        RosterPlayer("Travis Kelce", "TE", "KC", "TE", 13.5, 0.0, "NORMAL", 10, 95.0),
+        RosterPlayer("Deebo Samuel", "WR", "SF", "FLEX", 14.0, 0.0, "NORMAL", 9, 90.0),
+        RosterPlayer("James Conner", "RB", "ARI", "FLEX", 13.0, 0.0, "NORMAL", 11, 88.0),
+        RosterPlayer("SF Defense", "DST", "SF", "DST", 8.0, 0.0, "NORMAL", 9, 85.0),
+        # Harrison Butker on bye / zero projection (K slot)
+        RosterPlayer("Harrison Butker", "K", "KC", "K", 0.0, 0.0, "ACTIVE", 0, 90.0),
+    ]
+    # Bench has Alvin Kamara (RB) but ZERO backup kickers
+    bench = [
+        RosterPlayer("Alvin Kamara", "RB", "NO", "BE", 12.5, 0.0, "NORMAL", 12, 92.0),
+        RosterPlayer("Tony Pollard", "RB", "TEN", "BE", 11.0, 0.0, "NORMAL", 5, 80.0),
+    ]
+    roster = ParsedRoster(
+        team_name="Chips Ahoy", players=starters + bench, starters=starters, bench=bench
+    )
+
+    fa_kicker = MockESPNPlayer("Jake Moody", "K", "SF", 8.5)
+    espn_league = MockESPNLeague(teams=[], free_agents=[fa_kicker])
+
+    alerts = detect_lineup_holes_and_solutions(
+        roster=roster,
+        league=PNA_2026,
+        current_week=5,
+        espn_league=espn_league,
+    )
+
+    # Must detect both Chuba Hubbard and Harrison Butker as starting holes
+    alerted_players = [a.current_player_name for a in alerts]
+    assert "Chuba Hubbard" in alerted_players
+    assert "Harrison Butker" in alerted_players
+
+    # For Chuba Hubbard: bench cover exists (Alvin Kamara)
+    hubbard_alert = next(a for a in alerts if a.current_player_name == "Chuba Hubbard")
+    assert "Promote Alvin Kamara" in hubbard_alert.bench_recommendation
+
+    # For Harrison Butker: NO bench kicker exists -> external acquisition required
+    butker_alert = next(a for a in alerts if a.current_player_name == "Harrison Butker")
+    assert "No healthy, eligible bench replacement" in butker_alert.bench_recommendation
+    assert "Jake Moody" in butker_alert.waiver_recommendation
+

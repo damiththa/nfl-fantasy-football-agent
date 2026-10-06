@@ -142,8 +142,34 @@ def format_waiver_prompt(
     available_players: list[dict[str, Any]],
     trending_adds: list[dict[str, Any]],
     injuries: list[dict[str, Any]],
+    starter_holes: list[dict[str, Any]] | None = None,
 ) -> str:
     """Format prompt for waiver wire recommendations."""
+    holes_section = ""
+    if starter_holes:
+        hole_lines = []
+        for h in starter_holes:
+            s_name = h.get("starter_name", "Unknown")
+            s_pos = h.get("position", "UNK")
+            s_slot = h.get("slot", s_pos)
+            s_proj = float(h.get("projected_points", 0.0) or 0.0)
+            has_cov = h.get("has_bench_cover", False)
+            cov_players = h.get("bench_cover_players", [])
+            if has_cov:
+                hole_lines.append(
+                    f"- [BENCH COVER AVAILABLE] {s_name} ({s_slot}/{s_pos}) - {s_proj:.1f} pts: "
+                    f"Bench cover is available ({', '.join(cov_players)}). Execute starting lineup swap on bench; DO NOT burn high waiver priority on this position unless an elite upgrade exists."
+                )
+            else:
+                hole_lines.append(
+                    f"- 🚨 [URGENT STREAMING HOLE - NO BENCH BACKUP] {s_name} ({s_slot}/{s_pos}) - {s_proj:.1f} pts: "
+                    f"ZERO eligible bench replacements on roster! Team will take a 0.0 unless streamed. YOU MUST RECOMMEND A STREAMING ADD AT {s_pos}!"
+                )
+        holes_section = f"""
+STARTING LINEUP HOLES & BYE WEEK STREAMING STATUS:
+{chr(10).join(hole_lines)}
+"""
+
     return f"""Evaluate waiver wire opportunities for Week {week} in league '{league.name}'.
 
 LEAGUE SETUP:
@@ -152,8 +178,8 @@ LEAGUE SETUP:
 
 YOUR ROSTER:
 {your_roster}
-
-AVAILABLE FREE AGENTS (High Owned/Projected):
+{holes_section}
+AVAILABLE FREE AGENTS (High Owned/Projected & Streaming Options):
 {available_players}
 
 SLEEPER LEAGUE-WIDE 24H TRENDING ADDS:
@@ -169,6 +195,13 @@ You are a veteran, championship-winning fantasy head coach fiercely protecting t
   ABSOLUTELY NEVER recommend claiming or adding a player who is on IR (Injury Reserve), OUT, PUP, SUSPENDED, or dealing with a multi-week / season-ending injury (e.g., torn ACL, surgery, out until February).
   Claiming an injured player burns precious waiver priority and drops active roster depth for zero output.
   Every player recommended in `targets` MUST be currently active, healthy, and expected to play this week or next week.
+- CRITICAL UNFILLED STARTER HOLE & STREAMING MANDATE:
+  If any starting slot (especially Kicker or Defense/ST) has 0.0 projected points (due to Bye Week or injury) with ZERO bench backups available:
+  1. You MUST set `coach_verdict: "EXECUTE_CLAIMS"` and `is_move_recommended: true`.
+  2. You MUST NOT set STAND_PAT. A team taking a 0.0 in an active starting slot forfeits matchups!
+  3. You MUST recommend an actionable streaming target from `AVAILABLE FREE AGENTS` for that position.
+  4. Specify an expendable drop candidate (either a low-end bench stash or the player on bye if streaming).
+- If a skill player (RB/WR/TE) is on bye but bench has strong healthy replacements (e.g. Chuba Hubbard on bye, but Alvin Kamara/Tony Pollard on bench), advise that bench cover handles the position and waiver capital should be preserved for true holes.
 - ONLY recommend an add if:
   1. It fills an active starting hole (due to OUT/IR/SUS or Bye Week) that our bench cannot cover.
   2. Or the available free agent is a GENUINE, obvious upgrade in talent, target volume, or backfield touches over a player on our bench who is truly a droppable liability (e.g. reserve kicker/defense, buried #4 RB, or zero-snap player).

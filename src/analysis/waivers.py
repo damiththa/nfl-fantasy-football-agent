@@ -96,6 +96,58 @@ def evaluate_waivers(
 
         eligible_free_agents.append(fa_copy)
 
+    # 1. Analyze starting lineup for unplayable slots (bye weeks, 0.0 projection, injury)
+    has_unfilled_starter_hole = False
+    streaming_needs: list[str] = []
+    starter_holes_detail: list[dict[str, Any]] = []
+
+    for s in roster.starters:
+        is_out = (s.injury_status or "").upper() in ("OUT", "IR", "SUS", "SUSPENSION", "SUSPENDED", "DOUBTFUL")
+        is_bye = getattr(s, "bye_week", 0) == week and week > 0
+        is_zero_proj = not getattr(s, "has_played", False) and getattr(s, "projected_points", 0.0) <= 0.0
+
+        if is_out or is_bye or is_zero_proj:
+            slot_norm = (s.slot or s.position).upper().replace("/", "")
+            if slot_norm in ("DEF", "DST"):
+                slot_norm = "DST"
+            elif slot_norm in ("RBWRTE", "FLEX"):
+                slot_norm = "FLEX"
+
+            bench_cover = [
+                b for b in roster.bench
+                if (b.injury_status or "").upper() not in ("OUT", "IR", "SUS", "SUSPENDED", "DOUBTFUL")
+                and getattr(b, "bye_week", 0) != week
+                and not (not getattr(b, "has_played", False) and getattr(b, "projected_points", 0.0) <= 0.0)
+                and (
+                    b.position.upper() == slot_norm
+                    or (b.position.upper() in ("DEF", "DST") and slot_norm == "DST")
+                    or (slot_norm == "FLEX" and b.position.upper() in ("RB", "WR", "TE"))
+                )
+            ]
+
+            has_cov = len(bench_cover) > 0
+            pos_need = "DST" if slot_norm == "DST" else s.position.upper()
+            if not has_cov:
+                has_unfilled_starter_hole = True
+                if pos_need not in streaming_needs:
+                    streaming_needs.append(pos_need)
+
+            starter_holes_detail.append({
+                "starter_name": s.name,
+                "slot": s.slot,
+                "position": s.position,
+                "team": s.team,
+                "projected_points": s.projected_points,
+                "injury_status": s.injury_status,
+                "has_bench_cover": has_cov,
+                "bench_cover_players": [b.name for b in bench_cover],
+                "action_required": (
+                    f"Lineup swap available on bench ({', '.join(b.name for b in bench_cover[:2])})"
+                    if has_cov
+                    else f"URGENT STREAMING WAIVER CLAIM REQUIRED (0 bench backups for {s.position})"
+                ),
+            })
+
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
         roster_data = [
@@ -137,6 +189,25 @@ def evaluate_waivers(
                     }
                 )
 
+        # Ensure streaming positions (K, DST) have their top options in available_players_data
+        streaming_fa_candidates = []
+        for need in streaming_needs:
+            need_pos = "DST" if need in ("DEF", "DST", "D/ST") else need
+            pos_matches = [
+                fa for fa in eligible_free_agents
+                if fa.get("position", "").upper() == need_pos
+                or (need_pos == "DST" and fa.get("position", "").upper() in ("DEF", "DST", "D/ST"))
+            ]
+            streaming_fa_candidates.extend(pos_matches[:3])
+
+        seen_names = set()
+        combined_fa_pool = []
+        for fa in streaming_fa_candidates + eligible_free_agents:
+            fa_name = (fa.get("name") or "").lower()
+            if fa_name and fa_name not in seen_names:
+                seen_names.add(fa_name)
+                combined_fa_pool.append(fa)
+
         available_players_data = [
             {
                 "name": fa["name"],
@@ -146,7 +217,7 @@ def evaluate_waivers(
                 "percent_owned": fa.get("percent_owned", 0.0),
                 "injury_status": fa.get("injury_status", "ACTIVE"),
             }
-            for fa in eligible_free_agents[:35]
+            for fa in combined_fa_pool[:40]
         ]
 
         prompt = format_waiver_prompt(
@@ -156,6 +227,7 @@ def evaluate_waivers(
             available_players=available_players_data,
             trending_adds=trending_data[:20],
             injuries=injury_data[:20],
+            starter_holes=starter_holes_detail,
         )
 
         try:
@@ -189,19 +261,26 @@ def evaluate_waivers(
             report.targets = sanitized_targets
 
             if report.coach_verdict == "STAND_PAT" or not report.targets:
-                report.coach_verdict = "STAND_PAT"
-                report.is_move_recommended = False
-                report.targets = []
-                report.roster_drop_candidates = []
-                if not report.stand_pat_reasoning:
-                    report.stand_pat_reasoning = (
-                        "Your active starters are healthy and your bench provides crucial high-upside depth. "
-                        "None of the available healthy free agents represent a meaningful upgrade over your current assets. "
-                        "Preserve your waiver priority and hold your bench."
+                if has_unfilled_starter_hole:
+                    logger.warning(
+                        "Gemini returned STAND_PAT or empty targets, but roster has unfilled starter hole (%s). Overriding with deterministic streaming targets.",
+                        streaming_needs,
                     )
+                else:
+                    report.coach_verdict = "STAND_PAT"
+                    report.is_move_recommended = False
+                    report.targets = []
+                    report.roster_drop_candidates = []
+                    if not report.stand_pat_reasoning:
+                        report.stand_pat_reasoning = (
+                            "Your active starters are healthy and your bench provides crucial high-upside depth. "
+                            "None of the available healthy free agents represent a meaningful upgrade over your current assets. "
+                            "Preserve your waiver priority and hold your bench."
+                        )
+                    return report
             else:
                 report.is_move_recommended = True
-            return report
+                return report
         except Exception as e:
             fallback_err = str(e)
             logger.warning(
@@ -209,7 +288,7 @@ def evaluate_waivers(
                 e,
             )
 
-    # Deterministic fallback algorithm when LLM client is None
+    # Deterministic fallback algorithm when LLM client is None or when AI STAND_PAT is overridden by unfilled starter hole
     # 1. Check for genuine droppable liabilities on the bench
     clear_drop_candidates = []
     marginal_drop_candidates = []
@@ -224,28 +303,7 @@ def evaluate_waivers(
         elif p.projected_points < 4.0:
             marginal_drop_candidates.append(p)
 
-    # 2. Check if user has an urgent starting lineup hole with no bench replacement
-    has_unfilled_starter_hole = False
-    unplayable_slots: set[str] = set()
-    for s in roster.starters:
-        is_out = (s.injury_status or "").upper() in ("OUT", "IR", "SUS", "SUSPENSION", "SUSPENDED", "DOUBTFUL")
-        is_bye = getattr(s, "bye_week", 0) == week and week > 0
-        if is_out or is_bye:
-            unplayable_slots.add((s.slot or s.position).upper())
-
-    if unplayable_slots:
-        for slot in unplayable_slots:
-            bench_cover = [
-                b for b in roster.bench
-                if (b.injury_status or "").upper() not in ("OUT", "IR", "SUS", "SUSPENDED")
-                and getattr(b, "bye_week", 0) != week
-                and (b.position.upper() in slot or slot in ("FLEX", "RB/WR/TE"))
-            ]
-            if not bench_cover:
-                has_unfilled_starter_hole = True
-                break
-
-    # 3. Filter and rank available free agents
+    # 2. Filter and rank available free agents
     sorted_fa = sorted(
         eligible_free_agents,
         key=lambda fa: (
@@ -258,7 +316,7 @@ def evaluate_waivers(
     top_fa = sorted_fa[0] if sorted_fa else None
     top_fa_proj = float(top_fa.get("projected_points", 0.0) or 0.0) if top_fa else 0.0
 
-    # 4. Coach decision: Is making a move genuinely warranted?
+    # 3. Coach decision: Is making a move genuinely warranted?
     # If no starting hole, no clear droppable players, and top FA has mediocre projection:
     best_bench_proj = max([p.projected_points for p in roster.bench], default=0.0)
     bench_is_strong = len(clear_drop_candidates) == 0 and (
@@ -293,8 +351,48 @@ def evaluate_waivers(
     drop_candidates_str = [f"{drop_p.name} ({drop_p.position} - {drop_p.projected_points:.1f} pts)"] if drop_p else []
 
     targets = []
-    # Only suggest 1-2 top targets that are genuine improvements
+    # If we have streaming needs (e.g. K, DST), first pick the best available free agent for each streaming need!
+    if streaming_needs:
+        for need in streaming_needs:
+            need_norm = "DST" if need in ("DEF", "DST", "D/ST") else need
+            pos_matches = [
+                fa for fa in eligible_free_agents
+                if (fa.get("position", "").upper() == need_norm)
+                or (need_norm == "DST" and fa.get("position", "").upper() in ("DEF", "DST", "D/ST"))
+                or (need_norm == "FLEX" and fa.get("position", "").upper() in ("RB", "WR", "TE"))
+            ]
+            if pos_matches:
+                pos_matches.sort(
+                    key=lambda fa: (
+                        (float(fa.get("projected_points", 0.0) or 0.0) * 0.7)
+                        + (float(fa.get("percent_owned", 0.0) or 0.0) * 0.3)
+                    ),
+                    reverse=True,
+                )
+                best_streaming_fa = pos_matches[0]
+                s_name = best_streaming_fa.get("name", "Unknown")
+                s_pos = best_streaming_fa.get("position", need)
+                s_team = best_streaming_fa.get("team", "UNK")
+                s_proj = float(best_streaming_fa.get("projected_points", 0.0) or 0.0)
+                targets.append(
+                    WaiverRecommendation(
+                        player_name=s_name,
+                        position=s_pos,
+                        team=s_team,
+                        priority="MUST_ADD",
+                        recommended_drop=drop_name,
+                        reasoning=(
+                            f"🚨 Urgent streaming addition for starting {need} slot (Week {week} bye week / zero projection). "
+                            f"Projecting {s_proj:.1f} points with immediate starting utility."
+                        ),
+                        upside_summary=f"Plugs critical starting hole at {need} to prevent taking an automatic 0.0 in matchup.",
+                    )
+                )
+
+    # Then append other high-value upgrades if space permits
     for i, fa in enumerate(sorted_fa[:3]):
+        if any(t.player_name.lower() == fa.get("name", "").lower() for t in targets):
+            continue
         proj = float(fa.get("projected_points", 0.0) or 0.0)
         pos = fa.get("position", "UNK")
         name = fa.get("name", "Unknown Player")
@@ -304,7 +402,7 @@ def evaluate_waivers(
         if proj <= 0.0 or (not has_unfilled_starter_hole and proj < 7.0):
             continue
 
-        priority = "MUST_ADD" if (has_unfilled_starter_hole and i == 0) or proj > 11.0 else ("HIGH" if proj > 8.5 else "MEDIUM")
+        priority = "MUST_ADD" if (has_unfilled_starter_hole and not targets) or proj > 11.0 else ("HIGH" if proj > 8.5 else "MEDIUM")
 
         targets.append(
             WaiverRecommendation(

@@ -224,3 +224,129 @@ def test_evaluate_waivers_gemini_sanitizer_rejects_ir_target():
     assert report.is_move_recommended is False
 
 
+def test_evaluate_waivers_kicker_on_bye_forces_streaming_claim():
+    """Verify that a starting kicker on bye with 0 bench backups overrides STAND_PAT and forces a streaming claim."""
+    starters = [
+        RosterPlayer("Top QB", "QB", "BUF", "QB", 20.0, 0.0, "NORMAL", 7, 95.0),
+        RosterPlayer("Top RB", "RB", "SF", "RB", 18.0, 0.0, "NORMAL", 9, 99.0),
+        # Harrison Butker on bye / zero projection
+        RosterPlayer("Harrison Butker", "K", "KC", "K", 0.0, 0.0, "ACTIVE", 0, 90.0),
+    ]
+    # Bench is strong at RB/WR, but has 0 backup kickers
+    bench = [
+        RosterPlayer("Solid Backup RB", "RB", "DET", "Bench", 11.5, 0.0, "NORMAL", 5, 80.0),
+        RosterPlayer("Solid Backup WR", "WR", "HOU", "Bench", 10.0, 0.0, "NORMAL", 7, 75.0),
+    ]
+    roster = ParsedRoster(team_name="Chips Ahoy", players=starters + bench, starters=starters, bench=bench)
+
+    free_agents = [
+        {
+            "name": "Jake Moody",
+            "position": "K",
+            "team": "SF",
+            "projected_points": 8.5,
+            "percent_owned": 45.0,
+            "injury_status": "ACTIVE",
+        },
+        {
+            "name": "Backup WR",
+            "position": "WR",
+            "team": "CAR",
+            "projected_points": 6.0,
+            "percent_owned": 10.0,
+            "injury_status": "ACTIVE",
+        },
+    ]
+
+    report = evaluate_waivers(PNA_2026, 5, roster, free_agents)
+    # Must NOT stand pat when starting kicker has 0.0 pts and 0 bench backups!
+    assert report.coach_verdict == "EXECUTE_CLAIMS"
+    assert report.is_move_recommended is True
+    assert len(report.targets) > 0
+    assert report.targets[0].player_name == "Jake Moody"
+    assert report.targets[0].priority == "MUST_ADD"
+    assert "streaming" in report.targets[0].reasoning.lower()
+
+
+def test_evaluate_waivers_skill_player_on_bye_with_bench_cover_does_not_force_claim():
+    """Verify that a starting RB on bye does NOT force a waiver claim if bench cover (e.g. Kamara) is present."""
+    starters = [
+        RosterPlayer("Top QB", "QB", "BUF", "QB", 20.0, 0.0, "NORMAL", 7, 95.0),
+        # Chuba Hubbard on bye / zero projection
+        RosterPlayer("Chuba Hubbard", "RB", "CAR", "RB", 0.0, 0.0, "ACTIVE", 0, 85.0),
+        RosterPlayer("Top Kicker", "K", "DAL", "K", 9.0, 0.0, "NORMAL", 7, 90.0),
+    ]
+    # Bench has Alvin Kamara covering RB
+    bench = [
+        RosterPlayer("Alvin Kamara", "RB", "NO", "Bench", 12.0, 0.0, "NORMAL", 12, 92.0),
+        RosterPlayer("Tony Pollard", "RB", "TEN", "Bench", 11.0, 0.0, "NORMAL", 5, 80.0),
+    ]
+    roster = ParsedRoster(team_name="Chips Ahoy", players=starters + bench, starters=starters, bench=bench)
+
+    free_agents = [
+        {
+            "name": "Marginal FA RB",
+            "position": "RB",
+            "team": "NYG",
+            "projected_points": 6.5,
+            "percent_owned": 15.0,
+            "injury_status": "ACTIVE",
+        },
+    ]
+
+    report = evaluate_waivers(PNA_2026, 5, roster, free_agents)
+    # Bench covers RB; user should preserve waiver priority
+    assert report.coach_verdict == "STAND_PAT"
+    assert report.is_move_recommended is False
+    assert len(report.targets) == 0
+
+
+def test_evaluate_waivers_ai_stand_pat_overridden_when_kicker_on_bye():
+    """Verify that if Gemini hallucinates STAND_PAT when K is on bye, safety net overrides with deterministic streaming."""
+    starters = [
+        RosterPlayer("Top QB", "QB", "BUF", "QB", 20.0, 0.0, "NORMAL", 7, 95.0),
+        RosterPlayer("Harrison Butker", "K", "KC", "K", 0.0, 0.0, "ACTIVE", 0, 90.0),
+    ]
+    bench = [
+        RosterPlayer("Bench RB", "RB", "NO", "Bench", 10.0, 0.0, "NORMAL", 12, 85.0),
+    ]
+    roster = ParsedRoster(team_name="Chips Ahoy", players=starters + bench, starters=starters, bench=bench)
+
+    free_agents = [
+        {
+            "name": "Cameron Dicker",
+            "position": "K",
+            "team": "LAC",
+            "projected_points": 8.0,
+            "percent_owned": 50.0,
+            "injury_status": "ACTIVE",
+        },
+    ]
+
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            class Response:
+                text = (
+                    '{"league_id": 991059191, "week": 5, "is_move_recommended": false, '
+                    '"coach_verdict": "STAND_PAT", '
+                    '"stand_pat_reasoning": "Roster is stacked, do not churn.", '
+                    '"targets": [], "roster_drop_candidates": [], '
+                    '"overall_waiver_strategy": "Stand pat."}'
+                )
+
+            return Response()
+
+    class MockSdk:
+        models = MockModels()
+
+    client = GeminiIntelligenceClient(mock_client=MockSdk())
+    report = evaluate_waivers(PNA_2026, 5, roster, free_agents, client=client)
+
+    # STAND_PAT must be overridden because K has zero bench cover!
+    assert report.coach_verdict == "EXECUTE_CLAIMS"
+    assert report.is_move_recommended is True
+    assert len(report.targets) > 0
+    assert report.targets[0].player_name == "Cameron Dicker"
+
+
+
