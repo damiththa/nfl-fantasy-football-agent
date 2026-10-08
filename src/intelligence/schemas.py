@@ -315,6 +315,14 @@ class TradeEvaluation(BaseModel):
         default=None,
         description="Suggested counter-offer if trade has promise but is currently unbalanced",
     )
+    injury_risk_alert: Optional[str] = Field(
+        default=None,
+        description="Health or practice alert if any incoming target is tagged DTD, Questionable, or Out",
+    )
+    target_injury_status: Optional[str] = Field(
+        default=None,
+        description="Current ESPN injury status of primary incoming target ('HEALTHY', 'DTD', 'QUESTIONABLE', 'OUT')",
+    )
     generated_at: str = Field(
         default="",
         description="Date and time when trade evaluation was generated",
@@ -386,6 +394,14 @@ class TradeProposal(BaseModel):
     coach_conviction: str = Field(
         default="",
         description="The Head Coach's direct, persuasive argument convincing the manager why they should initiate this trade",
+    )
+    injury_risk_alert: Optional[str] = Field(
+        default=None,
+        description="Health or practice alert if any incoming target is tagged DTD or Questionable (e.g. '⚠️ INJURY WATCH: Player is currently DTD/Questionable.')",
+    )
+    target_injury_status: Optional[str] = Field(
+        default=None,
+        description="Current ESPN injury status of primary incoming target ('HEALTHY', 'DTD', 'QUESTIONABLE')",
     )
 
 

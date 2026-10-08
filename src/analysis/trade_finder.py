@@ -72,16 +72,46 @@ def propose_league_trades(
                     "team_name": getattr(team, "team_name", "Unknown"),
                     "manager": manager,
                     "optimal_starters": [
-                        {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+                        {
+                            "name": p.name,
+                            "pos": p.position,
+                            "pts": p.projected_points,
+                            "injury": p.injury_status or "HEALTHY",
+                            "injury_risk": (
+                                "DISQUALIFIED"
+                                if (p.injury_status or "").upper() in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION")
+                                else ("CAUTION_DTD" if (p.injury_status or "").upper() in ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q") else "HEALTHY")
+                            ),
+                        }
                         for p in opp_opt_starters
                     ],
                     "true_surplus_bench": [
-                        {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+                        {
+                            "name": p.name,
+                            "pos": p.position,
+                            "pts": p.projected_points,
+                            "injury": p.injury_status or "HEALTHY",
+                            "injury_risk": (
+                                "DISQUALIFIED"
+                                if (p.injury_status or "").upper() in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION")
+                                else ("CAUTION_DTD" if (p.injury_status or "").upper() in ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q") else "HEALTHY")
+                            ),
+                        }
                         for p in opp_opt_bench
                     ],
                     "optimal_starting_points": opp_opt_pts,
                     "all_roster_players": [
-                        {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+                        {
+                            "name": p.name,
+                            "pos": p.position,
+                            "pts": p.projected_points,
+                            "injury": p.injury_status or "HEALTHY",
+                            "injury_risk": (
+                                "DISQUALIFIED"
+                                if (p.injury_status or "").upper() in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION")
+                                else ("CAUTION_DTD" if (p.injury_status or "").upper() in ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q") else "HEALTHY")
+                            ),
+                        }
                         for p in parsed.players
                     ],
                 }
@@ -158,6 +188,7 @@ def propose_league_trades(
                     )
             else:
                 report.is_trade_recommended = True
+                filtered_proposals = []
                 for prop in report.proposals:
                     if not getattr(prop, "time_horizon", None):
                         prop.time_horizon = "LONG_TERM_DECISION"
@@ -169,6 +200,39 @@ def propose_league_trades(
                             f"starting equity while shipping away {giv} from our surplus depth. "
                             "This is how championships are engineered."
                         )
+
+                    # Post-process injury verification against live opponent rosters
+                    is_disqualified = False
+                    for opp_t, opp_rost in other_teams_parsed:
+                        for p in opp_rost.players:
+                            if any((p.name or "").lower() == (r or "").lower() for r in prop.receiving_players):
+                                p_inj = (p.injury_status or "").upper()
+                                if p_inj in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION"):
+                                    logger.warning(
+                                        "Rejecting AI trade proposal: target %s is disqualified due to status %s",
+                                        p.name, p_inj
+                                    )
+                                    is_disqualified = True
+                                elif p_inj in ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q"):
+                                    prop.target_injury_status = p.injury_status
+                                    if not getattr(prop, "injury_risk_alert", None):
+                                        prop.injury_risk_alert = (
+                                            f"⚠️ INJURY WATCH ({p.injury_status}): {p.name} is currently carrying an active {p.injury_status} tag. "
+                                            f"Do NOT pay full retail price. Verify practice participation on Thursday/Friday before submitting, "
+                                            f"or use this uncertainty as leverage to demand a steeper discount."
+                                        )
+
+                    if not is_disqualified:
+                        filtered_proposals.append(prop)
+
+                report.proposals = filtered_proposals
+                if not report.proposals:
+                    report.coach_verdict = "HOLD_ROSTER"
+                    report.is_trade_recommended = False
+                    report.hold_roster_reasoning = (
+                        "Market scan filtered out trade proposals because the prospective targets carry severe injury designations (OUT/IR). "
+                        "Hold your healthy roster and do not acquire injured assets."
+                    )
             eastern = zoneinfo.ZoneInfo("America/New_York")
             report.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
             report.intelligence_backend = client.model
@@ -207,6 +271,9 @@ def propose_league_trades(
         user_weakest_starter = user_flex_starters[0]
         target_pos = user_weakest_starter.position
 
+        DISQUALIFIED_STATUSES = ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION")
+        DTD_STATUSES = ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q")
+
         for team, opp_roster in other_teams_parsed:
             opp_opt_starters, opp_opt_bench, opp_opt_pts = compute_optimal_starters(opp_roster.players, league)
 
@@ -214,13 +281,13 @@ def propose_league_trades(
             # Prioritize true surplus bench depth first, then secondary starters (avoiding untradable alpha WR1/RB1s)
             opp_bench_cands = [
                 p for p in opp_opt_bench
-                if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in ("OUT", "IR")
+                if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in DISQUALIFIED_STATUSES
             ]
             opp_bench_cands.sort(key=lambda p: p.projected_points, reverse=True)
 
             opp_starter_cands = [
                 p for p in opp_opt_starters
-                if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in ("OUT", "IR")
+                if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in DISQUALIFIED_STATUSES
             ]
             opp_starter_cands.sort(key=lambda p: p.projected_points)
 
@@ -249,25 +316,37 @@ def propose_league_trades(
                     if opp_asset.name == user_asset.name:
                         continue
 
-                    points_upgrade = opp_asset.projected_points - user_weakest_starter.projected_points
+                    is_dtd = (opp_asset.injury_status or "").upper() in DTD_STATUSES
+                    # If player is DTD / Questionable, apply a 25% injury risk haircut to projected points
+                    # to guarantee we NEVER pay full price for an uncertain/injured player
+                    effective_opp_pts = opp_asset.projected_points * 0.75 if is_dtd else opp_asset.projected_points
+                    points_upgrade = effective_opp_pts - user_weakest_starter.projected_points
 
                     # The trade must be decisively more beneficial for US:
                     # 1. points_upgrade >= 1.5 (our starting lineup improves)
                     # 2. opp_upgrade >= 1.0 (opponent has incentive to accept)
                     # 3. Premium asset protection: If user gives up a top asset (>=13.0 pts),
-                    #    we never accept a discounted return (opp_asset must be within 2.5 pts of user_asset)
+                    #    we never accept a discounted return (effective_opp_pts must be within 2.5 pts of user_asset)
                     is_star_trade = user_asset.projected_points >= 13.0
-                    fair_value_return = not is_star_trade or (opp_asset.projected_points >= user_asset.projected_points - 2.5)
+                    fair_value_return = not is_star_trade or (effective_opp_pts >= user_asset.projected_points - 2.5)
 
                     if points_upgrade >= 1.5 and opp_upgrade >= 1.0 and fair_value_return:
                         net_gain = round(
-                            calculate_vorp(opp_asset.projected_points, target_pos, league.num_teams)
+                            calculate_vorp(effective_opp_pts, target_pos, league.num_teams)
                             - calculate_vorp(user_weakest_starter.projected_points, target_pos, league.num_teams),
                             1,
                         )
                         manager_name = _extract_manager_name(team)
                         opp_team_name = getattr(team, "team_name", "Opponent")
                         opp_team_id = getattr(team, "team_id", 0)
+
+                        injury_alert = None
+                        if is_dtd:
+                            injury_alert = (
+                                f"⚠️ INJURY WATCH ({opp_asset.injury_status}): {opp_asset.name} is currently nursing an active injury tag. "
+                                f"Do NOT pay full retail price. Verify full participation on Thursday/Friday practice reports before submitting, "
+                                f"or use this uncertainty as leverage to demand a steeper discount."
+                            )
 
                         proposal = TradeProposal(
                             target_team_id=opp_team_id,
@@ -276,10 +355,12 @@ def propose_league_trades(
                             giving_players=[user_asset.name],
                             receiving_players=[opp_asset.name],
                             net_vorp_gain=max(net_gain, 1.5),
+                            injury_risk_alert=injury_alert,
+                            target_injury_status=opp_asset.injury_status if is_dtd else "HEALTHY",
                             your_lineup_upgrade=(
                                 f"Upgrades our starting {target_pos} from {user_weakest_starter.name} "
                                 f"({user_weakest_starter.projected_points:.1f} pts) to {opp_asset.name} "
-                                f"({opp_asset.projected_points:.1f} pts) by +{points_upgrade:.1f} pts/wk."
+                                f"({opp_asset.projected_points:.1f} pts{' [risk-discounted for ' + str(opp_asset.injury_status) + ']' if is_dtd else ''}) by +{points_upgrade:.1f} pts/wk."
                             ),
                             why_target_accepts=(
                                 f"Based on overall roster construction, {opp_team_name}'s weakest starting "

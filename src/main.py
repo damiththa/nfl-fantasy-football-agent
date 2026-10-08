@@ -1741,6 +1741,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             ${tp.time_horizon_detail ? `<p style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;"><strong>Strategic Horizon:</strong> ${tp.time_horizon_detail}</p>` : ''}
             <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 4px;"><strong style="color: var(--accent);">Your Upgrade:</strong> ${tp.your_lineup_upgrade}</p>
             <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 10px;"><strong style="color: #a78bfa;">Why Target Accepts:</strong> ${tp.why_target_accepts}</p>
+            ${tp.injury_risk_alert ? `
+              <div style="background: rgba(245, 158, 11, 0.12); border-left: 4px solid #f59e0b; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; color: #fbbf24; line-height: 1.45;">
+                ${tp.injury_risk_alert}
+              </div>
+            ` : ''}
             ${tp.coach_conviction ? `
               <div style="background: rgba(168, 85, 247, 0.1); border-left: 4px solid #a855f7; padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; line-height: 1.45;">
                 <strong style="color: #c084fc; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
@@ -1818,6 +1823,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <div><span style="font-size: 11px; color: var(--text-muted); display: block;">Post-Trade Starters</span><strong style="color: #cbd5e1; font-size: 15px;">${data.post_trade_starting_points} pts</strong></div>
                 <div><span style="font-size: 11px; color: var(--text-muted); display: block;">Weekly Net Delta</span><strong style="color: ${delta > 0 ? '#22c55e' : (delta < 0 ? '#ef4444' : '#eab308')}; font-size: 15px;">${deltaSign}${delta} pts</strong></div>
                 <div><span style="font-size: 11px; color: var(--text-muted); display: block;">Net VORP</span><strong style="color: #38bdf8; font-size: 15px;">${data.your_vorp_change > 0 ? '+' : ''}${data.your_vorp_change}</strong></div>
+              </div>
+            ` : ''}
+
+            ${data.injury_risk_alert ? `
+              <div style="background: rgba(245, 158, 11, 0.12); border-left: 4px solid #f59e0b; padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 13px; color: #fbbf24; line-height: 1.45;">
+                ${data.injury_risk_alert}
               </div>
             ` : ''}
 

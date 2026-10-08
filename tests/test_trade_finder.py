@@ -224,3 +224,70 @@ def test_propose_league_trades_does_not_assume_unset_bench_is_unvalued():
     assert "overall roster construction" in prop.why_target_accepts.lower()
 
 
+def test_propose_league_trades_disqualifies_out_and_ir_targets():
+    """Verify that OUT/IR players are strictly excluded from trade proposals."""
+    user_team = MagicMock()
+    user_team.team_id = PNA_2026.team_id
+    user_team.team_name = "Mad Dawg"
+    user_team.roster = [
+        _make_mock_player("Josh Allen", "QB", "QB", 22.0),
+        _make_mock_player("Bijan Robinson", "RB", "RB", 18.0),
+        _make_mock_player("Bench RB Monster", "RB", "Bench", 15.0),
+        _make_mock_player("Weak Starter WR", "WR", "WR", 7.0),
+    ]
+
+    opp_team = MagicMock()
+    opp_team.team_id = 2
+    opp_team.team_name = "Rival Squad"
+    opp_team.owners = [{"firstName": "Jane", "lastName": "Doe"}]
+    opp_team.roster = [
+        _make_mock_player("Lamar Jackson", "QB", "QB", 21.0),
+        _make_mock_player("Opponent Weak RB", "RB", "RB", 6.0),
+        _make_mock_player("CeeDee Lamb", "WR", "WR", 19.0),
+        # Target WR is OUT with injury
+        _make_mock_player("Injured Star WR", "WR", "Bench", 16.0, injury="OUT"),
+    ]
+
+    mock_league = MagicMock()
+    mock_league.teams = [user_team, opp_team]
+
+    # In deterministic mode, Injured Star WR should be disqualified
+    report = propose_league_trades(PNA_2026, 1, mock_league)
+    for p in report.proposals:
+        assert "Injured Star WR" not in p.receiving_players
+
+
+def test_propose_league_trades_dtd_target_sets_alert_and_applies_haircut():
+    """Verify that DTD targets trigger an injury alert and 25% risk haircut."""
+    user_team = MagicMock()
+    user_team.team_id = PNA_2026.team_id
+    user_team.team_name = "Mad Dawg"
+    user_team.roster = [
+        _make_mock_player("Josh Allen", "QB", "QB", 22.0),
+        _make_mock_player("Bijan Robinson", "RB", "RB", 18.0),
+        _make_mock_player("Bench RB Monster", "RB", "Bench", 14.0),
+        _make_mock_player("Weak Starter WR", "WR", "WR", 6.0),
+    ]
+
+    opp_team = MagicMock()
+    opp_team.team_id = 2
+    opp_team.team_name = "Rival Squad"
+    opp_team.owners = [{"firstName": "John", "lastName": "Smith"}]
+    opp_team.roster = [
+        _make_mock_player("Lamar Jackson", "QB", "QB", 21.0),
+        _make_mock_player("Opponent Weak RB", "RB", "RB", 5.0),
+        # Target WR is DTD with 16.0 nominal pts -> 12.0 effective pts after 25% haircut
+        _make_mock_player("Questionable WR", "WR", "Bench", 16.0, injury="QUESTIONABLE"),
+    ]
+
+    mock_league = MagicMock()
+    mock_league.teams = [user_team, opp_team]
+
+    report = propose_league_trades(PNA_2026, 1, mock_league)
+    assert len(report.proposals) >= 1
+    prop = report.proposals[0]
+    assert "Questionable WR" in prop.receiving_players
+    assert prop.injury_risk_alert is not None
+    assert "INJURY WATCH" in prop.injury_risk_alert
+    assert prop.target_injury_status == "QUESTIONABLE"
+    assert "risk-discounted" in prop.your_lineup_upgrade

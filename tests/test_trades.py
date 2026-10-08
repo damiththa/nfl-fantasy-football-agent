@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from src.analysis.trades import (
     calculate_vorp,
     compute_optimal_starters,
@@ -302,4 +304,76 @@ def test_evaluate_trade_time_horizon_and_coach_conviction_reject():
     assert eval_res.time_horizon in ("LONG_TERM_DECISION", "WEEKLY_PURPOSE")
     assert len(eval_res.coach_conviction) > 0
     assert "reject" in eval_res.coach_conviction.lower() or "walk away" in eval_res.coach_conviction.lower()
+
+
+def test_evaluate_trade_disqualifies_out_player():
+    """Verify that incoming OUT players are rejected with injury risk alerts."""
+    roster = ParsedRoster(
+        team_name="Mad Dawg Team",
+        players=[
+            _make_player("Brock Purdy", "QB", 18.0),
+            _make_player("Kyren Williams", "RB", 15.0),
+            _make_player("Bench WR", "WR", 9.0),
+        ],
+    )
+    # Mock league with opponent owning Injured Star
+    mock_opp_player = MagicMock()
+    mock_opp_player.name = "Injured Star"
+    mock_opp_player.position = "RB"
+    mock_opp_player.proTeam = "GB"
+    mock_opp_player.projected_points = 18.0
+    mock_opp_player.injuryStatus = "OUT"
+
+    mock_team = MagicMock()
+    mock_team.roster = [mock_opp_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+
+    eval_res = evaluate_trade(
+        league=PNA_2026,
+        roster=roster,
+        giving_players=["Bench WR"],
+        receiving_players=["Injured Star"],
+        espn_league=mock_league,
+    )
+    assert eval_res.verdict == "REJECT"
+    assert eval_res.target_injury_status == "OUT"
+    assert eval_res.injury_risk_alert is not None
+    assert "CRITICAL INJURY ALERT" in eval_res.injury_risk_alert
+
+
+def test_evaluate_trade_dtd_player_attaches_injury_alert():
+    """Verify that incoming DTD / QUESTIONABLE players attach an injury alert."""
+    roster = ParsedRoster(
+        team_name="Mad Dawg Team",
+        players=[
+            _make_player("Brock Purdy", "QB", 18.0),
+            _make_player("Kyren Williams", "RB", 15.0),
+            _make_player("Bench WR", "WR", 8.0),
+        ],
+    )
+    mock_opp_player = MagicMock()
+    mock_opp_player.name = "Josh Jacobs"
+    mock_opp_player.position = "RB"
+    mock_opp_player.proTeam = "GB"
+    mock_opp_player.projected_points = 15.5
+    mock_opp_player.injuryStatus = "QUESTIONABLE"
+
+    mock_team = MagicMock()
+    mock_team.roster = [mock_opp_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+
+    eval_res = evaluate_trade(
+        league=PNA_2026,
+        roster=roster,
+        giving_players=["Bench WR"],
+        receiving_players=["Josh Jacobs"],
+        espn_league=mock_league,
+    )
+    assert eval_res.target_injury_status == "QUESTIONABLE"
+    assert eval_res.injury_risk_alert is not None
+    assert "INJURY WATCH" in eval_res.injury_risk_alert
 

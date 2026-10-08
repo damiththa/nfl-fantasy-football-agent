@@ -307,6 +307,16 @@ In `coach_conviction`, speak directly to the manager ("Mad Dawg") as their trust
 - If verdict is ACCEPT: Sell the manager on WHY they must pull the trigger on this deal right now, what ceiling it unlocks, and why any hesitation is leaving championship equity on the table.
 - If verdict is REJECT: Protect the manager by bluntly revealing the trap, why they are being fleeced or gutting their team, and why walking away is the winning move.
 - If verdict is COUNTER: Tell the manager exactly how to flip the leverage to get the deal across the finish line on our terms.
+
+CRITICAL INJURY & DTD/QUESTIONABLE RISK EVALUATION:
+- If ANY incoming player you are receiving is currently tagged DTD (Day-to-Day), QUESTIONABLE, DOUBTFUL, or OUT:
+  1. If tagged OUT, IR, or DOUBTFUL: You MUST REJECT the trade. Acquiring unplayable assets damages starting equity.
+  2. If tagged DTD or QUESTIONABLE:
+     - DO NOT evaluate them as 100% healthy. They carry active practice limitations and in-game re-injury risk.
+     - You must only ACCEPT if the trade represents a massive "buy-low" where the price paid reflects their injury uncertainty.
+     - You MUST populate `injury_risk_alert` with a clear warning: e.g. "⚠️ INJURY WATCH: [Player] is currently listed as [Status]. Verify practice participation before confirming, or use this uncertainty to negotiate a steeper discount."
+     - Set `target_injury_status` to their status.
+  3. If healthy, set `injury_risk_alert: null` and `target_injury_status: "HEALTHY"`.
 """
 
 
@@ -413,6 +423,17 @@ You are a seasoned, elite fantasy football coach. You do NOT make trades just to
     - Set `is_trade_recommended: false`
     - Set `proposals: []`
     - In `hold_roster_reasoning` and `market_overview`, provide an authoritative coaching evaluation explaining that our roster is well-constructed, no opposing teams present favorable trade packages, and holding our assets is the disciplined, winning move.
+
+CRITICAL INJURY & DTD/QUESTIONABLE PROPOSAL MANDATE:
+1. STRICT EXCLUSION:
+   - NEVER propose acquiring players marked OUT, IR, DOUBTFUL, or SUSPENDED. They are 100% ineligible as incoming trade targets.
+2. HANDLING DTD (DAY-TO-DAY) & QUESTIONABLE PLAYERS:
+   - If proposing to acquire a player currently carrying a DTD, DAY_TO_DAY, or QUESTIONABLE tag:
+     a) YOU MUST NEVER PAY FULL RETAIL PRICE. A trade for a DTD player is ONLY permissible as an aggressive "buy-low" where an opponent is panicked and we acquire high-ceiling talent at a deep discount (e.g. giving up bench surplus that doesn't hurt our weekly floor).
+     b) MUST populate `injury_risk_alert` with a clear advisory: e.g. "⚠️ INJURY WATCH: [Player] is currently listed as [Status]. Verify Thursday/Friday practice participation before submitting, or use their injury uncertainty as leverage to offer a discounted package."
+     c) Set `target_injury_status` to their current status (e.g. "DTD" or "QUESTIONABLE").
+     d) In `coach_conviction`, explicitly instruct Mad Dawg on the injury risk (e.g. explain why buying low makes sense, or advise waiting for practice clearance).
+3. If the incoming target is fully healthy, set `injury_risk_alert: null` and `target_injury_status: "HEALTHY"`.
 """
 
 

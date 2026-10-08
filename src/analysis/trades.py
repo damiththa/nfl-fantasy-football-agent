@@ -269,7 +269,7 @@ def _build_incoming_roster_players(
     incoming: list[RosterPlayer] = []
 
     # Search league teams if available
-    league_pool: dict[str, tuple[str, str, float]] = {}  # name_norm -> (pos, proTeam, pts)
+    league_pool: dict[str, tuple[str, str, float, str]] = {}  # name_norm -> (pos, proTeam, pts, injury_status)
     if espn_league and hasattr(espn_league, "teams"):
         for team in espn_league.teams:
             for p in getattr(team, "roster", []):
@@ -279,6 +279,7 @@ def _build_incoming_roster_players(
                     getattr(p, "position", "FLEX") or "FLEX",
                     getattr(p, "proTeam", "FA") or "FA",
                     float(getattr(p, "projected_points", 0.0) or 0.0),
+                    getattr(p, "injuryStatus", "NORMAL") or "NORMAL",
                 )
 
     for name in receiving_players:
@@ -286,9 +287,10 @@ def _build_incoming_roster_players(
         pos = "WR"
         pro_team = "NFL"
         pts = 10.0
+        inj_status = "NORMAL"
 
         if norm_name in league_pool:
-            pos, pro_team, pts = league_pool[norm_name]
+            pos, pro_team, pts, inj_status = league_pool[norm_name]
         elif name in proj_map:
             pos, pts = proj_map[name]
         elif norm_name in {normalize_player_name(k): v for k, v in proj_map.items()}:
@@ -308,7 +310,7 @@ def _build_incoming_roster_players(
                 slot="Bench",
                 projected_points=pts,
                 actual_points=0.0,
-                injury_status="ACTIVE",
+                injury_status=inj_status,
                 bye_week=0,
                 percent_owned=90.0,
             )
@@ -385,6 +387,29 @@ def evaluate_trade(
         num_teams=league.num_teams,
     )
 
+    # 2b. Evaluate injury risk of incoming targets
+    primary_inj_alert: Optional[str] = None
+    primary_inj_status: str = "HEALTHY"
+    is_disqualified_inj: bool = False
+
+    for inc in incoming_players:
+        raw_inj = (inc.injury_status or "").upper()
+        if raw_inj in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION"):
+            primary_inj_status = inc.injury_status
+            is_disqualified_inj = True
+            primary_inj_alert = (
+                f"🚨 CRITICAL INJURY ALERT ({inc.injury_status}): {inc.name} is currently designated {inc.injury_status}. "
+                f"Acquiring an unplayable asset compromises starting equity. REJECT this trade."
+            )
+            break
+        elif raw_inj in ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q"):
+            primary_inj_status = inc.injury_status
+            primary_inj_alert = (
+                f"⚠️ INJURY WATCH ({inc.injury_status}): {inc.name} is currently carrying an active {inc.injury_status} tag. "
+                f"Do NOT pay full retail price. Verify practice participation before confirming, "
+                f"or use this uncertainty as leverage to demand a steeper discount."
+            )
+
     # 3. Simulate Roster-Contextual Starting Lineup Impact
     sim_impact = simulate_trade_roster_impact(
         roster=roster,
@@ -442,11 +467,16 @@ def evaluate_trade(
                 for p in opponent_roster.players
             ]
 
+        receiving_details = [
+            f"{p.name} ({p.position} - {p.team}, {p.projected_points:.1f} pts, Status: {p.injury_status})"
+            for p in incoming_players
+        ]
+
         prompt = format_trade_prompt(
             league=league,
             your_roster={"players": roster_data},
             giving_players=giving_players,
-            receiving_players=receiving_players,
+            receiving_players=receiving_details,
             opponent_roster={"players": opp_data} if opp_data else None,
             simulated_impact={
                 "pre_trade_starting_points": pre_pts,
@@ -474,6 +504,24 @@ def evaluate_trade(
             verdict_obj.fallback_reason = None
             if not getattr(verdict_obj, "time_horizon", None):
                 verdict_obj.time_horizon = "LONG_TERM_DECISION"
+
+            if primary_inj_alert and not getattr(verdict_obj, "injury_risk_alert", None):
+                verdict_obj.injury_risk_alert = primary_inj_alert
+            if not getattr(verdict_obj, "target_injury_status", None) or verdict_obj.target_injury_status == "HEALTHY":
+                if primary_inj_status != "HEALTHY":
+                    verdict_obj.target_injury_status = primary_inj_status
+
+            if is_disqualified_inj and verdict_obj.verdict == "ACCEPT":
+                verdict_obj.verdict = "REJECT"
+                disq_names = ", ".join(
+                    p.name for p in incoming_players
+                    if (p.injury_status or "").upper() in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION")
+                )
+                verdict_obj.coach_conviction = (
+                    f"Mad Dawg, do NOT pull the trigger. Incoming asset {disq_names} "
+                    f"is currently {primary_inj_status}. We never trade starting assets for unplayable injured players."
+                )
+
             if not getattr(verdict_obj, "coach_conviction", ""):
                 if verdict_obj.verdict == "ACCEPT":
                     verdict_obj.coach_conviction = (
@@ -501,7 +549,22 @@ def evaluate_trade(
     has_critical_depth = "CRITICAL DEPTH WARNING" in depth_impact
     all_incoming_benched = all("does NOT crack your starting lineup" in c for c in lineup_changes)
 
-    if has_critical_depth:
+    if is_disqualified_inj:
+        verdict = "REJECT"
+        time_horizon = "LONG_TERM_DECISION"
+        time_horizon_detail = (
+            f"Severe injury risk: Incoming target ({', '.join(p.name for p in incoming_players)}) carries an active {primary_inj_status} tag."
+        )
+        coach_conviction = (
+            f"Mad Dawg, reject this trade immediately. {', '.join(p.name for p in incoming_players)} is designated {primary_inj_status}. "
+            "We never trade healthy starting assets for injured, unplayable players. Slam the door on this offer."
+        )
+        reasoning = (
+            f"Incoming player carries a disqualifying injury status ({primary_inj_status}). "
+            f"Trading away healthy contributors for an injured asset compromises starting lineup depth."
+        )
+        counter = "Target a fully healthy starting asset instead."
+    elif has_critical_depth:
         verdict = "REJECT"
         time_horizon = "LONG_TERM_DECISION"
         time_horizon_detail = (
@@ -612,6 +675,8 @@ def evaluate_trade(
         ),
         reasoning=reasoning,
         counter_suggestion=counter,
+        injury_risk_alert=primary_inj_alert,
+        target_injury_status=primary_inj_status,
         generated_at=gen_time,
         intelligence_backend="deterministic_fallback",
         fallback_reason=fallback_err or "Gemini client was not provided",
