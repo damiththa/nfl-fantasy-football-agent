@@ -625,7 +625,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px;">
             <label style="margin: 0;">Players You Give (must be on your roster)</label>
-            <button type="button" onclick="loadTradeRoster(true)" style="background: none; border: none; color: var(--accent); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;" title="Re-fetch live roster directly from ESPN">🔄 Refresh Roster</button>
+            <button type="button" onclick="loadTradeRoster(true)" style="background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 4px; line-height: 1;" title="Refresh live roster from ESPN">🔄</button>
           </div>
           <input type="text" id="trade-give" placeholder="e.g. D'Andre Swift, Tyjae Spears">
           <div id="trade-give-roster-tags" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;"></div>
@@ -853,10 +853,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             tagContainer.appendChild(pill);
           });
         } else {
-          tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">No roster players found. Click 🔄 Refresh Roster to retry.</span>';
+          tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">No roster players found. Click 🔄 to retry.</span>';
         }
       } catch (e) {
-        tagContainer.innerHTML = '<span style="font-size: 11px; color: #ef4444;">Failed to load roster. Click 🔄 Refresh Roster to retry.</span>';
+        tagContainer.innerHTML = '<span style="font-size: 11px; color: #ef4444;">Failed to load roster. Click 🔄 to retry.</span>';
       }
     }
 

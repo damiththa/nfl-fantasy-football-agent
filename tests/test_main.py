@@ -414,7 +414,8 @@ def test_query_trade_calls_load_roster_week(client, monkeypatch):
 def test_dashboard_contains_refresh_roster_and_ticker(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "🔄 Refresh Roster" in response.text
+    assert ">🔄</button>" in response.text
+    assert "Refresh Roster" not in response.text
     assert "cache: 'no-store'" in response.text
     assert "_t=" in response.text
     assert "loadTradeRoster(true)" in response.text
