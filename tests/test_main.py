@@ -316,3 +316,108 @@ def test_fetch_league_free_agents_augments_kickers_and_defenses():
     assert "Test Defense" in names
 
 
+def test_query_roster_players_no_cache_and_load_roster_week(client, monkeypatch):
+    from unittest.mock import MagicMock
+
+    mock_league = MagicMock()
+    mock_league.current_week = 6
+    mock_team = MagicMock()
+    mock_team.team_id = 3
+    mock_team.team_name = "Mad Dawg"
+    mock_player = MagicMock()
+    mock_player.name = "Breece Hall"
+    mock_player.position = "RB"
+    mock_player.proTeam = "NYJ"
+    mock_player.projected_points = 14.5
+    mock_player.points = 0.0
+    mock_player.game_played = 0
+    mock_player.injuryStatus = "ACTIVE"
+    mock_player.lineupLocked = False
+    mock_player.lineupSlot = "RB"
+    mock_player.stats = {6: {"projected_points": 14.5, "points": 0.0}}
+    mock_team.roster = [mock_player]
+    mock_league.teams = [mock_team]
+
+    class MockLeagueClient:
+        def get_league(self, cfg):
+            return mock_league
+
+    monkeypatch.setattr("src.main.LeagueClient", MockLeagueClient)
+
+    response = client.get("/query/roster-players?league_id=991059191")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache, no-store, must-revalidate"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["expires"] == "0"
+
+    mock_league.load_roster_week.assert_called_once_with(6)
+    data = response.json()
+    assert data["league_id"] == 991059191
+    assert data["team_name"] == "Mad Dawg"
+    assert len(data["players"]) == 1
+    assert data["players"][0]["name"] == "Breece Hall"
+
+
+def test_query_trade_calls_load_roster_week(client, monkeypatch):
+    from unittest.mock import MagicMock
+    from src.intelligence.schemas import TradeEvaluation
+
+    mock_league = MagicMock()
+    mock_league.current_week = 6
+    mock_team = MagicMock()
+    mock_team.team_id = 3
+    mock_team.team_name = "Mad Dawg"
+    mock_team.roster = []
+    mock_league.teams = [mock_team]
+
+    class MockLeagueClient:
+        def get_league(self, cfg):
+            return mock_league
+
+    monkeypatch.setattr("src.main.LeagueClient", MockLeagueClient)
+
+    dummy_verdict = TradeEvaluation(
+        verdict="ACCEPT",
+        is_valid_trade=True,
+        roster_validation_errors=[],
+        pre_trade_starting_points=115.0,
+        post_trade_starting_points=117.5,
+        net_starting_points_change=2.5,
+        starting_lineup_changes=[],
+        positional_depth_impact="Solid",
+        your_vorp_change=2.5,
+        starting_lineup_impact="+2.5 pts",
+        time_horizon="LONG_TERM_DECISION",
+        time_horizon_detail="Full season",
+        coach_conviction="Strong upgrade at starting running back.",
+        playoff_schedule_impact="Favorable",
+        reasoning="Improves weekly starter floor.",
+        generated_at="2026-10-08T12:00:00Z",
+        intelligence_backend="Gemini Pro",
+    )
+    monkeypatch.setattr("src.main.evaluate_trade", MagicMock(return_value=dummy_verdict))
+
+    response = client.post(
+        "/query/trade",
+        json={
+            "league_id": 991059191,
+            "giving_players": ["Player A"],
+            "receiving_players": ["Player B"],
+        },
+    )
+    assert response.status_code == 200
+    mock_league.load_roster_week.assert_called_once_with(6)
+    data = response.json()
+    assert data["verdict"] == "ACCEPT"
+
+
+def test_dashboard_contains_refresh_roster_and_ticker(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "🔄 Refresh Roster" in response.text
+    assert "cache: 'no-store'" in response.text
+    assert "_t=" in response.text
+    assert "loadTradeRoster(true)" in response.text
+
+
+

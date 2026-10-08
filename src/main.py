@@ -623,7 +623,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           </select>
         </div>
         <div class="form-group">
-          <label>Players You Give (must be on your roster)</label>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px;">
+            <label style="margin: 0;">Players You Give (must be on your roster)</label>
+            <button type="button" onclick="loadTradeRoster(true)" style="background: none; border: none; color: var(--accent); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;" title="Re-fetch live roster directly from ESPN">🔄 Refresh Roster</button>
+          </div>
           <input type="text" id="trade-give" placeholder="e.g. D'Andre Swift, Tyjae Spears">
           <div id="trade-give-roster-tags" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;"></div>
         </div>
@@ -692,8 +695,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
       try {
         const resp = await fetch(url, { method: 'POST' });
-        clearInterval(activeTimer);
         const data = await resp.json();
+        if (activeTimer) {
+          clearInterval(activeTimer);
+          activeTimer = null;
+        }
 
         if (!resp.ok || data.detail || data.error) {
           const errMsg = data.detail || data.error || ('HTTP ' + resp.status + ': ' + resp.statusText);
@@ -713,7 +719,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         resTitle.textContent = title;
         renderOutput(data);
       } catch (err) {
-        clearInterval(activeTimer);
+        if (activeTimer) {
+          clearInterval(activeTimer);
+          activeTimer = null;
+        }
         resTitle.textContent = title + " — ⚠️ Connection / Timeout Notice";
         resContent.innerHTML = `
           <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin: 12px 0;">
@@ -722,6 +731,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <p style="font-size: 12px; color: #cbd5e1; margin: 0;">Mobile browsers (such as iOS Safari) close idle connections after 60 seconds. The server streams keep-alive pulses to preserve unconstrained Gemini 3.1 Pro reasoning depth. If your connection dropped due to local device signal, tap the button again to reload.</p>
           </div>
         `;
+      } finally {
+        if (activeTimer) {
+          clearInterval(activeTimer);
+          activeTimer = null;
+        }
       }
     }
 
@@ -742,24 +756,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const resTitle = document.getElementById('results-title');
       const resContent = document.getElementById('results-content');
 
-      if (activeTimer) clearInterval(activeTimer);
+      if (activeTimer) {
+        clearInterval(activeTimer);
+        activeTimer = null;
+      }
       let elapsedSec = 0;
 
-      resTitle.textContent = "Evaluating Trade...";
-      resContent.innerHTML = `
-        <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 18px;">
-          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-            <span class="spinner"></span>
-            <strong style="color: var(--accent); font-size: 15px;">Running VORP Analysis with Gemini Pro (0s elapsed)...</strong>
-          </div>
-          <p style="color: #cbd5e1; font-size: 13px; margin: 0;">Verifying roster ownership and calculating net starting points delta...</p>
-        </div>
-      `;
-      resCard.style.display = 'block';
-      resCard.scrollIntoView({ behavior: 'smooth' });
-
-      activeTimer = setInterval(() => {
-        elapsedSec++;
+      function updateTradeLoadingStatus() {
         resContent.innerHTML = `
           <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 18px;">
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -769,6 +772,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <p style="color: #cbd5e1; font-size: 13px; margin: 0;">Verifying roster ownership and calculating net starting points delta...</p>
           </div>
         `;
+      }
+
+      resTitle.textContent = "Evaluating Trade...";
+      updateTradeLoadingStatus();
+      resCard.style.display = 'block';
+      resCard.scrollIntoView({ behavior: 'smooth' });
+
+      activeTimer = setInterval(() => {
+        elapsedSec++;
+        updateTradeLoadingStatus();
       }, 1000);
 
       try {
@@ -777,8 +790,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ league_id: leagueId, giving_players: giving, receiving_players: receiving })
         });
-        clearInterval(activeTimer);
         const data = await resp.json();
+        if (activeTimer) {
+          clearInterval(activeTimer);
+          activeTimer = null;
+        }
 
         if (!resp.ok || data.detail || (data.error && !data.verdict)) {
           const errMsg = data.detail || data.error || ('HTTP ' + resp.status + ': ' + resp.statusText);
@@ -795,20 +811,34 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         resTitle.textContent = "Trade Verdict: " + (data.verdict || 'Evaluation Complete');
         renderOutput(data);
       } catch (err) {
-        clearInterval(activeTimer);
+        if (activeTimer) {
+          clearInterval(activeTimer);
+          activeTimer = null;
+        }
         resTitle.textContent = "Trade Evaluation Failed";
         resContent.innerHTML = '<p style="color: #ef4444;">❌ Error: ' + err.message + '</p>';
+      } finally {
+        if (activeTimer) {
+          clearInterval(activeTimer);
+          activeTimer = null;
+        }
       }
     }
 
-    async function loadTradeRoster() {
+    async function loadTradeRoster(force = false) {
       const leagueSelect = document.getElementById('trade-league');
       const tagContainer = document.getElementById('trade-give-roster-tags');
       if (!leagueSelect || !tagContainer) return;
       const leagueId = leagueSelect.value;
-      tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">Loading your roster...</span>';
+      if (force) {
+        tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--accent);">🔄 Syncing live roster from ESPN...</span>';
+      } else {
+        tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">Loading your roster...</span>';
+      }
       try {
-        const resp = await fetch(`/query/roster-players?league_id=${leagueId}`);
+        const resp = await fetch(`/query/roster-players?league_id=${leagueId}&_t=${Date.now()}`, {
+          cache: 'no-store'
+        });
         const data = await resp.json();
         if (data.players && data.players.length > 0) {
           tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted); width: 100%; margin-bottom: 3px;">Your Roster (click to add/remove):</span>';
@@ -823,10 +853,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             tagContainer.appendChild(pill);
           });
         } else {
-          tagContainer.innerHTML = '';
+          tagContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">No roster players found. Click 🔄 Refresh Roster to retry.</span>';
         }
       } catch (e) {
-        tagContainer.innerHTML = '';
+        tagContainer.innerHTML = '<span style="font-size: 11px; color: #ef4444;">Failed to load roster. Click 🔄 Refresh Roster to retry.</span>';
       }
     }
 
@@ -2254,8 +2284,15 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")):
 
 
 @app.get("/query/roster-players")
-def query_roster_players(league_id: int = Query(..., description="ESPN League ID")) -> dict[str, Any]:
+def query_roster_players(
+    response: Response,
+    league_id: int = Query(..., description="ESPN League ID"),
+) -> dict[str, Any]:
     """Fetch current roster players for quick-select in trade evaluator."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     league_config = ALL_LEAGUES.get(league_id)
     if not league_config:
         raise HTTPException(status_code=404, detail=f"League {league_id} not found in configuration.")
@@ -2263,6 +2300,10 @@ def query_roster_players(league_id: int = Query(..., description="ESPN League ID
     try:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
+        try:
+            espn.load_roster_week(current_week)
+        except Exception as e:
+            logger.warning("load_roster_week(%s) failed for league %s: %s", current_week, league_id, e)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
         parsed_roster = parse_roster(my_team, league_config, week=current_week) if my_team else None
         players = []
@@ -2298,6 +2339,10 @@ def query_trade(req: TradeRequest):
     def _compute() -> dict[str, Any]:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
+        try:
+            espn.load_roster_week(current_week)
+        except Exception as e:
+            logger.warning("load_roster_week(%s) failed in trade evaluation for league %s: %s", current_week, req.league_id, e)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
         parsed_roster = parse_roster(my_team, league_config, week=current_week) if my_team else None
 
