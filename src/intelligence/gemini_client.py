@@ -27,8 +27,8 @@ INITIAL_BACKOFF_SECONDS = 1.0
 BACKOFF_MULTIPLIER = 1.5
 
 PREFERRED_MODELS: list[str] = [
-    "gemini-3.1-pro-preview",  # Primary target: served from the Vertex AI `global` endpoint only
-    "gemini-3.1-pro",          # Alias (resolves if GA identifier changes)
+    "gemini-3.1-pro",          # Primary GA target (auto-switches the moment Google releases GA endpoint)
+    "gemini-3.1-pro-preview",  # Current active frontier model (served from Vertex AI `global`)
     "gemini-3-pro-preview",    # Secondary target preview
     "gemini-2.5-pro",          # Legacy stable fallback (EOL Oct 2026)
 ]

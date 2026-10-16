@@ -143,10 +143,30 @@ def test_negotiate_active_model_upgrades_when_target_available():
         models = AllAvailableModels()
 
     selected, diag = negotiate_active_model(force=True, mock_client=AllAvailableClient())
-    assert selected == "gemini-3.1-pro-preview"
+    assert selected == "gemini-3.1-pro"
     assert diag["auto_upgrade_active"] is True
+    assert diag["candidates"]["gemini-3.1-pro"]["available"] is True
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
     assert diag["candidates"]["gemini-2.5-pro"]["available"] is True
+
+
+def test_negotiate_active_model_selects_preview_when_ga_is_404():
+    """Verify that if GA gemini-3.1-pro returns 404, the system selects gemini-3.1-pro-preview."""
+    class PreviewOnlyModels:
+        def generate_content(self, model, contents, config=None):
+            if model == "gemini-3.1-pro":
+                raise ConnectionError("404 Publisher model not found")
+            return MockModelResponse("ok")
+
+    class PreviewOnlyClient:
+        models = PreviewOnlyModels()
+
+    selected, diag = negotiate_active_model(force=True, mock_client=PreviewOnlyClient())
+    assert selected == "gemini-3.1-pro-preview"
+    assert diag["auto_upgrade_active"] is True
+    assert diag["candidates"]["gemini-3.1-pro"]["available"] is False
+    assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
+
 
 
 def test_in_flight_failover_structured():
