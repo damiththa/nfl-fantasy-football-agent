@@ -349,4 +349,57 @@ def test_evaluate_waivers_ai_stand_pat_overridden_when_kicker_on_bye():
     assert report.targets[0].player_name == "Cameron Dicker"
 
 
+def test_evaluate_waivers_never_recommends_dropping_bye_week_star():
+    """Verify that neither deterministic nor AI waiver evaluation ever suggests dropping a star on bye (e.g. James Cook)."""
+    starters = [
+        RosterPlayer("Joe Burrow", "QB", "CIN", "QB", 23.6, 0.0, "NORMAL", 12, 99.0),
+    ]
+    bench = [
+        # James Cook on Week 7 bye (0.0 projected_points, 97% owned, 16.5 ROS PPG)
+        RosterPlayer("James Cook III", "RB", "BUF", "Bench", 0.0, 0.0, "ACTIVE", 7, 97.0, ros_baseline_ppg=16.5),
+        # Expendable low-owned bench WR
+        RosterPlayer("End of Bench WR", "WR", "CAR", "Bench", 4.5, 0.0, "NORMAL", 11, 12.0, ros_baseline_ppg=4.5),
+    ]
+    roster = ParsedRoster(team_name="Mad Dawg", players=starters + bench, starters=starters, bench=bench)
+
+    free_agents = [
+        {
+            "name": "Breakout RB",
+            "position": "RB",
+            "team": "MIA",
+            "projected_points": 14.0,
+            "percent_owned": 55.0,
+            "injury_status": "ACTIVE",
+        }
+    ]
+
+    # 1. Deterministic check
+    det_report = evaluate_waivers(PNA_2026, 7, roster, free_agents)
+    for t in det_report.targets:
+        assert t.recommended_drop != "James Cook III"
+    assert not any("James Cook" in d for d in det_report.roster_drop_candidates)
+
+    # 2. AI sanitizer check (if LLM hallucinates dropping James Cook III on his bye week)
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            class Response:
+                text = (
+                    '{"league_id": 991059191, "week": 7, "is_move_recommended": true, '
+                    '"coach_verdict": "EXECUTE_CLAIMS", '
+                    '"targets": [{"player_name": "Breakout RB", "position": "RB", "team": "MIA", "priority": "MUST_ADD", "recommended_drop": "James Cook III", "reasoning": "Add RB", "upside_summary": "RB1"}], '
+                    '"roster_drop_candidates": ["James Cook III (0.0 pts)"], "overall_waiver_strategy": "Claim Breakout RB"}'
+                )
+
+            return Response()
+
+    class MockSdk:
+        models = MockModels()
+
+    client = GeminiIntelligenceClient(mock_client=MockSdk())
+    ai_report = evaluate_waivers(PNA_2026, 7, roster, free_agents, client=client)
+    assert ai_report.targets[0].recommended_drop == "End of Bench WR"
+    assert not any("James Cook" in d for d in ai_report.roster_drop_candidates)
+
+
+
 

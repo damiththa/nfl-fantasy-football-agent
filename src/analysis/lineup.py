@@ -15,7 +15,7 @@ from src.data.stats import fetch_player_stats, fetch_snap_counts
 from src.data.vegas import GameOdds, get_player_game_odds, normalize_team_abbr
 from src.data.weather import GameWeather
 from src.espn.matchup import MatchupData
-from src.espn.roster import ParsedRoster, RosterPlayer
+from src.espn.roster import ParsedRoster, RosterPlayer, get_safe_drop_candidates
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_lineup_prompt
 from src.intelligence.schemas import (
@@ -288,10 +288,10 @@ def detect_lineup_holes_and_solutions(
         except Exception:
             pass
 
-    # Find candidate drop from user's bench (lowest projected healthy player not on IR)
-    bench_candidates = [b for b in roster.bench if (b.injury_status or "").upper() not in ("IR",)]
-    bench_candidates.sort(key=lambda b: getattr(b, "projected_points", 0.0) or 0.0)
-    drop_candidate = bench_candidates[0] if bench_candidates else None
+    # Find genuinely expendable candidate drop from user's bench
+    # (Strictly excludes bye-week players and protected core/star skill assets!)
+    safe_bench_drops = get_safe_drop_candidates(roster, current_week=current_week)
+    drop_candidate = safe_bench_drops[0] if safe_bench_drops else None
 
     # Track already recommended bench promotions
     used_bench_names: set[str] = set()
@@ -386,6 +386,11 @@ def detect_lineup_holes_and_solutions(
                 waiver_rec = (
                     f"🎯 Claim {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts). "
                     f"Suggested Drop: {drop_candidate.name} ({drop_candidate.position}, {drop_candidate.projected_points:.1f} pts).{ir_tip}"
+                )
+            elif eligible_bench:
+                waiver_rec = (
+                    f"🎯 Top FA Option: {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts). "
+                    f"🛡️ NO DROP RECOMMENDED: Your bench holds protected/bye-week starters and already covers this slot via {eligible_bench[0].name}.{ir_tip}"
                 )
             else:
                 waiver_rec = f"🎯 Claim {top_fa.name} ({top_fa_pos} - {top_fa_team}, {top_fa_pts:.1f} pts) from free agency.{ir_tip}"
@@ -488,6 +493,7 @@ def enrich_lineup_recommendation_with_espn_status(
             b.has_played = getattr(p_obj, "has_played", False)
 
     # Detect emergency lineup holes (injuries, OUT, IR, SUS, Bye weeks, Vacant)
+    # Always use the deterministic, bye-protected hole detector so LLM hallucinations never suggest dropping stars on bye
     rec.lineup_hole_alerts = detect_lineup_holes_and_solutions(
         roster=roster,
         league=league,
@@ -981,6 +987,10 @@ def optimize_lineup(
                 "team": p.team,
                 "current_slot": p.slot,
                 "projected_pts": p.projected_points,
+                "ros_baseline_ppg": round(max(p.projected_points, getattr(p, "ros_baseline_ppg", 0.0)), 1),
+                "percent_owned": round(getattr(p, "percent_owned", 0.0), 1),
+                "is_on_bye": p.is_on_bye(week),
+                "is_protected_asset": p.is_protected_asset,
                 "injury": p.injury_status,
                 "is_locked": getattr(p, "is_locked", False),
                 "lock_status": getattr(p, "lock_status", "UNLOCKED_ACTIONABLE"),

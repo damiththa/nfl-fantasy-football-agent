@@ -343,6 +343,50 @@ def test_evaluate_trade_disqualifies_out_player():
     assert "CRITICAL INJURY ALERT" in eval_res.injury_risk_alert
 
 
+def test_evaluate_trade_protects_bye_week_star_using_ros_baseline():
+    """Verify that trading away a star RB on his bye week (0.0 weekly projection, 16.5 ROS baseline)
+    for a mediocre 10-pt filler is rejected because compute_optimal_starters uses ROS baseline value.
+    """
+    roster = ParsedRoster(
+        team_name="Mad Dawg",
+        players=[
+            _make_player("Joe Burrow", "QB", 22.0),
+            # James Cook III is on Bye (0.0 weekly proj, but 16.5 ROS baseline PPG)
+            RosterPlayer(
+                name="James Cook III",
+                position="RB",
+                team="BUF",
+                slot="Bench",
+                projected_points=0.0,
+                actual_points=0.0,
+                injury_status="ACTIVE",
+                bye_week=7,
+                percent_owned=97.0,
+                ros_baseline_ppg=16.5,
+            ),
+            _make_player("Chuba Hubbard", "RB", 14.0),
+            _make_player("Alvin Kamara", "RB", 9.0),
+            _make_player("Drake London", "WR", 17.0),
+            _make_player("Jordan Addison", "WR", 11.0),
+            _make_player("Jake Ferguson", "TE", 8.0),
+            _make_player("Tony Pollard", "RB", 12.0),
+            _make_player("Wan'Dale Robinson", "WR", 8.5),
+            _make_player("Jets D/ST", "DST", 7.5),
+        ],
+    )
+    projections = {"Ted Hurst III": ("WR", 10.0)}
+    result = evaluate_trade(
+        league=PNA_2026,
+        roster=roster,
+        giving_players=["James Cook III"],
+        receiving_players=["Ted Hurst III"],
+        player_projections=projections,
+    )
+    assert result.verdict == "REJECT"
+    assert result.net_starting_points_change < 0
+
+
+
 def test_evaluate_trade_dtd_player_attaches_injury_alert():
     """Verify that incoming DTD / QUESTIONABLE players attach an injury alert."""
     roster = ParsedRoster(

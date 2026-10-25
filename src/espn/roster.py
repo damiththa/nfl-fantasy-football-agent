@@ -28,11 +28,40 @@ class RosterPlayer:
     lock_status: str = "UNLOCKED_ACTIONABLE"
     pro_opponent: str = ""
     opponent_pos_rank: Optional[int] = None
+    ros_baseline_ppg: float = 0.0
 
     @property
     def is_zero_projection_unplayed(self) -> bool:
         """Returns True if the player has not yet played and is projected for 0.0 points."""
         return not self.has_played and self.projected_points <= 0.0
+
+    def is_on_bye(self, current_week: int = 0) -> bool:
+        """Returns True if the player is on a bye week in current_week."""
+        if current_week and self.bye_week == current_week:
+            return True
+        if (
+            not self.has_played
+            and self.projected_points <= 0.0
+            and (self.injury_status or "NORMAL").upper() in ("NORMAL", "ACTIVE", "")
+            and (not self.pro_opponent or self.pro_opponent.upper() in ("BYE", "NONE", ""))
+        ):
+            return True
+        return False
+
+    @property
+    def is_protected_asset(self) -> bool:
+        """Returns True if the player is a core/star asset that must NEVER be recommended as a waiver drop."""
+        pos = (self.position or "").upper()
+        if pos in ("DST", "D/ST", "DEF", "K", "PK"):
+            return False
+        if (self.injury_status or "").upper() in ("IR", "INJURY_RESERVE"):
+            return False
+        if self.percent_owned >= 65.0:
+            return True
+        effective_ppg = max(self.projected_points, self.ros_baseline_ppg)
+        if effective_ppg >= 10.0:
+            return True
+        return False
 
     def __post_init__(self):
         if self.has_played:
@@ -56,6 +85,52 @@ class ParsedRoster:
     starters: List[RosterPlayer] = field(default_factory=list)
     bench: List[RosterPlayer] = field(default_factory=list)
     ir: List[RosterPlayer] = field(default_factory=list)
+
+
+def get_safe_drop_candidates(
+    roster: ParsedRoster, current_week: int = 0
+) -> list[RosterPlayer]:
+    """Return bench players that are genuinely safe to drop, ordered from most expendable to least.
+
+    Strictly excludes:
+    1. Any player currently on a bye week (whose 0.0 weekly projection is temporary).
+    2. Any protected core/star skill asset (is_protected_asset == True, e.g., >=65% owned or >=10.0 ROS PPG).
+    3. Any player already in an IR slot.
+    """
+    clear_drops: list[RosterPlayer] = []
+    marginal_drops: list[RosterPlayer] = []
+
+    for b in roster.bench:
+        inj = (b.injury_status or "").upper()
+        if inj == "IR":
+            continue
+        pos = (b.position or "").upper()
+
+        # 1. Extra Kicker or Defense on the bench is always the #1 most expendable roster spot
+        if pos in ("DST", "D/ST", "DEF", "K", "PK"):
+            clear_drops.append(b)
+            continue
+
+        # 2. Never drop a skill player simply because they are on a bye week!
+        if b.is_on_bye(current_week):
+            continue
+
+        # 3. Never drop a protected core/star skill asset (e.g. James Cook, Ladd McConkey, Khalil Shakir)
+        if b.is_protected_asset:
+            continue
+
+        marginal_drops.append(b)
+
+    # Sort marginal drops by effective season value (not just a single week's projection), then ownership
+    marginal_drops.sort(
+        key=lambda p: (
+            max(p.projected_points, getattr(p, "ros_baseline_ppg", 0.0)),
+            p.percent_owned,
+        )
+    )
+    clear_drops.sort(key=lambda p: p.projected_points)
+    return clear_drops + marginal_drops
+
 
 
 def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None) -> ParsedRoster:
@@ -192,6 +267,39 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
             if not has_played and proj_pts <= 0.0 and (not pro_opp or str(pro_opp).upper() in ("BYE", "NONE", "")):
                 detected_bye = target_week
 
+        # Compute rest-of-season (ROS) / multi-week baseline PPG so bye-week 0.0 projections
+        # never disguise a star player as a 0.0-point scrub
+        weekly_samples: list[float] = []
+        for k, v in stats_dict.items():
+            if not isinstance(v, dict):
+                continue
+            try:
+                k_int = int(k)
+            except (ValueError, TypeError):
+                continue
+            # Ignore season-total keys (0 or >= 2000) and focus on weekly entries (1..18)
+            if 1 <= k_int <= 18:
+                w_pts = v.get("points")
+                w_proj = v.get("projected_points")
+                if isinstance(w_pts, (int, float)) and w_pts > 0:
+                    weekly_samples.append(float(w_pts))
+                elif isinstance(w_proj, (int, float)) and w_proj > 0:
+                    weekly_samples.append(float(w_proj))
+
+        pct_owned = float(getattr(player, "percent_owned", 0.0) or 0.0)
+        if weekly_samples:
+            ros_baseline = round(sum(weekly_samples) / len(weekly_samples), 2)
+        elif proj_pts > 0:
+            ros_baseline = proj_pts
+        elif pct_owned >= 85.0:
+            ros_baseline = 14.5
+        elif pct_owned >= 70.0:
+            ros_baseline = 11.5
+        elif pct_owned >= 50.0:
+            ros_baseline = 9.0
+        else:
+            ros_baseline = 0.0
+
         rp = RosterPlayer(
             name=getattr(player, "name", "Unknown Player") or "Unknown Player",
             position=getattr(player, "position", "UNK") or "UNK",
@@ -201,12 +309,13 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
             actual_points=actual_pts,
             injury_status=getattr(player, "injuryStatus", "NORMAL") or "NORMAL",
             bye_week=detected_bye,
-            percent_owned=getattr(player, "percent_owned", 0.0) or 0.0,
+            percent_owned=pct_owned,
             has_played=has_played,
             is_locked=is_locked,
             lock_status=lock_status,
             pro_opponent=str(pro_opp) if pro_opp else "",
             opponent_pos_rank=opp_pos_rank,
+            ros_baseline_ppg=ros_baseline,
         )
 
         parsed.players.append(rp)

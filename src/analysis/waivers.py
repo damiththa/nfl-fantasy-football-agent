@@ -10,7 +10,7 @@ from typing import Any, Optional
 from src.config import LeagueConfig
 from src.data.injuries import PlayerInjuryInfo, normalize_name
 from src.data.trending import TrendingPlayer
-from src.espn.roster import ParsedRoster
+from src.espn.roster import ParsedRoster, get_safe_drop_candidates
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_waiver_prompt
 from src.intelligence.schemas import WaiverRecommendation, WaiverReport
@@ -148,6 +148,14 @@ def evaluate_waivers(
                 ),
             })
 
+    # Identify safe drop candidates up front (strictly excluding bye-week and protected core/star assets)
+    safe_bench_drops = get_safe_drop_candidates(roster, current_week=week)
+    protected_or_bye_names = {
+        p.name.lower()
+        for p in roster.players
+        if p.is_on_bye(week) or p.is_protected_asset
+    }
+
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
         roster_data = [
@@ -157,6 +165,10 @@ def evaluate_waivers(
                 "team": p.team,
                 "slot": p.slot,
                 "projected_pts": p.projected_points,
+                "ros_baseline_ppg": round(max(p.projected_points, getattr(p, "ros_baseline_ppg", 0.0)), 1),
+                "percent_owned": round(getattr(p, "percent_owned", 0.0), 1),
+                "is_on_bye": p.is_on_bye(week),
+                "is_protected_do_not_drop": bool(p.is_on_bye(week) or p.is_protected_asset),
                 "injury": p.injury_status,
             }
             for p in roster.players
@@ -237,7 +249,10 @@ def evaluate_waivers(
             report.intelligence_backend = client.model
             report.fallback_reason = None
 
-            # Post-validation safety net: Reject any target that is on IR, Out, or injured with 0 projection
+            # Post-validation safety net:
+            # 1. Reject any target that is on IR, Out, or injured with 0 projection
+            # 2. Never allow dropping a bye-week player or protected core/star asset!
+            fallback_safe_drop = safe_bench_drops[0].name if safe_bench_drops else None
             sanitized_targets = []
             for t in report.targets:
                 fa_match = next((fa for fa in free_agents if fa.get("name", "").lower() == t.player_name.lower()), None)
@@ -257,8 +272,30 @@ def evaluate_waivers(
                             t.player_name, espn_inj, sl_status, proj
                         )
                         continue
+
+                if t.recommended_drop:
+                    rec_drop_clean = t.recommended_drop.split("(")[0].strip().lower()
+                    if any(
+                        rec_drop_clean == pname or pname in rec_drop_clean
+                        for pname in protected_or_bye_names
+                    ):
+                        logger.warning(
+                            "Sanitizer blocked AI recommended_drop '%s' (bye-week or protected star asset). Replacing with '%s'.",
+                            t.recommended_drop,
+                            fallback_safe_drop,
+                        )
+                        t.recommended_drop = fallback_safe_drop
+
                 sanitized_targets.append(t)
             report.targets = sanitized_targets
+
+            # Sanitize roster_drop_candidates list against bye-week / protected players
+            if report.roster_drop_candidates:
+                report.roster_drop_candidates = [
+                    d
+                    for d in report.roster_drop_candidates
+                    if not any(pname in d.lower() for pname in protected_or_bye_names)
+                ]
 
             if report.coach_verdict == "STAND_PAT" or not report.targets:
                 if has_unfilled_starter_hole:
@@ -289,18 +326,21 @@ def evaluate_waivers(
             )
 
     # Deterministic fallback algorithm when LLM client is None or when AI STAND_PAT is overridden by unfilled starter hole
-    # 1. Check for genuine droppable liabilities on the bench
+    # 1. Check for genuine droppable liabilities on the bench (strictly excluding bye-week and protected assets)
     clear_drop_candidates = []
     marginal_drop_candidates = []
 
     for p in roster.bench:
-        # Extra DST or Kicker on bench is a clear droppable roster clogger
         if p.position in ("DST", "D/ST", "K"):
+            # Extra DST or Kicker on bench is a clear droppable roster clogger
             clear_drop_candidates.append(p)
+        elif p.is_on_bye(week) or p.is_protected_asset:
+            # NEVER drop a player on a bye week or a protected star/starter asset!
+            continue
         elif (p.injury_status or "").upper() in ("OUT", "IR"):
-            # Injured bench players not in IR slot
+            # Injured low-end bench players not in IR slot
             clear_drop_candidates.append(p)
-        elif p.projected_points < 4.0:
+        elif max(p.projected_points, getattr(p, "ros_baseline_ppg", 0.0)) < 6.5:
             marginal_drop_candidates.append(p)
 
     # 2. Filter and rank available free agents
@@ -345,7 +385,7 @@ def evaluate_waivers(
         )
 
     # If an add is genuinely justified:
-    drop_pool = clear_drop_candidates or marginal_drop_candidates or sorted(roster.bench, key=lambda p: p.projected_points)
+    drop_pool = clear_drop_candidates or marginal_drop_candidates or safe_bench_drops
     drop_p = drop_pool[0] if drop_pool else None
     drop_name = drop_p.name if drop_p else None
     drop_candidates_str = [f"{drop_p.name} ({drop_p.position} - {drop_p.projected_points:.1f} pts)"] if drop_p else []

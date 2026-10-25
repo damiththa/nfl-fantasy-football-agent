@@ -647,3 +647,53 @@ def test_detect_lineup_holes_zero_projection_unplayed_starter():
     assert "No healthy, eligible bench replacement" in butker_alert.bench_recommendation
     assert "Jake Moody" in butker_alert.waiver_recommendation
 
+
+def test_detect_lineup_holes_never_drops_star_on_bye_week():
+    """Verify exact user scenario in Chips Ahoy: DeVonta Smith on bye in starting WR slot, James Cook III on bye on bench (0.0 pts).
+    The hole detector must NEVER suggest dropping James Cook III or any bye-week / protected bench star!
+    """
+    from src.config import CHIPS_AHOY
+
+    starters = [
+        RosterPlayer("Joe Burrow", "QB", "CIN", "QB", 23.6, 0.0, "NORMAL", 12, 99.0),
+        RosterPlayer("Chuba Hubbard", "RB", "CAR", "RB", 14.5, 0.0, "NORMAL", 11, 88.0),
+        RosterPlayer("Alvin Kamara", "RB", "NO", "RB", 8.2, 0.0, "NORMAL", 12, 92.0),
+        RosterPlayer("Drake London", "WR", "ATL", "WR", 17.1, 0.0, "NORMAL", 12, 98.0),
+        # DeVonta Smith on Week 7 Bye in starting WR slot
+        RosterPlayer("DeVonta Smith", "WR", "PHI", "WR", 0.0, 0.0, "ACTIVE", 7, 94.0, ros_baseline_ppg=14.2),
+        RosterPlayer("Jake Ferguson", "TE", "DAL", "TE", 5.9, 0.0, "NORMAL", 10, 85.0),
+        RosterPlayer("Tony Pollard", "RB", "TEN", "FLEX", 13.4, 0.0, "NORMAL", 5, 86.0),
+        RosterPlayer("Harrison Butker", "K", "KC", "K", 10.3, 0.0, "NORMAL", 6, 92.0),
+        RosterPlayer("Jets D/ST", "DST", "NYJ", "DST", 7.3, 0.0, "NORMAL", 12, 75.0),
+    ]
+    # Bench has James Cook III and DJ Moore on Week 7 Bye (0.0 projected_points), plus Jordan Addison and Wan'Dale Robinson
+    bench = [
+        RosterPlayer("James Cook III", "RB", "BUF", "BE", 0.0, 0.0, "ACTIVE", 7, 97.0, ros_baseline_ppg=16.5),
+        RosterPlayer("DJ Moore", "WR", "BUF", "BE", 0.0, 0.0, "ACTIVE", 7, 91.0, ros_baseline_ppg=13.8),
+        RosterPlayer("Jordan Addison", "WR", "MIN", "BE", 10.9, 0.0, "NORMAL", 6, 82.0, ros_baseline_ppg=11.5),
+        RosterPlayer("Tyler Allgeier", "RB", "ATL", "BE", 11.1, 0.0, "NORMAL", 12, 45.0, ros_baseline_ppg=8.5),
+        RosterPlayer("Wan'Dale Robinson", "WR", "TEN", "BE", 8.4, 0.0, "NORMAL", 11, 52.0, ros_baseline_ppg=8.4),
+    ]
+    roster = ParsedRoster(
+        team_name="Mad Dawg", players=starters + bench, starters=starters, bench=bench
+    )
+
+    fa_wr = MockESPNPlayer("Ted Hurst III", "WR", "TB", 10.0)
+    espn_league = MockESPNLeague(teams=[], free_agents=[fa_wr])
+
+    alerts = detect_lineup_holes_and_solutions(
+        roster=roster,
+        league=CHIPS_AHOY,
+        current_week=7,
+        espn_league=espn_league,
+    )
+
+    assert len(alerts) == 1
+    alert = alerts[0]
+    assert alert.current_player_name == "DeVonta Smith"
+    assert "Promote Jordan Addison" in alert.bench_recommendation
+    # CRITICAL: James Cook III and DJ Moore (on bye) must NEVER be suggested as drops!
+    assert "James Cook" not in alert.waiver_recommendation
+    assert "DJ Moore" not in alert.waiver_recommendation
+
+

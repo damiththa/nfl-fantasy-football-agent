@@ -111,14 +111,25 @@ def validate_trade_roster_ownership(
     return (len(errors) == 0, errors, matched_giving)
 
 
+def get_player_ros_value(p: RosterPlayer) -> float:
+    """Return a player's rest-of-season (ROS) weekly baseline points so a bye-week 0.0
+    projection never causes the trade engine to treat a star as a 0.0-point player.
+    """
+    proj = float(getattr(p, "projected_points", 0.0) or 0.0)
+    ros = float(getattr(p, "ros_baseline_ppg", 0.0) or 0.0)
+    return max(proj, ros)
+
+
 def compute_optimal_starters(
-    players: list[RosterPlayer], league: LeagueConfig
+    players: list[RosterPlayer],
+    league: LeagueConfig,
+    use_ros_baseline: bool = True,
 ) -> tuple[list[RosterPlayer], list[RosterPlayer], float]:
     """Deterministically calculate optimal starters and total starting points for a set of players."""
     # Filter out active vs injured players (injuries sorted to bottom)
     def player_sort_key(p: RosterPlayer) -> tuple[int, float]:
         is_injured = (getattr(p, "injury_status", "") or "").upper() in ("OUT", "IR")
-        pts = getattr(p, "projected_points", 0.0) or 0.0
+        pts = get_player_ros_value(p) if use_ros_baseline else (getattr(p, "projected_points", 0.0) or 0.0)
         return (0 if not is_injured else 1, -pts)
 
     sorted_players = sorted(players, key=player_sort_key)
@@ -156,7 +167,13 @@ def compute_optimal_starters(
         else:
             bench.append(p)
 
-    total_pts = round(sum(getattr(p, "projected_points", 0.0) or 0.0 for p in starters), 2)
+    total_pts = round(
+        sum(
+            (get_player_ros_value(p) if use_ros_baseline else (getattr(p, "projected_points", 0.0) or 0.0))
+            for p in starters
+        ),
+        2,
+    )
     return starters, bench, total_pts
 
 
@@ -196,7 +213,7 @@ def simulate_trade_roster_impact(
         )
         tag = "Acquired Starter" if is_incoming else "Promoted from Bench"
         lineup_changes.append(
-            f"⬆️ {tag}: {ns.name} ({ns.position}, {getattr(ns, 'projected_points', 0.0):.1f} pts) enters starting lineup"
+            f"⬆️ {tag}: {ns.name} ({ns.position}, {get_player_ros_value(ns):.1f} pts) enters starting lineup"
         )
 
     for ds in departed_starters:
@@ -206,14 +223,14 @@ def simulate_trade_roster_impact(
         )
         tag = "Traded Away" if is_traded else "Demoted to Bench"
         lineup_changes.append(
-            f"⬇️ {tag}: {ds.name} ({ds.position}, {getattr(ds, 'projected_points', 0.0):.1f} pts) exits starting lineup"
+            f"⬇️ {tag}: {ds.name} ({ds.position}, {get_player_ros_value(ds):.1f} pts) exits starting lineup"
         )
 
     # Check if incoming player did NOT crack the starting lineup
     for inc in incoming_players:
         if normalize_player_name(inc.name) not in post_starter_names:
             lineup_changes.append(
-                f"⚠️ Bench Stash: Acquired player {inc.name} ({inc.position}, {getattr(inc, 'projected_points', 0.0):.1f} pts) "
+                f"⚠️ Bench Stash: Acquired player {inc.name} ({inc.position}, {get_player_ros_value(inc):.1f} pts) "
                 f"does NOT crack your starting lineup (sits on bench behind current starters)."
             )
 
@@ -269,17 +286,47 @@ def _build_incoming_roster_players(
     incoming: list[RosterPlayer] = []
 
     # Search league teams if available
-    league_pool: dict[str, tuple[str, str, float, str]] = {}  # name_norm -> (pos, proTeam, pts, injury_status)
+    league_pool: dict[str, tuple[str, str, float, str, float]] = {}  # name_norm -> (pos, proTeam, pts, injury_status, ros_ppg)
     if espn_league and hasattr(espn_league, "teams"):
         for team in espn_league.teams:
             for p in getattr(team, "roster", []):
                 p_name = getattr(p, "name", "")
                 p_norm = normalize_player_name(p_name)
+                pts_val = float(getattr(p, "projected_points", 0.0) or 0.0)
+                pct_owned = float(getattr(p, "percent_owned", 0.0) or 0.0)
+                stats_dict = getattr(p, "stats", {})
+                weekly_samples: list[float] = []
+                if isinstance(stats_dict, dict):
+                    for k, v in stats_dict.items():
+                        if not isinstance(v, dict):
+                            continue
+                        try:
+                            k_int = int(k)
+                        except (ValueError, TypeError):
+                            continue
+                        if 1 <= k_int <= 18:
+                            w_pts = v.get("points")
+                            w_proj = v.get("projected_points")
+                            if isinstance(w_pts, (int, float)) and w_pts > 0:
+                                weekly_samples.append(float(w_pts))
+                            elif isinstance(w_proj, (int, float)) and w_proj > 0:
+                                weekly_samples.append(float(w_proj))
+                if weekly_samples:
+                    ros_val = round(sum(weekly_samples) / len(weekly_samples), 2)
+                elif pts_val > 0:
+                    ros_val = pts_val
+                elif pct_owned >= 85.0:
+                    ros_val = 14.5
+                elif pct_owned >= 70.0:
+                    ros_val = 11.5
+                else:
+                    ros_val = pts_val
                 league_pool[p_norm] = (
                     getattr(p, "position", "FLEX") or "FLEX",
                     getattr(p, "proTeam", "FA") or "FA",
-                    float(getattr(p, "projected_points", 0.0) or 0.0),
+                    pts_val,
                     getattr(p, "injuryStatus", "NORMAL") or "NORMAL",
+                    ros_val,
                 )
 
     for name in receiving_players:
@@ -288,19 +335,23 @@ def _build_incoming_roster_players(
         pro_team = "NFL"
         pts = 10.0
         inj_status = "NORMAL"
+        ros_val = 10.0
 
         if norm_name in league_pool:
-            pos, pro_team, pts, inj_status = league_pool[norm_name]
+            pos, pro_team, pts, inj_status, ros_val = league_pool[norm_name]
         elif name in proj_map:
             pos, pts = proj_map[name]
+            ros_val = pts
         elif norm_name in {normalize_player_name(k): v for k, v in proj_map.items()}:
             norm_dict = {normalize_player_name(k): v for k, v in proj_map.items()}
             pos, pts = norm_dict[norm_name]
+            ros_val = pts
         else:
             baselines = (
                 REPLACEMENT_BASELINES_10_TEAM if num_teams <= 10 else REPLACEMENT_BASELINES_12_TEAM
             )
             pts = baselines.get(pos, 10.0) + 2.0
+            ros_val = pts
 
         incoming.append(
             RosterPlayer(
@@ -313,6 +364,7 @@ def _build_incoming_roster_players(
                 injury_status=inj_status,
                 bye_week=0,
                 percent_owned=90.0,
+                ros_baseline_ppg=ros_val,
             )
         )
 
@@ -424,12 +476,12 @@ def evaluate_trade(
     lineup_changes = sim_impact["starting_lineup_changes"]
     depth_impact = sim_impact["positional_depth_impact"]
 
-    # Calculate net VORP as supporting metric
+    # Calculate net VORP as supporting metric (using ROS baseline so bye-week stars aren't valued at 0.0)
     giving_vorp = sum(
-        calculate_vorp(p.projected_points, p.position, league.num_teams) for p in matched_giving
+        calculate_vorp(get_player_ros_value(p), p.position, league.num_teams) for p in matched_giving
     )
     receiving_vorp = sum(
-        calculate_vorp(p.projected_points, p.position, league.num_teams) for p in incoming_players
+        calculate_vorp(get_player_ros_value(p), p.position, league.num_teams) for p in incoming_players
     )
     net_vorp = round(receiving_vorp - giving_vorp, 2)
 
@@ -457,18 +509,31 @@ def evaluate_trade(
     # 5. LLM Analysis via Gemini Pro if available
     if client is not None:
         roster_data = [
-            {"name": p.name, "pos": p.position, "pts": p.projected_points, "slot": p.slot}
+            {
+                "name": p.name,
+                "pos": p.position,
+                "pts": p.projected_points,
+                "ros_baseline_ppg": round(get_player_ros_value(p), 1),
+                "percent_owned": round(getattr(p, "percent_owned", 0.0), 1),
+                "is_on_bye": p.is_on_bye(),
+                "slot": p.slot,
+            }
             for p in roster.players
         ]
         opp_data = None
         if opponent_roster:
             opp_data = [
-                {"name": p.name, "pos": p.position, "pts": p.projected_points}
+                {
+                    "name": p.name,
+                    "pos": p.position,
+                    "pts": p.projected_points,
+                    "ros_baseline_ppg": round(get_player_ros_value(p), 1),
+                }
                 for p in opponent_roster.players
             ]
 
         receiving_details = [
-            f"{p.name} ({p.position} - {p.team}, {p.projected_points:.1f} pts, Status: {p.injury_status})"
+            f"{p.name} ({p.position} - {p.team}, Weekly Proj: {p.projected_points:.1f} pts, ROS Baseline: {get_player_ros_value(p):.1f} pts/wk, Status: {p.injury_status})"
             for p in incoming_players
         ]
 

@@ -11,7 +11,7 @@ import zoneinfo
 from datetime import datetime
 from typing import Any, Optional
 
-from src.analysis.trades import calculate_vorp, compute_optimal_starters
+from src.analysis.trades import calculate_vorp, compute_optimal_starters, get_player_ros_value
 from src.config import LeagueConfig
 from src.espn.roster import ParsedRoster, parse_roster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
@@ -62,7 +62,7 @@ def propose_league_trades(
         if team_id == league.team_id:
             user_team = team
         else:
-            parsed = parse_roster(team, league)
+            parsed = parse_roster(team, league, week=week)
             manager = _extract_manager_name(team)
             other_teams_parsed.append((team, parsed))
             opp_opt_starters, opp_opt_bench, opp_opt_pts = compute_optimal_starters(parsed.players, league)
@@ -75,7 +75,9 @@ def propose_league_trades(
                         {
                             "name": p.name,
                             "pos": p.position,
-                            "pts": p.projected_points,
+                            "pts": round(get_player_ros_value(p), 2),
+                            "weekly_proj": p.projected_points,
+                            "is_on_bye": p.is_on_bye(week),
                             "injury": p.injury_status or "HEALTHY",
                             "injury_risk": (
                                 "DISQUALIFIED"
@@ -89,7 +91,9 @@ def propose_league_trades(
                         {
                             "name": p.name,
                             "pos": p.position,
-                            "pts": p.projected_points,
+                            "pts": round(get_player_ros_value(p), 2),
+                            "weekly_proj": p.projected_points,
+                            "is_on_bye": p.is_on_bye(week),
                             "injury": p.injury_status or "HEALTHY",
                             "injury_risk": (
                                 "DISQUALIFIED"
@@ -104,7 +108,9 @@ def propose_league_trades(
                         {
                             "name": p.name,
                             "pos": p.position,
-                            "pts": p.projected_points,
+                            "pts": round(get_player_ros_value(p), 2),
+                            "weekly_proj": p.projected_points,
+                            "is_on_bye": p.is_on_bye(week),
                             "injury": p.injury_status or "HEALTHY",
                             "injury_risk": (
                                 "DISQUALIFIED"
@@ -126,21 +132,42 @@ def propose_league_trades(
             market_overview=f"User team {league.team_id} not found in league.",
         )
 
-    user_roster = parse_roster(user_team, league)
+    user_roster = parse_roster(user_team, league, week=week)
     user_opt_starters, user_opt_bench, user_opt_pts = compute_optimal_starters(user_roster.players, league)
     user_roster_data = {
         "team_name": user_roster.team_name,
         "optimal_starters": [
-            {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+            {
+                "name": p.name,
+                "pos": p.position,
+                "pts": round(get_player_ros_value(p), 2),
+                "weekly_proj": p.projected_points,
+                "is_on_bye": p.is_on_bye(week),
+                "injury": p.injury_status,
+            }
             for p in user_opt_starters
         ],
         "true_surplus_bench": [
-            {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+            {
+                "name": p.name,
+                "pos": p.position,
+                "pts": round(get_player_ros_value(p), 2),
+                "weekly_proj": p.projected_points,
+                "is_on_bye": p.is_on_bye(week),
+                "injury": p.injury_status,
+            }
             for p in user_opt_bench
         ],
         "optimal_starting_points": user_opt_pts,
         "all_roster_players": [
-            {"name": p.name, "pos": p.position, "pts": p.projected_points, "injury": p.injury_status}
+            {
+                "name": p.name,
+                "pos": p.position,
+                "pts": round(get_player_ros_value(p), 2),
+                "weekly_proj": p.projected_points,
+                "is_on_bye": p.is_on_bye(week),
+                "injury": p.injury_status,
+            }
             for p in user_roster.players
         ],
     }
@@ -253,18 +280,18 @@ def propose_league_trades(
         p for p in user_opt_starters
         if (p.position or "").upper() in ("RB", "WR", "TE")
     ]
-    user_flex_starters.sort(key=lambda p: p.projected_points)
+    user_flex_starters.sort(key=get_player_ros_value)
 
     user_bench_assets = [
         p for p in user_opt_bench
         if (p.injury_status or "").upper() not in ("OUT", "IR", "SUSPENSION") and (p.position or "").upper() in ("RB", "WR", "TE", "QB")
     ]
-    user_bench_assets.sort(key=lambda p: p.projected_points, reverse=True)
+    user_bench_assets.sort(key=get_player_ros_value, reverse=True)
 
     # Candidate assets user can trade: true bench depth first, then startable assets if depth allows
     user_trade_candidates = user_bench_assets + [
         p for p in user_flex_starters
-        if (p.injury_status or "").upper() not in ("OUT", "IR", "SUSPENSION") and getattr(p, "projected_points", 0.0) >= 8.0
+        if (p.injury_status or "").upper() not in ("OUT", "IR", "SUSPENSION") and get_player_ros_value(p) >= 8.0
     ]
 
     if user_flex_starters and user_trade_candidates and other_teams_parsed:
@@ -283,13 +310,13 @@ def propose_league_trades(
                 p for p in opp_opt_bench
                 if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in DISQUALIFIED_STATUSES
             ]
-            opp_bench_cands.sort(key=lambda p: p.projected_points, reverse=True)
+            opp_bench_cands.sort(key=get_player_ros_value, reverse=True)
 
             opp_starter_cands = [
                 p for p in opp_opt_starters
                 if (p.position or "").upper() == target_pos and (p.injury_status or "").upper() not in DISQUALIFIED_STATUSES
             ]
-            opp_starter_cands.sort(key=lambda p: p.projected_points)
+            opp_starter_cands.sort(key=get_player_ros_value)
 
             opp_cands_at_target_pos = opp_bench_cands + opp_starter_cands
 
@@ -309,31 +336,35 @@ def propose_league_trades(
                 if not opp_starters_at_user_pos:
                     continue
 
-                opp_weakest_at_pos = min(opp_starters_at_user_pos, key=lambda p: p.projected_points)
-                opp_upgrade = user_asset.projected_points - opp_weakest_at_pos.projected_points
+                opp_weakest_at_pos = min(opp_starters_at_user_pos, key=get_player_ros_value)
+                user_asset_pts = get_player_ros_value(user_asset)
+                opp_weakest_pts = get_player_ros_value(opp_weakest_at_pos)
+                opp_upgrade = user_asset_pts - opp_weakest_pts
 
                 for opp_asset in opp_cands_at_target_pos:
                     if opp_asset.name == user_asset.name:
                         continue
 
                     is_dtd = (opp_asset.injury_status or "").upper() in DTD_STATUSES
+                    opp_asset_pts = get_player_ros_value(opp_asset)
+                    user_weakest_pts = get_player_ros_value(user_weakest_starter)
                     # If player is DTD / Questionable, apply a 25% injury risk haircut to projected points
                     # to guarantee we NEVER pay full price for an uncertain/injured player
-                    effective_opp_pts = opp_asset.projected_points * 0.75 if is_dtd else opp_asset.projected_points
-                    points_upgrade = effective_opp_pts - user_weakest_starter.projected_points
+                    effective_opp_pts = opp_asset_pts * 0.75 if is_dtd else opp_asset_pts
+                    points_upgrade = effective_opp_pts - user_weakest_pts
 
                     # The trade must be decisively more beneficial for US:
                     # 1. points_upgrade >= 1.5 (our starting lineup improves)
                     # 2. opp_upgrade >= 1.0 (opponent has incentive to accept)
                     # 3. Premium asset protection: If user gives up a top asset (>=13.0 pts),
                     #    we never accept a discounted return (effective_opp_pts must be within 2.5 pts of user_asset)
-                    is_star_trade = user_asset.projected_points >= 13.0
-                    fair_value_return = not is_star_trade or (effective_opp_pts >= user_asset.projected_points - 2.5)
+                    is_star_trade = user_asset_pts >= 13.0
+                    fair_value_return = not is_star_trade or (effective_opp_pts >= user_asset_pts - 2.5)
 
                     if points_upgrade >= 1.5 and opp_upgrade >= 1.0 and fair_value_return:
                         net_gain = round(
                             calculate_vorp(effective_opp_pts, target_pos, league.num_teams)
-                            - calculate_vorp(user_weakest_starter.projected_points, target_pos, league.num_teams),
+                            - calculate_vorp(user_weakest_pts, target_pos, league.num_teams),
                             1,
                         )
                         manager_name = _extract_manager_name(team)
@@ -359,13 +390,13 @@ def propose_league_trades(
                             target_injury_status=opp_asset.injury_status if is_dtd else "HEALTHY",
                             your_lineup_upgrade=(
                                 f"Upgrades our starting {target_pos} from {user_weakest_starter.name} "
-                                f"({user_weakest_starter.projected_points:.1f} pts) to {opp_asset.name} "
-                                f"({opp_asset.projected_points:.1f} pts{' [risk-discounted for ' + str(opp_asset.injury_status) + ']' if is_dtd else ''}) by +{points_upgrade:.1f} pts/wk."
+                                f"({user_weakest_pts:.1f} pts) to {opp_asset.name} "
+                                f"({opp_asset_pts:.1f} pts{' [risk-discounted for ' + str(opp_asset.injury_status) + ']' if is_dtd else ''}) by +{points_upgrade:.1f} pts/wk."
                             ),
                             why_target_accepts=(
                                 f"Based on overall roster construction, {opp_team_name}'s weakest starting "
-                                f"{user_asset.position} is {opp_weakest_at_pos.name} ({opp_weakest_at_pos.projected_points:.1f} pts). "
-                                f"Adding {user_asset.name} ({user_asset.projected_points:.1f} pts) directly injects "
+                                f"{user_asset.position} is {opp_weakest_at_pos.name} ({opp_weakest_pts:.1f} pts). "
+                                f"Adding {user_asset.name} ({user_asset_pts:.1f} pts) directly injects "
                                 f"+{opp_upgrade:.1f} pts/wk into their starting lineup, while they trade from depth at {target_pos}."
                             ),
                             negotiation_pitch=(
