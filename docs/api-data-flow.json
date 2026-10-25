@@ -16,7 +16,7 @@
         "id": "ondemand-flow",
         "label": "On-Demand REST Flow",
         "focus": ["browser_user", "api_queries", "pydantic_contracts", "gemini_ladder", "gcs_memory_store", "espn_pipeline"],
-        "note": "Live start/sit, waiver priority, trade proposals & lessons queried via HTTP keep-alive streaming with unconstrained Gemini 3.1 Pro."
+        "note": "Live start/sit, waiver priority, trade proposals & lessons queried via HTTP keep-alive streaming with native thinking Gemini 4 Argon and ROS bye-week asset protection."
       },
       {
         "id": "stateless-lineage",
@@ -35,7 +35,7 @@
     { "id": "api_queries", "type": "backend", "label": "REST Query Endpoints", "sublabel": "streaming • keep-alive", "pos": [250, 200], "size": [150, 60], "tag": "Heartbeat Stream" },
     { "id": "gcs_memory_store", "type": "database", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [250, 310], "size": [150, 60], "tag": "Zero DB Tables" },
 
-    { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "Uncapped Reasoning" },
+    { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "4-argon ➔ 3.1-pro ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "Native Thinking" },
     { "id": "pydantic_contracts", "type": "backend", "label": "6 Pydantic Contracts", "sublabel": "JSON Schema Enforcement", "pos": [510, 200], "size": [160, 60] },
     { "id": "espn_pipeline", "type": "backend", "label": "Data Ingestion Layer", "sublabel": "Rosters, Wire, Odds, Wx, Stats", "pos": [510, 310], "size": [160, 60] },
 

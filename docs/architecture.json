@@ -22,13 +22,13 @@
         "id": "on-demand-optimization",
         "label": "Live Command Center & AI Reasoning",
         "focus": ["user", "fastapi", "engines", "gcs_memory", "ext_context", "gemini"],
-        "note": "On-demand start/sit, waiver priority & trade reviews with HTTP keep-alive streaming and unconstrained Gemini 3.1 Pro reasoning."
+        "note": "On-demand start/sit, waiver priority & trade reviews with HTTP keep-alive streaming and native thinking Gemini 4 Argon reasoning."
       },
       {
         "id": "ai-resilience",
         "label": "Model Ladder & Failover",
         "focus": ["fastapi", "engines", "gemini"],
-        "note": "Dynamic model negotiation: gemini-3.1-pro-preview probe with 429 exponential backoff falling back to gemini-2.5-pro."
+        "note": "Dynamic model negotiation: gemini-4-argon with Vertex AI native thinking, falling back to gemini-3.1-pro-preview and gemini-2.5-pro."
       }
     ]
   },
@@ -41,8 +41,8 @@
     { "id": "fastapi", "type": "backend", "label": "FastAPI Engine", "sublabel": "Streaming • Keep-Alive", "pos": [260, 200], "size": [160, 60] },
     { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN S2/SWID & Keys", "pos": [260, 420], "size": [160, 60], "tag": "IAM Protected" },
 
-    { "id": "gemini", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "3.1-preview ➔ 2.5-pro", "pos": [490, 90], "size": [170, 60], "tag": "Uncapped Reasoning" },
-    { "id": "engines", "type": "backend", "label": "Decision & Trade Engines", "sublabel": "Lineup • Trade • Waivers", "pos": [490, 200], "size": [170, 60], "tag": "Optimal Starters" },
+    { "id": "gemini", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "4-argon ➔ 3.1-pro ➔ 2.5-pro", "pos": [490, 90], "size": [170, 60], "tag": "Native Thinking" },
+    { "id": "engines", "type": "backend", "label": "Decision & Trade Engines", "sublabel": "Lineup • Trade • Waivers", "pos": [490, 200], "size": [170, 60], "tag": "ROS & Bye-Week Guard" },
     { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 310], "size": [170, 60] },
 
     { "id": "ext_context", "type": "external", "label": "Vegas, Weather & Stats", "sublabel": "Vegas • Meteo • nflverse", "pos": [740, 90], "size": [180, 60] },
@@ -85,9 +85,9 @@
       "title": "ESPN Ingestion & Optimization",
       "items": [
         "Ingests My Team Roster, Opponent Lineups, and Free Agent Wire via private ESPN API",
-        "Advanced opportunity stats via nflverse (snap %, WOPR, red-zone equity) & ESPN DvP ranks",
-        "Dynamic model ladder: gemini-3.1-pro-preview with automatic gemini-2.5-pro fallback",
-        "429 RESOURCE_EXHAUSTED exponential backoff retry loop (5s ➔ 10s ➔ 20s)"
+        "Rest-of-Season (ROS) baseline & bye-week asset protection locks star players from drop or trade undervaluation",
+        "Dynamic model ladder: gemini-4-argon (Vertex AI native thinking) with gemini-3.1-pro and gemini-2.5-pro failover",
+        "Injury guardrails & DTD risk discount haircut with 429 exponential backoff retry loop"
       ]
     },
     {
