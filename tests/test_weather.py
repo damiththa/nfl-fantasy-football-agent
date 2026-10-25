@@ -47,6 +47,12 @@ def test_fetch_game_weather_dome(monkeypatch):
     assert weather.conditions_summary == "Indoor"
     assert weather.stadium_name == "Mercedes-Benz Stadium"
 
+    # WSH and WAS both resolve to Northwest Stadium
+    stadiums = load_stadiums()
+    assert "WSH" in stadiums
+    assert "WAS" in stadiums
+    assert stadiums["WSH"]["stadium_name"] == "Northwest Stadium"
+
 
 def test_fetch_game_weather_api_error(monkeypatch):
     # Mock httpx.Client to raise an error

@@ -2004,6 +2004,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                             week=recap_week,
                             matchup=recap_matchup,
                             client=client,
+                            is_past_week=(recap_week < current_week),
                         )
                         league_res[f"{league_config.short_name} Film Room"] = recap.model_dump()
                     except Exception as recap_err:
@@ -2487,6 +2488,7 @@ def query_weekly_recap(
             week=target_week,
             matchup=matchup,
             client=client,
+            is_past_week=(target_week < current_week),
         )
         return report.model_dump()
 

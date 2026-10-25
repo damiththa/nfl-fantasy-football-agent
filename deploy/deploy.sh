@@ -50,13 +50,13 @@ $GCLOUD run deploy "${SERVICE_NAME}" \
     --platform="managed" \
     --allow-unauthenticated \
     --min-instances=0 \
-    --max-instances=1 \
+    --max-instances=3 \
     --memory=512Mi \
     --cpu=1 \
     --timeout=600 \
     --quiet \
     --set-secrets="ESPN_S2=ESPN_S2:latest,ESPN_SWID=ESPN_SWID:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,SENDGRID_API_KEY=SENDGRID_API_KEY:latest" \
-    --set-env-vars="NFL_SEASON=2026,GEMINI_MODEL=auto,GEMINI_LOCATION=global,GCS_MEMORY_BUCKET=gen-lang-client-0581555372-fantasy-memory"
+    --set-env-vars="NFL_SEASON=2026,GEMINI_MODEL=auto,GEMINI_LOCATION=global,GEMINI_THINKING_BUDGET=4096,GCS_MEMORY_BUCKET=gen-lang-client-0581555372-fantasy-memory"
 
 # 4. Ensure Cloud Scheduler jobs have sufficient deadline (600s) to prevent timeouts
 echo "--> Updating Cloud Scheduler job deadlines to 600s..."

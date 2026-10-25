@@ -293,7 +293,7 @@
     "stadium_name": "Northwest Stadium",
     "city": "Landover",
     "state": "MD",
-    "team": ["WAS"],
+    "team": ["WAS", "WSH"],
     "latitude": 38.9076,
     "longitude": -76.8645,
     "is_dome": false,

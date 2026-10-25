@@ -131,6 +131,7 @@ def generate_weekly_recap(
     week: int,
     matchup: MatchupData,
     client: Optional[GeminiIntelligenceClient] = None,
+    is_past_week: bool = False,
 ) -> WeeklyRecapReport:
     """Generate a comprehensive weekly film room report or mid-week checkpoint.
 
@@ -139,6 +140,7 @@ def generate_weekly_recap(
         week: NFL week number.
         matchup: Weekly matchup data with user and opponent rosters/scores.
         client: Gemini intelligence client (optional).
+        is_past_week: Whether the requested week is already in the past (week < current_week).
 
     Returns:
         WeeklyRecapReport with state-aware analysis.
@@ -151,6 +153,14 @@ def generate_weekly_recap(
     opp_roster = matchup.opponent_team
     user_team_name = user_roster.team_name or "Mad Dawg"
     opp_team_name = opp_roster.team_name if opp_roster else "Opponent"
+
+    # If recapping a completed past week, mark all starters/bench as having completed that week
+    if is_past_week:
+        for p in user_roster.players:
+            p.has_played = True
+        if opp_roster:
+            for p in opp_roster.players:
+                p.has_played = True
 
     # Identify played vs upcoming starters
     completed_starters = [p for p in user_roster.starters if p.has_played]

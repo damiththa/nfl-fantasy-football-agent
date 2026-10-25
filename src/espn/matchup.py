@@ -97,10 +97,29 @@ def get_weekly_matchup(
                 else getattr(matchup, "home_projected", 0.0)
             )
 
-            your_roster = parse_roster(your_team, league_config, week=week)
+            your_lineup = (
+                getattr(matchup, "home_lineup", None)
+                if is_home
+                else getattr(matchup, "away_lineup", None)
+            )
+            opp_lineup = (
+                getattr(matchup, "away_lineup", None)
+                if is_home
+                else getattr(matchup, "home_lineup", None)
+            )
+
+            if isinstance(your_lineup, list) and len(your_lineup) > 0:
+                your_roster = parse_roster(your_lineup, league_config, week=week)
+                your_roster.team_name = getattr(your_team, "team_name", your_roster.team_name)
+            else:
+                your_roster = parse_roster(your_team, league_config, week=week)
 
             if opp_team:
-                opp_roster = parse_roster(opp_team, league_config, week=week)
+                if isinstance(opp_lineup, list) and len(opp_lineup) > 0:
+                    opp_roster = parse_roster(opp_lineup, league_config, week=week)
+                    opp_roster.team_name = getattr(opp_team, "team_name", opp_roster.team_name)
+                else:
+                    opp_roster = parse_roster(opp_team, league_config, week=week)
             else:
                 opp_roster = None
                 opp_projected = 0.0

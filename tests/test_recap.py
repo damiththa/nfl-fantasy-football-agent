@@ -293,3 +293,34 @@ def test_pre_kickoff_recap():
     assert len(report.upcoming_starters) == 2
     assert "Pre-game" in report.coach_game_summary or "not kicked off yet" in report.coach_game_summary
 
+
+def test_is_past_week_forces_final_status():
+    """Verify that when is_past_week=True, even if a starter had played=False (e.g. bye/0 pts), the recap is FINAL."""
+    starters = [
+        _create_mock_player("Purdy", "QB", "QB", 22.0, 18.0, played=True),
+        _create_mock_player("ZeroStarter", "WR", "WR", 0.0, 12.0, played=False),
+    ]
+    user_roster = ParsedRoster(
+        team_name="Mad Dawg",
+        players=starters,
+        starters=starters,
+        bench=[],
+        ir=[],
+    )
+    matchup = MatchupData(
+        week=6,
+        your_team=user_roster,
+        opponent_team=None,
+        your_projected=30.0,
+        opp_projected=20.0,
+        projected_margin=10.0,
+        is_favorite=True,
+        your_score=22.0,
+        opp_score=18.0,
+    )
+    report = generate_weekly_recap(PNA_2026, 6, matchup, client=None, is_past_week=True)
+    assert report.matchup_status == "FINAL"
+    assert report.result == "WIN"
+    assert report.completed_starters_count == 2
+
+

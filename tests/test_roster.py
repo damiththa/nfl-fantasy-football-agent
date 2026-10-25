@@ -148,3 +148,60 @@ def test_parse_roster_opponent_and_dvp_rank():
     assert rp.pro_opponent == "GB"
     assert rp.opponent_pos_rank == 28
 
+
+def test_get_weekly_matchup_prefers_box_lineup():
+    """Verify get_weekly_matchup uses home_lineup/away_lineup BoxPlayers when available so historical weeks retain accurate slots."""
+    from src.espn.matchup import get_weekly_matchup
+
+    box_player = MagicMock()
+    box_player.name = "Pat Freiermuth"
+    box_player.position = "TE"
+    box_player.proTeam = "PIT"
+    box_player.slot_position = "RB/WR/TE"
+    box_player.points = 21.5
+    box_player.projected_points = 9.0
+    box_player.game_played = 100
+    box_player.injuryStatus = "NORMAL"
+    box_player.stats = {}
+
+    # Current team roster has a completely different player/slot
+    current_player = MagicMock()
+    current_player.name = "Dropped Player"
+    current_player.position = "WR"
+    current_player.proTeam = "NYJ"
+    current_player.lineupSlot = "BE"
+    current_player.points = None
+    current_player.projected_points = 0.0
+    current_player.stats = {}
+
+    home_team = MagicMock()
+    home_team.team_id = PNA_2026.team_id
+    home_team.team_name = "Mad Dawg"
+    home_team.roster = [current_player]
+
+    away_team = MagicMock()
+    away_team.team_id = 99
+    away_team.team_name = "Opponent"
+    away_team.roster = []
+
+    matchup_obj = MagicMock()
+    matchup_obj.home_team = home_team
+    matchup_obj.away_team = away_team
+    matchup_obj.home_lineup = [box_player]
+    matchup_obj.away_lineup = []
+    matchup_obj.home_projected = 110.0
+    matchup_obj.away_projected = 100.0
+    matchup_obj.home_score = 125.0
+    matchup_obj.away_score = 95.0
+
+    mock_league = MagicMock()
+    mock_league.box_scores.return_value = [matchup_obj]
+
+    data = get_weekly_matchup(mock_league, PNA_2026.team_id, 5, PNA_2026)
+    assert data is not None
+    assert data.your_team.team_name == "Mad Dawg"
+    assert len(data.your_team.starters) == 1
+    assert data.your_team.starters[0].name == "Pat Freiermuth"
+    assert data.your_team.starters[0].actual_points == 21.5
+
+

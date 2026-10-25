@@ -119,7 +119,7 @@ def test_clean_json_text():
 def test_negotiate_active_model_fallback_when_target_unavailable():
     class SelectiveModels:
         def generate_content(self, model, contents, config=None):
-            if "gemini-3" in model:
+            if "gemini-3" in model or "gemini-4" in model:
                 raise ConnectionError("404 Model Not Found in us-central1")
             return MockModelResponse("ok")
 
@@ -129,6 +129,7 @@ def test_negotiate_active_model_fallback_when_target_unavailable():
     selected, diag = negotiate_active_model(force=True, mock_client=SelectiveClient())
     assert selected == "gemini-2.5-pro"
     assert diag["auto_upgrade_active"] is False
+    assert diag["candidates"]["gemini-4-argon"]["available"] is False
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is False
     assert "404" in diag["candidates"]["gemini-3.1-pro-preview"]["status"]
     assert diag["candidates"]["gemini-2.5-pro"]["available"] is True
@@ -143,18 +144,19 @@ def test_negotiate_active_model_upgrades_when_target_available():
         models = AllAvailableModels()
 
     selected, diag = negotiate_active_model(force=True, mock_client=AllAvailableClient())
-    assert selected == "gemini-3.1-pro"
+    assert selected == "gemini-4-argon"
     assert diag["auto_upgrade_active"] is True
+    assert diag["candidates"]["gemini-4-argon"]["available"] is True
     assert diag["candidates"]["gemini-3.1-pro"]["available"] is True
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
     assert diag["candidates"]["gemini-2.5-pro"]["available"] is True
 
 
 def test_negotiate_active_model_selects_preview_when_ga_is_404():
-    """Verify that if GA gemini-3.1-pro returns 404, the system selects gemini-3.1-pro-preview."""
+    """Verify that if gemini-4-argon and GA gemini-3.1-pro return 404, the system selects gemini-3.1-pro-preview."""
     class PreviewOnlyModels:
         def generate_content(self, model, contents, config=None):
-            if model == "gemini-3.1-pro":
+            if model in ("gemini-4-argon", "gemini-3.1-pro"):
                 raise ConnectionError("404 Publisher model not found")
             return MockModelResponse("ok")
 
@@ -164,6 +166,7 @@ def test_negotiate_active_model_selects_preview_when_ga_is_404():
     selected, diag = negotiate_active_model(force=True, mock_client=PreviewOnlyClient())
     assert selected == "gemini-3.1-pro-preview"
     assert diag["auto_upgrade_active"] is True
+    assert diag["candidates"]["gemini-4-argon"]["available"] is False
     assert diag["candidates"]["gemini-3.1-pro"]["available"] is False
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
 
@@ -309,10 +312,11 @@ def test_resolve_thinking_config_unconstrained_default(monkeypatch):
 
 
 def test_resolve_thinking_config_env_override(monkeypatch):
-    """Test that resolve_thinking_config respects GEMINI_THINKING_BUDGET if set."""
+    """Test that resolve_thinking_config respects GEMINI_THINKING_BUDGET for Gemini 3, and returns None for Gemini 4."""
     from src.intelligence.gemini_client import resolve_thinking_config
     monkeypatch.setenv("GEMINI_THINKING_BUDGET", "4096")
     cfg = resolve_thinking_config("gemini-3.1-pro-preview")
     assert cfg is not None
     assert cfg.thinking_budget == 4096
+    assert resolve_thinking_config("gemini-4-argon") is None
 

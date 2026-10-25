@@ -136,50 +136,81 @@ def fetch_player_stats(season: int) -> dict[str, PlayerStats]:
     df = _player_stats_cache[season]
 
     try:
+        team_col = "recent_team" if "recent_team" in df.columns else ("team" if "team" in df.columns else None)
+        group_cols = ["player_name", "player_id"]
+        if "player_display_name" in df.columns:
+            group_cols.append("player_display_name")
+        if team_col:
+            group_cols.append(team_col)
+
         # Aggregate weekly data to season level
-        agg_df = df.group_by(["player_name", "player_id", "recent_team"]).agg(
+        agg_df = df.group_by(group_cols).agg(
             [
-                pl.col("games").sum().alias("games_played"),
-                pl.col("targets").sum().alias("targets"),
-                pl.col("target_share").mean().alias("target_share"),
-                pl.col("receptions").sum().alias("receptions"),
-                pl.col("receiving_yards").sum().alias("receiving_yards"),
-                pl.col("carries").sum().alias("rushing_attempts"),
-                pl.col("rushing_yards").sum().alias("rushing_yards"),
+                pl.col("games").sum().alias("games_played")
+                if "games" in df.columns
+                else pl.len().alias("games_played"),
+                pl.col("targets").sum().alias("targets")
+                if "targets" in df.columns
+                else pl.lit(0).alias("targets"),
+                pl.col("target_share").mean().alias("target_share")
+                if "target_share" in df.columns
+                else pl.lit(0.0).alias("target_share"),
+                pl.col("receptions").sum().alias("receptions")
+                if "receptions" in df.columns
+                else pl.lit(0).alias("receptions"),
+                pl.col("receiving_yards").sum().alias("receiving_yards")
+                if "receiving_yards" in df.columns
+                else pl.lit(0).alias("receiving_yards"),
+                pl.col("carries").sum().alias("rushing_attempts")
+                if "carries" in df.columns
+                else pl.lit(0).alias("rushing_attempts"),
+                pl.col("rushing_yards").sum().alias("rushing_yards")
+                if "rushing_yards" in df.columns
+                else pl.lit(0).alias("rushing_yards"),
                 pl.col("red_zone_targets").sum().alias("red_zone_targets")
                 if "red_zone_targets" in df.columns
                 else pl.lit(0).alias("red_zone_targets"),
                 pl.col("red_zone_carries").sum().alias("red_zone_carries")
                 if "red_zone_carries" in df.columns
                 else pl.lit(0).alias("red_zone_carries"),
-                pl.col("air_yards_share").mean().alias("air_yards_share"),
-                pl.col("wopr").mean().alias("wopr"),
+                pl.col("air_yards_share").mean().alias("air_yards_share")
+                if "air_yards_share" in df.columns
+                else pl.lit(0.0).alias("air_yards_share"),
+                pl.col("wopr").mean().alias("wopr")
+                if "wopr" in df.columns
+                else pl.lit(0.0).alias("wopr"),
             ]
         )
 
         results = {}
         for row in agg_df.iter_rows(named=True):
-            name = row.get("player_name")
-            if not name:
+            short_name = row.get("player_name")
+            display_name = row.get("player_display_name")
+            primary_name = display_name or short_name
+            if not primary_name:
                 continue
 
-            results[name] = PlayerStats(
-                player_name=name,
-                player_id=row.get("player_id", ""),
-                team=row.get("recent_team", ""),
+            team_val = (row.get(team_col, "") if team_col else "") or ""
+            stat_obj = PlayerStats(
+                player_name=primary_name,
+                player_id=row.get("player_id", "") or "",
+                team=team_val,
                 position="",  # Not always available in this dataset
-                games_played=row.get("games_played", 0),
-                targets=row.get("targets", 0),
+                games_played=int(row.get("games_played", 0) or 0),
+                targets=int(row.get("targets", 0) or 0),
                 target_share=row.get("target_share", 0.0) or 0.0,
-                receptions=row.get("receptions", 0),
-                receiving_yards=row.get("receiving_yards", 0),
-                rushing_attempts=row.get("rushing_attempts", 0),
-                rushing_yards=row.get("rushing_yards", 0),
-                red_zone_targets=row.get("red_zone_targets", 0),
-                red_zone_carries=row.get("red_zone_carries", 0),
+                receptions=int(row.get("receptions", 0) or 0),
+                receiving_yards=int(row.get("receiving_yards", 0) or 0),
+                rushing_attempts=int(row.get("rushing_attempts", 0) or 0),
+                rushing_yards=int(row.get("rushing_yards", 0) or 0),
+                red_zone_targets=int(row.get("red_zone_targets", 0) or 0),
+                red_zone_carries=int(row.get("red_zone_carries", 0) or 0),
                 air_yards_share=row.get("air_yards_share", 0.0) or 0.0,
                 wopr=row.get("wopr", 0.0) or 0.0,
             )
+            results[primary_name] = stat_obj
+            if short_name and short_name != primary_name:
+                results[short_name] = stat_obj
         return results
     except Exception as e:
         logger.warning(f"Error processing player stats for season {season}: {e}")
@@ -208,8 +239,14 @@ def get_player_trends(player_name: str, season: int, recent_weeks: int = 3) -> d
     df = _player_stats_cache[season]
 
     try:
-        # Filter for player
-        player_df = df.filter(pl.col("player_name") == player_name)
+        # Filter for player (matching either player_name or player_display_name)
+        if "player_display_name" in df.columns:
+            player_df = df.filter(
+                (pl.col("player_name") == player_name)
+                | (pl.col("player_display_name") == player_name)
+            )
+        else:
+            player_df = df.filter(pl.col("player_name") == player_name)
         if player_df.height == 0:
             return {}
 
