@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 458" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 458" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-animation="trace" data-preset="classic" data-quality-profile="standard" data-node-ui="" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
 <style><![CDATA[
 
 /*
@@ -154,7 +154,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       --lane-fill: rgba(15, 23, 42, 0.22);
       --lane-stroke: #334155;
 
-      --arrow: #64748b;
+      --arrow: #94a3b8;
       --arrow-emphasis: #34d399;
 
       /* Opaque mask color used behind semi-transparent component fills
@@ -186,7 +186,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     [data-theme="light"] {
       --bg: #f4f5f7;
       --grid: #e9edf2;
-      --canvas-dot: #d9dee5;
+      --canvas-dot: #e2e7ec;
       --text: #111827;
       --text-muted: #5b6474;
       --text-dim: #9aa3b2;
@@ -197,7 +197,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       --lane-fill: rgba(248, 250, 252, 0.65);
       --lane-stroke: #cbd5e1;
 
-      --arrow: #94a3b8;
+      --arrow: #64748b;
       --arrow-emphasis: #059669;
 
       --mask: #ffffff;
@@ -567,14 +567,29 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       color: var(--frontend-stroke);
     }
 
-    /* The reader owns only the outer scale. Wide diagrams and measured tall workflows keep one authored
-       SVG/viewBox while the runtime chooses a desktop width from the actual
-       vertical budget. This avoids device-specific files and breakpoint
-       jumps between a laptop and a tall monitor. */
+    /* The reader owns only the outer scale. Compact automatic sequences fit at
+       their authored text size or larger. Long sequences and waterfall rows
+       favor reading width and page scroll; other diagrams keep height fitting.
+       Small automatic canvases retain a modest scale inside a usable shell.
+       Every strategy preserves the authored SVG/viewBox and semantic geometry. */
     .container {
       width: 100%;
       max-width: var(--archify-reader-width, 1440px);
       margin: 0 auto;
+    }
+    html[data-reader-area="true"] .diagram-container {
+      min-height: var(--archify-diagram-min-height);
+      display: flex;
+      align-items: center;
+    }
+    html[data-reader-area="true"] .diagram-container > svg { flex-shrink: 0; }
+    /* The original SVG legend can use the outer corner while the capped or fitted
+       diagram stays centered. The container still clips all outer paint. */
+    .diagram-container:has([data-reader-legend-corner]) > svg { overflow: visible; }
+    .diagram-container [data-reader-legend-corner] {
+      transform-origin: 0 0;
+      transform-box: view-box;
+      transform: var(--archify-reader-legend-transform);
     }
     html[data-reader-narrow="true"]:not([data-present="true"]) .diagram-container > svg {
       min-width: 0;
@@ -779,7 +794,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       pointer-events: none;
     }
     html[data-embed="true"][data-preset="editorial"] .diagram-container::after { display: none; }
-    html[data-motion-capable="true"][data-preset="signal-flow"][data-ambient-motion="running"] .diagram-container::before {
+    html[data-motion-capable="true"][data-preset="signal-flow"][data-ambient-entry="running"] .diagram-container::before {
       content: "";
       position: absolute;
       inset: 0;
@@ -961,8 +976,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .diagram-nav-icon {
       display: block;
-      width: 0.875rem;
-      height: 0.875rem;
+      width: 0.95rem;
+      height: 0.95rem;
       margin: auto;
       background: currentColor;
       -webkit-mask-position: center;
@@ -1026,8 +1041,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-nav #btn-overview-map::before,
     .diagram-nav #btn-semantic-lens::before {
       flex: none;
-      width: 0.875rem;
-      height: 0.875rem;
+      width: 0.95rem;
+      height: 0.95rem;
       background: currentColor;
       content: "";
       opacity: 0.85;
@@ -1041,21 +1056,33 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-nav [data-view="out"],
     .diagram-nav [data-view="reset"],
     .diagram-nav [data-view="in"] {
+      position: relative;
       border-radius: 0;
-      background: color-mix(in srgb, var(--text) 4.5%, transparent);
+      background: color-mix(in srgb, var(--panel-border) 38%, transparent);
     }
     .diagram-nav [data-view="out"] { margin-left: 0.375rem; border-radius: 0.5rem 0 0 0.5rem; }
     .diagram-nav [data-view="out"]::before { display: none; }
     .diagram-nav [data-view="reset"],
     .diagram-nav [data-view="in"] { margin-left: -0.0625rem; }
     .diagram-nav [data-view="in"] { border-radius: 0 0.5rem 0.5rem 0; }
+    .diagram-nav [data-view="reset"]::after,
+    .diagram-nav [data-view="in"]::after {
+      position: absolute;
+      top: 0.55rem;
+      bottom: 0.55rem;
+      left: 0;
+      width: 1px;
+      background: color-mix(in srgb, var(--panel-border) 75%, transparent);
+      content: "";
+      pointer-events: none;
+    }
     .diagram-nav [data-view="out"]:hover,
     .diagram-nav [data-view="reset"]:hover,
-    .diagram-nav [data-view="in"]:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
+    .diagram-nav [data-view="in"]:hover { background: color-mix(in srgb, var(--panel-border) 60%, transparent); }
     .diagram-nav [data-view="out"]:disabled,
     .diagram-nav [data-view="in"]:disabled { opacity: 1; color: color-mix(in srgb, var(--text-muted) 40%, transparent); }
     .diagram-nav [data-view="out"]:disabled:hover,
-    .diagram-nav [data-view="in"]:disabled:hover { background: color-mix(in srgb, var(--text) 4.5%, transparent); }
+    .diagram-nav [data-view="in"]:disabled:hover { background: color-mix(in srgb, var(--panel-border) 38%, transparent); }
     .diagram-nav [data-view="reset"] { min-width: 3.25rem; }
     .diagram-container[data-camera-indicator="true"] .diagram-nav-detail,
     .diagram-container[data-camera-indicator="true"] .diagram-nav-percent { color: var(--frontend-stroke); }
@@ -2229,6 +2256,41 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       font-size: 0.5rem;
     }
     .diagram-guide-feedback:empty { display: none; }
+    .diagram-guide-credit {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      padding: 0.46rem 0.9rem 0.56rem;
+      border-top: 1px solid color-mix(in srgb, var(--toolbar-border) 74%, transparent);
+      color: var(--text-faint);
+      font-size: 0.5rem;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+    }
+    .diagram-guide-credit-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+      flex: none;
+      opacity: 0.72;
+      transition: opacity 120ms ease, color 120ms ease;
+    }
+    .diagram-guide-star {
+      width: 0.62rem;
+      height: 0.62rem;
+      background: currentColor;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.6l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.4l-3.8 2 .7-4.3-3.1-3 4.3-.6z' fill='none' stroke='black' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.6l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.4l-3.8 2 .7-4.3-3.1-3 4.3-.6z' fill='none' stroke='black' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .diagram-guide-credit:hover .diagram-guide-star,
+    .diagram-guide-credit:focus-visible .diagram-guide-star {
+      -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.6l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.4l-3.8 2 .7-4.3-3.1-3 4.3-.6z' stroke='black' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E");
+      mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.6l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.4l-3.8 2 .7-4.3-3.1-3 4.3-.6z' stroke='black' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+    .diagram-guide-credit:hover .diagram-guide-credit-link,
+    .diagram-guide-credit:focus-visible .diagram-guide-credit-link { opacity: 1; color: var(--cloud-stroke); }
+    .diagram-guide-credit:focus-visible { outline: 2px solid var(--cloud-stroke); outline-offset: -2px; }
     @keyframes archify-guide-in {
       from { opacity: 0; transform: translateY(-5px) scale(0.985); }
       to { opacity: 1; transform: translateY(0) scale(1); }
@@ -2299,7 +2361,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       gap: 0.55rem;
       margin: 0 0.55rem 0.55rem;
       padding: 0 0.7rem;
-      min-height: 2.6rem;
+      min-height: 2.35rem;
       border: 1px solid var(--toolbar-border);
       border-radius: 0.55rem;
       background: color-mix(in srgb, var(--panel) 78%, transparent);
@@ -2309,7 +2371,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .node-finder-search > span { color: var(--frontend-stroke); font-size: 0.875rem; }
     .node-finder-search:focus-within {
       border-color: var(--frontend-stroke);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--frontend-stroke) 20%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--frontend-stroke) 14%, transparent);
     }
     .node-finder-input {
       appearance: none;
@@ -2347,6 +2409,21 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       background: color-mix(in srgb, var(--panel) 54%, transparent);
       scroll-padding-block: 0.25rem;
       scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--panel-border) 90%, transparent) transparent;
+    }
+    /* Slim overlay-style thumb instead of the chunky platform default. */
+    .node-finder-results::-webkit-scrollbar { width: 10px; }
+    .node-finder-results::-webkit-scrollbar-track { background: transparent; }
+    .node-finder-results::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--panel-border) 85%, transparent);
+      border: 3px solid transparent;
+      border-radius: 999px;
+      background-clip: padding-box;
+    }
+    .node-finder-results::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--text-muted) 65%, transparent);
+      border: 3px solid transparent;
+      background-clip: padding-box;
     }
     html[data-preset="blueprint"] .node-finder-results { border-radius: 0.18rem; }
     .node-finder-result {
@@ -2354,8 +2431,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 0.2rem 0.75rem;
       width: 100%;
-      min-height: 3.25rem;
-      padding: 0.58rem 0.65rem;
+      min-height: 3rem;
+      padding: 0.52rem 0.65rem;
       border: 0;
       border-radius: 0;
       background: transparent;
@@ -2396,6 +2473,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       font-size: 0.625rem;
       font-style: normal;
     }
+    /* A zero count is absence, not information — let it recede. */
+    .node-finder-result em[data-zero] { color: var(--text-faint); }
     .node-finder[data-context^="route-"] .node-finder-result em {
       padding: 0.1rem 0.3rem;
       border: 1px solid color-mix(in srgb, currentColor 52%, transparent);
@@ -2431,6 +2510,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border-radius: 0.75rem;
       border: 1px solid var(--panel-border);
       padding: 1.125rem 1.25rem;
+      /* Card notes are authored prose and may carry an unbreakable run such as a
+         slash-joined pipeline or a long identifier. Without this, that run sets the
+         card's min-content width, spills past its track in every rail placement,
+         and pushes the whole page into horizontal overflow at desktop widths.
+         `anywhere` rather than `break-word` because only `anywhere` shrinks the
+         intrinsic minimum the layout is sized from. */
+      overflow-wrap: anywhere;
     }
 
     html[data-preset="signal-flow"] .card {
@@ -2618,19 +2704,31 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     html[data-reader-rail="bottom"] .node-outline-head { padding: 1rem 2.5rem 0.375rem 0.25rem; }
     html[data-reader-rail="bottom"] .node-outline-list {
-      columns: 15rem;
-      column-gap: 1.75rem;
+      display: grid;
+      gap: 0.5rem;
       padding: 0;
       overflow: visible;
       -webkit-mask-image: none;
       mask-image: none;
     }
-    /* Named groups stay whole; a single unnamed group may split across columns,
-       where a continuous spine would read as a broken line. */
     html[data-reader-rail="bottom"] .node-outline-group + .node-outline-group { margin-top: 0; }
-    html[data-reader-rail="bottom"] .node-outline-group:has(> .node-outline-heading) { break-inside: avoid; padding-bottom: 0.25rem; }
-    html[data-reader-rail="bottom"] .node-outline-group:not(:has(> .node-outline-heading)) > ul::before { display: none; }
-    html[data-reader-rail="bottom"] .node-outline-group li { break-inside: avoid; }
+    html[data-reader-rail="bottom"] .node-outline-group:has(> .node-outline-heading) { padding-bottom: 0.25rem; }
+    html[data-reader-rail="bottom"] .node-outline-group > ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 0.5rem;
+    }
+    html[data-reader-rail="bottom"] .node-outline-group > ul::before { display: none; }
+    html[data-reader-rail="bottom"] .node-outline-group li {
+      flex: 0 1 auto;
+      min-width: min(100%, 12rem);
+      max-width: min(100%, 32rem);
+    }
+    html[data-reader-rail="bottom"] .node-outline-heading {
+      justify-content: flex-start;
+      gap: 0.5rem;
+    }
+    html[data-reader-rail="bottom"] .node-outline-heading > span { overflow-wrap: anywhere; }
     .rail-controls { display: none; }
     html:is([data-reader-rail="true"], [data-reader-rail="overlay"], [data-reader-rail="bottom"]) .rail-controls {
       display: flex;
@@ -2846,6 +2944,37 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .node-outline-item:hover small,
     .node-outline-item[data-previewing] small,
     .node-outline-item[aria-current="true"] small { color: var(--text-muted); }
+
+    /* The desktop bottom rail is an index: compact rows keep related nodes
+       together while allowing full names and descriptions to wrap naturally. */
+    html[data-reader-rail="bottom"] .node-outline-item {
+      grid-template-columns: 0.625rem minmax(0, 1fr) 0.75rem;
+      align-items: first baseline;
+      column-gap: 0.375rem;
+      min-height: 0;
+      padding-block: 0.375rem;
+    }
+    html[data-reader-rail="bottom"] .node-outline-item strong,
+    html[data-reader-rail="bottom"] .node-outline-item small {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    html[data-reader-rail="bottom"] .node-outline-item strong {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    html[data-reader-rail="bottom"] .node-outline-item small {
+      grid-column: 2;
+      grid-row: 2;
+      text-align: left;
+    }
+    html[data-reader-rail="bottom"] .node-outline-item::after {
+      grid-column: 3;
+      grid-row: 1;
+      align-self: center;
+    }
 
     .card-header {
       display: flex;
@@ -3467,6 +3596,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       background: transparent;
       box-shadow: none;
     }
+    /* The motion button breathes on the relay cycle, so the chrome keeps time
+       with the wave it controls. Motion Governor mirrors the planned cycle from
+       the diagram SVG onto the document. */
+    html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden]) #btn-motion .motion-control-dot {
+      animation: archify-motion-dot-breathe var(--flow-cycle-chrome, 6.4s) ease-in-out infinite;
+    }
+    @keyframes archify-motion-dot-breathe {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      46% { opacity: 0.55; transform: scale(0.72); }
+    }
     .toolbar .export-menu {
       position: absolute;
       top: calc(100% + 0.125rem);
@@ -4003,10 +4142,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     html[data-preset="classic"] .diagram-container > svg .c-grid { stroke: transparent; }
     html[data-preset="classic"][data-theme="light"] .diagram-container > svg [data-node-id] > rect:not(.c-mask) {
-      filter: drop-shadow(0 1px 1px rgba(17, 24, 39, 0.05)) drop-shadow(0 6px 12px rgba(17, 24, 39, 0.06));
+      --ambient-node-base-filter: drop-shadow(0 1px 1px rgba(17, 24, 39, 0.05)) drop-shadow(0 6px 12px rgba(17, 24, 39, 0.06));
+      filter: var(--ambient-node-base-filter);
     }
     html[data-preset="classic"][data-theme="dark"] .diagram-container > svg [data-node-id] > rect:not(.c-mask) {
-      filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
+      --ambient-node-base-filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
+      filter: var(--ambient-node-base-filter);
     }
     html[data-preset="classic"] .diagram-container > svg [data-edge-from] {
       stroke-linecap: round;
@@ -4138,41 +4279,6 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg [data-node-id]:focus-visible {
       filter: drop-shadow(0 0 7px var(--frontend-stroke));
       outline: none;
-    }
-    /* Verified Source Beacons are installed at runtime only for nodes whose
-       repository evidence passed the local revision/blob/line checks. They
-       live inside the owning node so every focus, route, story, and guided
-       view keeps one coherent opacity state. Export serialization removes
-       them before producing the canonical SVG or any derived visual. */
-    .source-evidence-beacon {
-      pointer-events: none;
-      opacity: 1;
-      transition: filter 160ms ease;
-    }
-    .source-evidence-beacon rect {
-      fill: color-mix(in srgb, var(--mask) 92%, var(--backend-stroke));
-      stroke: color-mix(in srgb, var(--backend-stroke) 82%, var(--panel-border));
-      stroke-width: 1;
-      vector-effect: non-scaling-stroke;
-    }
-    .source-evidence-beacon text {
-      fill: var(--backend-stroke);
-      font-size: 7px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-anchor: middle;
-      text-transform: uppercase;
-    }
-    svg [data-node-id]:hover .source-evidence-beacon,
-    svg [data-node-id]:focus-visible .source-evidence-beacon,
-    svg [data-node-id][data-focus-selected] .source-evidence-beacon {
-      opacity: 1;
-      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--backend-stroke) 72%, transparent));
-    }
-    svg[data-preset="signal-flow"] .source-evidence-beacon { opacity: 0.9; }
-    svg[data-preset="blueprint"] .source-evidence-beacon rect {
-      rx: 0.8px;
-      filter: none;
     }
     svg [data-legend-kind][role="button"] { cursor: pointer; }
     svg [data-legend-kind]:focus { outline: none; }
@@ -4664,69 +4770,177 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .c-region         { fill: rgba(251, 191, 36, 0.05); stroke: var(--cloud-stroke); stroke-dasharray: 8,4; }
     .c-lane           { fill: var(--lane-fill); stroke: var(--lane-stroke); stroke-dasharray: 6,6; }
 
-    /* Optional trace animation, enabled only by meta.animation = "trace".
-       The ordinary viewer performs one ambient pass and then restores the
-       authored solid/security/async line language. WebM samples the same
-       authored geometry into an explicit canvas timeline. */
-    html[data-ambient-motion="running"] svg[data-animation="trace"] [data-animate="edge"] {
-      animation: archify-edge-flow 2.4s linear 1;
-      animation-delay: calc(var(--step, 0) * 160ms);
+    /* Live plays one relay per cycle: a comet (halo, tail, head) leaves each
+       source when the signal reaches it, travels at one shared speed, leaves a
+       soft wake, and lands as a ripple while its target glows. Downstream edges
+       depart only after their source is reached, so the reader sees the path the
+       diagram describes rather than every edge shimmering at once. Sequence
+       messages relay in authored chronological order. Motion Governor plans the
+       timeline and its per-edge keyframes; this stylesheet owns appearance.
+       Original line language and markers remain static. Node entry is bounded to
+       one pass per document. */
+    svg[data-animation="trace"] {
+      --flow-cycle: 6.4s;
+      --flow-halo-peak: 0.17;
+      --flow-glow-peak: 0.5;
+      --flow-tail-peak: 0.42;
+      --flow-head-peak: 0.95;
+      --flow-wake-peak: 0.3;
+      --flow-ripple-peak: 0.65;
     }
-    html[data-ambient-motion="running"] svg[data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] {
-      animation: archify-edge-flow 2.4s linear 1;
-      animation-delay: calc(var(--step, 0) * 160ms);
+    .ambient-edge-flow {
+      fill: none;
+      stroke: var(--arrow-emphasis);
+      stroke-linecap: round;
+      pointer-events: none;
+      display: none;
     }
-    html[data-ambient-motion="running"] svg[data-animation="trace"] [data-animate="node"] {
+    .ambient-flow-wake {
+      --flow-peak: var(--flow-wake-peak, 0.3);
+      stroke-width: 3.2;
+      stroke-dasharray: var(--flow-dasharray, none);
+    }
+    .ambient-flow-halo {
+      --flow-peak: var(--flow-halo-peak, 0.17);
+      stroke-width: 6;
+      stroke-dasharray: var(--flow-dash, 12px) calc(var(--flow-len, 0px) - var(--flow-dash, 12px));
+    }
+    /* A wide blurred streak centered on the head: this is the bloom that makes
+       the comet read as a traveling orb of light rather than a bright dash. */
+    .ambient-flow-glow {
+      --flow-peak: var(--flow-glow-peak, 0.5);
+      stroke-width: 9;
+      stroke-dasharray: var(--flow-dash, 12px) calc(var(--flow-len, 0px) - var(--flow-dash, 12px));
+      filter: blur(2.5px);
+    }
+    .ambient-flow-tail {
+      --flow-peak: var(--flow-tail-peak, 0.42);
+      stroke-width: 2.4;
+      stroke-dasharray: var(--flow-dasharray, var(--flow-dash, 20px) calc(var(--flow-len, 0px) - var(--flow-dash, 20px)));
+    }
+    .ambient-flow-head {
+      --flow-peak: var(--flow-head-peak, 0.95);
+      stroke: color-mix(in srgb, var(--arrow-emphasis) 40%, white);
+      stroke-width: 2.6;
+      stroke-dasharray: var(--flow-dash, 6px) calc(var(--flow-len, 0px) - var(--flow-dash, 6px));
+    }
+    .ambient-flow-ripple {
+      --flow-peak: var(--flow-ripple-peak, 0.65);
+      stroke: color-mix(in srgb, var(--arrow-emphasis) 55%, white);
+      stroke-width: 2;
+    }
+    html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden]) .ambient-edge-flow {
+      display: inline;
+      animation-name: var(--flow-name, none);
+      animation-duration: var(--flow-cycle, 6.4s);
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+      animation-delay: var(--flow-delay, 0s);
+      /* Without backwards fill a delayed layer would sit at its natural opacity
+         (fully lit) until its departure arrives. */
+      animation-fill-mode: backwards;
+    }
+    /* Stream packets trail the comet head as smaller, dimmer beads. */
+    .ambient-flow-head.packet {
+      --flow-peak: calc(var(--flow-head-peak, 0.95) * 0.62);
+      stroke-width: 3.4;
+    }
+    /* Timeline and waterfall playhead: a crisp rule over a soft bloom. */
+    .ambient-flow-playhead {
+      --flow-peak: 0.9;
+      stroke: color-mix(in srgb, var(--arrow-emphasis) 55%, white);
+      stroke-width: 1.6;
+    }
+    .ambient-flow-playhead-glow {
+      --flow-peak: 0.32;
+      stroke-width: 10;
+      filter: blur(4px);
+    }
+    /* Waterfall spans fill in proportion to their measured time, then settle. */
+    .ambient-flow-fill {
+      --flow-peak: 0.5;
+      fill: color-mix(in srgb, var(--flow-fill, var(--arrow-emphasis)) 55%, white);
+      stroke: none;
+      transform-box: fill-box;
+      transform-origin: left center;
+    }
+    .ambient-flow-fill-failed { fill: var(--security-stroke); --flow-peak: 0.5; }
+    html[data-theme="light"] .ambient-flow-playhead { stroke: color-mix(in srgb, var(--arrow-emphasis) 70%, black); }
+    html[data-theme="light"] .ambient-flow-fill { --flow-peak: 0.42; fill: color-mix(in srgb, var(--flow-fill, var(--arrow-emphasis)) 70%, black); }
+    svg[data-preset="editorial"] .ambient-flow-fill { --flow-peak: 0.2; }
+    svg[data-preset="editorial"] .ambient-flow-playhead-glow { --flow-peak: 0.14; }
+    /* Each decorative flow follows its owning edge through tree visibility. */
+    .ambient-edge-flow[data-tree-hidden] { display: none !important; animation: none !important; }
+    svg[data-preset="blueprint"] .ambient-edge-flow { stroke-linecap: square; }
+    svg[data-preset="editorial"] { --flow-halo-peak: 0.07; --flow-glow-peak: 0.28; --flow-tail-peak: 0.2; --flow-head-peak: 0.7; --flow-wake-peak: 0.14; --flow-ripple-peak: 0.3; }
+    /* On light canvases the relay reads by saturation instead of bloom: the head
+       and ripple mix toward ink instead of white, and every layer's peak rises so
+       the wave survives the bright background. */
+    html[data-theme="light"] svg[data-animation="trace"] {
+      --flow-halo-peak: 0.22;
+      --flow-glow-peak: 0.4;
+      --flow-tail-peak: 0.5;
+      --flow-wake-peak: 0.34;
+    }
+    html[data-theme="light"] .ambient-flow-head {
+      stroke: color-mix(in srgb, var(--arrow-emphasis) 55%, black);
+      stroke-width: 2.8;
+    }
+    html[data-theme="light"] .ambient-flow-ripple {
+      stroke: color-mix(in srgb, var(--arrow-emphasis) 65%, black);
+    }
+    html[data-ambient-entry="running"] svg[data-animation="trace"] [data-animate="node"] {
       transform-box: fill-box;
       transform-origin: center;
-      animation: archify-node-pulse 3.6s ease-in-out 1;
-      animation-delay: calc(var(--step, 0) * 160ms);
+      animation: archify-node-pulse 3.6s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="edge"] {
-      stroke-linecap: round;
-      filter: drop-shadow(0 0 3px var(--arrow-emphasis));
-      animation-duration: 1.75s;
+    html[data-ambient-entry="running"] svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="node"] {
+      animation: archify-node-pulse 3.1s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    svg[data-preset="signal-flow"][data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] { animation-duration: 1.75s; }
-    svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="node"] {
-      animation-duration: 3.1s;
+    html[data-ambient-entry="running"] svg[data-preset="blueprint"][data-animation="trace"] [data-animate="node"] {
+      animation: archify-blueprint-node-pulse 3.8s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    svg[data-preset="blueprint"][data-animation="trace"] [data-animate="edge"] {
-      stroke-linecap: square;
-      filter: none;
-      animation-duration: 2.15s;
+    html[data-ambient-entry="running"] svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] {
+      animation: archify-editorial-node-pulse 3.5s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    svg[data-preset="blueprint"][data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] { animation-duration: 2.15s; }
-    svg[data-preset="blueprint"][data-animation="trace"] [data-animate="node"] {
-      animation-name: archify-blueprint-node-pulse;
-      animation-duration: 3.8s;
+    /* Each node glows in its planned windows: when the relay reaches it, while a
+       walk token rests on it, as a message lands, or as the playhead passes.
+       During the bounded entrance all three animations run; the entrance pulse is
+       listed after the repeating glow and wins on filter until it completes. */
+    html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden]) svg[data-animation="trace"] [data-animate="node"] {
+      animation: var(--flow-node-name, none) var(--flow-cycle, 6.4s) linear infinite;
     }
-    svg[data-preset="editorial"][data-animation="trace"] [data-animate="edge"] {
-      filter: none;
-      animation-duration: 2.2s;
+    html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-animation="trace"] [data-animate="node"] {
+      animation: var(--flow-node-name, none) var(--flow-cycle, 6.4s) linear infinite,
+        archify-node-pulse 3.6s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    svg[data-preset="editorial"][data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] { animation-duration: 2.2s; }
-    svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] {
-      animation-name: archify-editorial-node-pulse;
-      animation-duration: 3.5s;
+    html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="node"] {
+      animation: var(--flow-node-name, none) var(--flow-cycle, 6.4s) linear infinite,
+        archify-node-pulse 3.1s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    /* Embedded proofs stay static so proof grids are calm instead of leaving
-       ambient trace loops on. */
-    html[data-embed="true"] svg[data-animation="trace"] [data-animate],
-    html[data-share-playback="true"] svg[data-animation="trace"] [data-animate] {
-      animation: none !important;
-      stroke-dashoffset: 0;
+    html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-preset="blueprint"][data-animation="trace"] [data-animate="node"] {
+      animation: var(--flow-node-name, none) var(--flow-cycle, 6.4s) linear infinite,
+        archify-blueprint-node-pulse 3.8s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    html[data-embed="true"] svg[data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"],
-    html[data-share-playback="true"] svg[data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] {
-      animation: none !important;
-      stroke-dashoffset: 0;
+    html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] {
+      animation: var(--flow-node-name, none) var(--flow-cycle, 6.4s) linear infinite,
+        archify-editorial-node-pulse 3.5s ease-in-out 1 calc(var(--step, 0) * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(var(--step, 0) * 160ms);
     }
-    @keyframes archify-edge-flow {
-      0% { stroke-dasharray: 10 8; stroke-dashoffset: 54; opacity: 0.42; }
-      88% { stroke-dasharray: 10 8; stroke-dashoffset: 0; opacity: 1; }
-      99.9% { stroke-dasharray: 10 8; stroke-dashoffset: 0; opacity: 1; }
-      100% { stroke-dashoffset: 0; opacity: 1; }
+    @keyframes archify-node-enter {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @media print {
+      .ambient-edge-flow { display: none !important; animation: none !important; }
+      svg[data-animation="trace"] [data-animate="node"] { animation: none !important; }
     }
     @keyframes archify-node-pulse {
       0%, 72%, 100% { filter: none; stroke-width: 1.5; }
@@ -4793,10 +5007,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       50% { opacity: 0.48; transform: scale(0.78); }
     }
     @media (prefers-reduced-motion: reduce) {
+      .ambient-edge-flow { display: none !important; animation: none !important; }
       html[data-preset="signal-flow"] .diagram-container::before {
         animation: none !important;
       }
       .pulse-dot { animation: none !important; }
+      .motion-control-dot { animation: none !important; }
       svg[data-animation="trace"] [data-animate] {
         animation: none !important;
         stroke-dashoffset: 0;
@@ -4832,7 +5048,6 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         filter: none;
       }
       .relationship-pulse-overlay { display: none !important; }
-      .source-evidence-beacon,
       svg [data-node-id], svg [data-edge-from], svg [data-detail], svg [data-detail-anchor], svg [data-legend-hit], svg { transition: none !important; }
     }
   
@@ -4859,6 +5074,27 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
           </pattern>
         </defs>
+        <style>
+          svg[data-node-ui] [data-node-id] > rect:not(.c-mask) { stroke-width: 1.25px; }
+          :is([data-theme="dark"] svg[data-node-ui], svg[data-node-ui][data-theme="dark"]) [data-node-id] > rect:not(.c-mask).c-frontend { fill: color-mix(in srgb, var(--frontend-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--frontend-stroke) 72%, var(--mask)); }
+          :is([data-theme="dark"] svg[data-node-ui], svg[data-node-ui][data-theme="dark"]) [data-node-id] > rect:not(.c-mask).c-backend { fill: color-mix(in srgb, var(--backend-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--backend-stroke) 72%, var(--mask)); }
+          :is([data-theme="dark"] svg[data-node-ui], svg[data-node-ui][data-theme="dark"]) [data-node-id] > rect:not(.c-mask).c-database { fill: color-mix(in srgb, var(--database-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--database-stroke) 72%, var(--mask)); }
+          :is([data-theme="dark"] svg[data-node-ui], svg[data-node-ui][data-theme="dark"]) [data-node-id] > rect:not(.c-mask).c-cloud { fill: color-mix(in srgb, var(--cloud-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--cloud-stroke) 72%, var(--mask)); }
+          :is([data-theme="dark"] svg[data-node-ui], svg[data-node-ui][data-theme="dark"]) [data-node-id] > rect:not(.c-mask).c-security { fill: color-mix(in srgb, var(--security-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--security-stroke) 72%, var(--mask)); }
+          :is([data-theme="dark"] svg[data-node-ui], svg[data-node-ui][data-theme="dark"]) [data-node-id] > rect:not(.c-mask).c-messagebus { fill: color-mix(in srgb, var(--messagebus-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--messagebus-stroke) 72%, var(--mask)); }
+          :is([data-theme="dark"] svg[data-node-ui], svg[data-node-ui][data-theme="dark"]) [data-node-id] > rect:not(.c-mask).c-external { fill: color-mix(in srgb, var(--external-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--external-stroke) 72%, var(--mask)); }
+          svg[data-node-ui]:is([data-preset="classic"], [data-preset="signal-flow"], [data-preset="editorial"]) .c-region { fill: color-mix(in srgb, var(--cloud-stroke) 3%, transparent); stroke: color-mix(in srgb, var(--cloud-stroke) 42%, var(--lane-stroke)); stroke-dasharray: none; }
+          svg[data-node-ui] .c-security-group { stroke: color-mix(in srgb, var(--security-stroke) 58%, var(--lane-stroke)); }
+          svg[data-node-ui]:is([data-preset="classic"], [data-preset="signal-flow"], [data-preset="editorial"]) .c-security-group { stroke-dasharray: 4 3; }
+          svg[data-node-ui]:is([data-preset="classic"], [data-preset="signal-flow"], [data-preset="editorial"]) .c-lane { stroke: var(--lane-stroke); stroke-dasharray: none; }
+          svg[data-node-ui] [data-graph-role="structural-frame-label-mask"] { rx: 5px; fill: color-mix(in srgb, var(--cloud-stroke) 10%, var(--mask)); stroke: color-mix(in srgb, var(--cloud-stroke) 38%, var(--mask)); stroke-width: .8px; }
+          svg[data-node-ui] [data-composition-frame-kind="security-group"] > [data-graph-role="structural-frame-label-mask"] { fill: color-mix(in srgb, var(--security-stroke) 9%, var(--mask)); stroke: color-mix(in srgb, var(--security-stroke) 36%, var(--mask)); }
+          svg[data-node-ui] .phase-rule { opacity: .5; stroke-dasharray: none; }
+          svg[data-node-ui] .phase-chip { stroke: var(--lane-stroke); stroke-width: .75px; }
+          svg[data-node-ui] g[data-edge-from] > rect.c-mask { rx: 7px; stroke: var(--lane-stroke); stroke-width: .75px; }
+          svg[data-node-ui][data-preset="blueprint"] :is([data-graph-role="structural-frame-label-mask"], g[data-edge-from] > rect.c-mask, .phase-chip) { rx: 2px; }
+          svg[data-node-ui][data-preset="editorial"] :is([data-graph-role="structural-frame-label-mask"], g[data-edge-from] > rect.c-mask, .phase-chip) { rx: 3px; }
+        </style>
 
         <!-- Background Grid -->
         <rect width="100%" height="100%" fill="url(#grid)" />
@@ -4873,58 +5109,58 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Connection paths (before components for correct z-order) -->
         <g data-graph-role="automatic-crossover" style="--step:0">
           <path data-graph-role="automatic-crossover-underlay" d="M 170 111.95 L 250 111.95" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="scheduler" data-edge-to="api_automated" data-edge-label="cron trigger" data-edge-key="0" data-edge-id="cron-to-auto" data-composition-points="170,111.95;250,111.95" data-composition-crossover="halo" data-composition-independent="true" d="M 170 111.95 L 250 111.95" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-edge-from="scheduler" data-edge-to="api_automated" data-edge-label="cron trigger" data-edge-key="0" data-edge-id="cron-to-auto" data-composition-points="170,111.95;250,111.95" data-composition-crossover="halo" data-composition-independent="true" d="M 170 111.95 L 250 111.95" class="a-emphasis" data-animate="edge" style="--step:0" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:1">
           <path data-graph-role="automatic-crossover-underlay" d="M 170 230 L 250 230" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="browser_user" data-edge-to="api_queries" data-edge-label="HTTPS :443" data-edge-key="1" data-edge-id="user-to-query" data-composition-points="170,230;250,230" data-composition-crossover="halo" data-composition-independent="true" d="M 170 230 L 250 230" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-edge-from="browser_user" data-edge-to="api_queries" data-edge-label="HTTPS :443" data-edge-key="1" data-edge-id="user-to-query" data-composition-points="170,230;250,230" data-composition-crossover="halo" data-composition-independent="true" d="M 170 230 L 250 230" class="a-emphasis" data-animate="edge" style="--step:1" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:2">
           <path data-graph-role="automatic-crossover-underlay" d="M 250 127 L 234 127 Q 226 127 226 135 L 226 179 Q 226 187 234 187 L 236 187 Q 244 187 244 195 L 244 332 Q 244 340 236 340 L 170 340" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api_automated" data-edge-to="sendgrid_egress" data-edge-key="2" data-edge-id="auto-to-email" data-composition-points="250,127;226,127;226,187;244,187;244,340;170,340" data-composition-crossover="halo" data-composition-independent="true" d="M 250 127 L 234 127 Q 226 127 226 135 L 226 179 Q 226 187 234 187 L 236 187 Q 244 187 244 195 L 244 332 Q 244 340 236 340 L 170 340" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="api_automated" data-edge-to="sendgrid_egress" data-edge-key="2" data-edge-id="auto-to-email" data-composition-points="250,127;226,127;226,187;244,187;244,340;170,340" data-composition-crossover="halo" data-composition-independent="true" d="M 250 127 L 234 127 Q 226 127 226 135 L 226 179 Q 226 187 234 187 L 236 187 Q 244 187 244 195 L 244 332 Q 244 340 236 340 L 170 340" class="a-default" data-animate="edge" style="--step:2" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:3">
           <path data-graph-role="automatic-crossover-underlay" d="M 400 120 L 510 120" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api_automated" data-edge-to="gemini_ladder" data-edge-label="AI digest" data-edge-key="3" data-edge-id="auto-to-gemini" data-composition-points="400,120;510,120" data-composition-crossover="halo" data-composition-independent="true" d="M 400 120 L 510 120" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-edge-from="api_automated" data-edge-to="gemini_ladder" data-edge-label="AI digest" data-edge-key="3" data-edge-id="auto-to-gemini" data-composition-points="400,120;510,120" data-composition-crossover="halo" data-composition-independent="true" d="M 400 120 L 510 120" class="a-emphasis" data-animate="edge" style="--step:3" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:4">
           <path data-graph-role="automatic-crossover-underlay" d="M 400 223 L 510 223" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api_queries" data-edge-to="pydantic_contracts" data-edge-label="contracts" data-edge-key="4" data-edge-id="query-to-pydantic" data-composition-points="400,223;510,223" data-composition-crossover="halo" data-composition-independent="true" d="M 400 223 L 510 223" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="api_queries" data-edge-to="pydantic_contracts" data-edge-label="contracts" data-edge-key="4" data-edge-id="query-to-pydantic" data-composition-points="400,223;510,223" data-composition-crossover="halo" data-composition-independent="true" d="M 400 223 L 510 223" class="a-default" data-animate="edge" style="--step:4" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:5">
           <path data-graph-role="automatic-crossover-underlay" d="M 590 200 L 590 150" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="pydantic_contracts" data-edge-to="gemini_ladder" data-edge-label="JSON mode" data-edge-key="5" data-edge-id="pydantic-to-gemini" data-composition-points="590,200;590,150" data-composition-crossover="halo" data-composition-independent="true" d="M 590 200 L 590 150" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-edge-from="pydantic_contracts" data-edge-to="gemini_ladder" data-edge-label="JSON mode" data-edge-key="5" data-edge-id="pydantic-to-gemini" data-composition-points="590,200;590,150" data-composition-crossover="halo" data-composition-independent="true" d="M 590 200 L 590 150" class="a-emphasis" data-animate="edge" style="--step:5" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:6">
           <path data-graph-role="automatic-crossover-underlay" d="M 325 260 L 325 310" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api_queries" data-edge-to="gcs_memory_store" data-edge-key="6" data-edge-id="query-to-memory" data-composition-points="325,260;325,310" data-composition-crossover="halo" data-composition-independent="true" d="M 325 260 L 325 310" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-edge-from="api_queries" data-edge-to="gcs_memory_store" data-edge-key="6" data-edge-id="query-to-memory" data-composition-points="325,260;325,310" data-composition-crossover="halo" data-composition-independent="true" d="M 325 260 L 325 310" class="a-emphasis" data-animate="edge" style="--step:6" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:7">
           <path data-graph-role="automatic-crossover-underlay" d="M 400 347 L 510 347" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="gcs_memory_store" data-edge-to="espn_pipeline" data-edge-label="lessons &amp; tape" data-edge-key="7" data-edge-id="memory-to-pipeline" data-composition-points="400,347;510,347" data-composition-crossover="halo" data-composition-independent="true" d="M 400 347 L 510 347" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="gcs_memory_store" data-edge-to="espn_pipeline" data-edge-label="lessons &amp; tape" data-edge-key="7" data-edge-id="memory-to-pipeline" data-composition-points="400,347;510,347" data-composition-crossover="halo" data-composition-independent="true" d="M 400 347 L 510 347" class="a-default" data-animate="edge" style="--step:7" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:8">
-          <path data-graph-role="automatic-crossover-underlay" d="M 400 237 L 416 237 Q 424 237 424 245 L 424 278 Q 424 286 432 286 L 582 286 Q 590 286 590 294 L 590 310" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api_queries" data-edge-to="espn_pipeline" data-edge-key="8" data-edge-id="query-to-pipeline" data-composition-points="400,237;424,237;424,286;590,286;590,310" data-composition-crossover="halo" data-composition-independent="true" d="M 400 237 L 416 237 Q 424 237 424 245 L 424 278 Q 424 286 432 286 L 582 286 Q 590 286 590 294 L 590 310" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 340.05 260 L 340.05 277 Q 340.05 285 348.05 285 L 582 285 Q 590 285 590 293 L 590 310" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="api_queries" data-edge-to="espn_pipeline" data-edge-key="8" data-edge-id="query-to-pipeline" data-composition-points="340.05,260;340.05,285;590,285;590,310" data-composition-crossover="halo" data-composition-independent="true" d="M 340.05 260 L 340.05 277 Q 340.05 285 348.05 285 L 582 285 Q 590 285 590 293 L 590 310" class="a-default" data-animate="edge" style="--step:8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:9">
           <path data-graph-role="automatic-crossover-underlay" d="M 670 326 L 724 326 Q 732 326 732 318 L 732 128 Q 732 120 740 120 L 770 120" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="espn_pipeline" data-edge-to="odds_weather" data-edge-key="9" data-edge-id="pipeline-to-odds" data-composition-points="670,326;732,326;732,120;770,120" data-composition-crossover="halo" data-composition-independent="true" d="M 670 326 L 724 326 Q 732 326 732 318 L 732 128 Q 732 120 740 120 L 770 120" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="espn_pipeline" data-edge-to="odds_weather" data-edge-key="9" data-edge-id="pipeline-to-odds" data-composition-points="670,326;732,326;732,120;770,120" data-composition-crossover="halo" data-composition-independent="true" d="M 670 326 L 724 326 Q 732 326 732 318 L 732 128 Q 732 120 740 120 L 770 120" class="a-default" data-animate="edge" style="--step:9" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:10">
-          <path data-graph-role="automatic-crossover-underlay" d="M 576 310 L 576 271 Q 576 263 584 263 L 738 263 Q 746 263 746 255 L 746 238 Q 746 230 754 230 L 770 230" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="espn_pipeline" data-edge-to="espn_v3" data-edge-key="10" data-edge-id="pipeline-to-espn" data-composition-points="576,310;576,263;746,263;746,230;770,230" data-composition-crossover="halo" data-composition-independent="true" d="M 576 310 L 576 271 Q 576 263 584 263 L 738 263 Q 746 263 746 255 L 746 238 Q 746 230 754 230 L 770 230" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 670 340 L 738 340 Q 746 340 746 332 L 746 238 Q 746 230 754 230 L 770 230" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="espn_pipeline" data-edge-to="espn_v3" data-edge-key="10" data-edge-id="pipeline-to-espn" data-composition-points="670,340;746,340;746,230;770,230" data-composition-crossover="halo" data-composition-independent="true" d="M 670 340 L 738 340 Q 746 340 746 332 L 746 238 Q 746 230 754 230 L 770 230" class="a-default" data-animate="edge" style="--step:10" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:11">
           <path data-graph-role="automatic-crossover-underlay" d="M 670 354 L 770 354" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="espn_pipeline" data-edge-to="sleeper_wire" data-edge-label="trending adds" data-edge-key="11" data-edge-id="pipeline-to-sleeper" data-composition-points="670,354;770,354" data-composition-crossover="halo" data-composition-independent="true" d="M 670 354 L 770 354" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="espn_pipeline" data-edge-to="sleeper_wire" data-edge-label="trending adds" data-edge-key="11" data-edge-id="pipeline-to-sleeper" data-composition-points="670,354;770,354" data-composition-crossover="halo" data-composition-independent="true" d="M 670 354 L 770 354" class="a-default" data-animate="edge" style="--step:11" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
 
         <!-- Components -->
         <g id="node-scheduler" data-node-id="scheduler" data-node-label="Cloud Scheduler" tabindex="0" role="button" aria-label="Focus Cloud Scheduler, 5 Cron Jobs (ET), Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="5 Cron Jobs (ET)" data-node-context="Architecture component">
           <title>Cloud Scheduler · 5 Cron Jobs (ET) · Architecture component</title>
-          <rect x="40" y="90" width="130" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="90" width="130" height="60" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <rect x="40" y="90" width="130" height="60" rx="8" class="c-mask"/>
+          <rect x="40" y="90" width="130" height="60" rx="8" class="c-cloud" data-animate="node" style="--step:0" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(46 96) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
@@ -4934,8 +5170,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-browser_user" data-node-id="browser_user" data-node-label="Mad Dawg (Browser)" tabindex="0" role="button" aria-label="Focus Mad Dawg (Browser), Web Command Center, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Web Command Center" data-node-context="Architecture component">
           <title>Mad Dawg (Browser) · Web Command Center · Architecture component</title>
-          <rect x="40" y="200" width="130" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="200" width="130" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <rect x="40" y="200" width="130" height="60" rx="8" class="c-mask"/>
+          <rect x="40" y="200" width="130" height="60" rx="8" class="c-external" data-animate="node" style="--step:1" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 206) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
@@ -4946,8 +5182,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-sendgrid_egress" data-node-id="sendgrid_egress" data-node-label="SendGrid Mail API" tabindex="0" role="button" aria-label="Focus SendGrid Mail API, damiththa@gmail.com, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="damiththa@gmail.com" data-node-tag="HTML Digest" data-node-context="Architecture component">
           <title>SendGrid Mail API · damiththa@gmail.com · Architecture component · HTML Digest</title>
-          <rect x="40" y="310" width="130" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="310" width="130" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <rect x="40" y="310" width="130" height="60" rx="8" class="c-mask"/>
+          <rect x="40" y="310" width="130" height="60" rx="8" class="c-external" data-animate="node" style="--step:3" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 316) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
@@ -4959,8 +5195,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-api_automated" data-node-id="api_automated" data-node-label="Automated Endpoints" tabindex="0" role="button" aria-label="Focus Automated Endpoints, /run/weekly • /run/sunday, Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="/run/weekly • /run/sunday" data-node-tag="Cron Ingress" data-node-context="Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)">
           <title>Automated Endpoints · /run/weekly • /run/sunday · Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle) · Cron Ingress</title>
-          <rect x="250" y="90" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="250" y="90" width="150" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <rect x="250" y="90" width="150" height="60" rx="8" class="c-mask"/>
+          <rect x="250" y="90" width="150" height="60" rx="8" class="c-backend" data-animate="node" style="--step:1" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 96) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
@@ -4971,8 +5207,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-api_queries" data-node-id="api_queries" data-node-label="REST Query Endpoints" tabindex="0" role="button" aria-label="Focus REST Query Endpoints, streaming • keep-alive, Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="streaming • keep-alive" data-node-tag="Heartbeat Stream" data-node-context="Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)">
           <title>REST Query Endpoints · streaming • keep-alive · Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle) · Heartbeat Stream</title>
-          <rect x="250" y="200" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="250" y="200" width="150" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <rect x="250" y="200" width="150" height="60" rx="8" class="c-mask"/>
+          <rect x="250" y="200" width="150" height="60" rx="8" class="c-backend" data-animate="node" style="--step:2" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 206) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
@@ -4983,8 +5219,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-gcs_memory_store" data-node-id="gcs_memory_store" data-node-label="GCS Memory Store" tabindex="0" role="button" aria-label="Focus GCS Memory Store, JSON Lessons &amp; Tape, Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="database" data-node-sublabel="JSON Lessons &amp; Tape" data-node-tag="Zero DB Tables" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle)">
           <title>GCS Memory Store · JSON Lessons &amp; Tape · Google Cloud Platform: us-central1 ($0.00 Idle) · Zero DB Tables</title>
-          <rect x="250" y="310" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="250" y="310" width="150" height="60" rx="6" class="c-database" stroke-width="1.5"/>
+          <rect x="250" y="310" width="150" height="60" rx="8" class="c-mask"/>
+          <rect x="250" y="310" width="150" height="60" rx="8" class="c-database" data-animate="node" style="--step:7" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(256 316) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
@@ -4994,22 +5230,22 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="325" y="362" class="t-database" font-size="7" text-anchor="middle">Zero DB Tables</text>
         </g>
 
-        <g id="node-gemini_ladder" data-node-id="gemini_ladder" data-node-label="Gemini Model Ladder" tabindex="0" role="button" aria-label="Focus Gemini Model Ladder, 3.1-preview ➔ 2.5-pro, Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="3.1-preview ➔ 2.5-pro" data-node-tag="Uncapped Reasoning" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle)">
-          <title>Gemini Model Ladder · 3.1-preview ➔ 2.5-pro · Google Cloud Platform: us-central1 ($0.00 Idle) · Uncapped Reasoning</title>
-          <rect x="510" y="90" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="510" y="90" width="160" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+        <g id="node-gemini_ladder" data-node-id="gemini_ladder" data-node-label="Gemini Model Ladder" tabindex="0" role="button" aria-label="Focus Gemini Model Ladder, 4-argon ➔ 3.1-pro ➔ 2.5-pro, Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="4-argon ➔ 3.1-pro ➔ 2.5-pro" data-node-tag="Native Thinking" data-node-context="Google Cloud Platform: us-central1 ($0.00 Idle)">
+          <title>Gemini Model Ladder · 4-argon ➔ 3.1-pro ➔ 2.5-pro · Google Cloud Platform: us-central1 ($0.00 Idle) · Native Thinking</title>
+          <rect x="510" y="90" width="160" height="60" rx="8" class="c-mask"/>
+          <rect x="510" y="90" width="160" height="60" rx="8" class="c-backend" data-animate="node" style="--step:4" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(516 96) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="590" y="118" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Gemini Model Ladder</text>
-        <text data-detail="context" x="590" y="134" class="t-muted" font-size="9" text-anchor="middle">3.1-preview ➔ 2.5-pro</text>
-        <text data-detail="fine" x="590" y="142" class="t-backend" font-size="7" text-anchor="middle">Uncapped Reasoning</text>
+        <text data-detail="context" x="590" y="134" class="t-muted" font-size="9" text-anchor="middle">4-argon ➔ 3.1-pro ➔ 2.5-pro</text>
+        <text data-detail="fine" x="590" y="142" class="t-backend" font-size="7" text-anchor="middle">Native Thinking</text>
         </g>
 
         <g id="node-pydantic_contracts" data-node-id="pydantic_contracts" data-node-label="6 Pydantic Contracts" tabindex="0" role="button" aria-label="Focus 6 Pydantic Contracts, JSON Schema Enforcement, Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="JSON Schema Enforcement" data-node-context="Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)">
           <title>6 Pydantic Contracts · JSON Schema Enforcement · Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)</title>
-          <rect x="510" y="200" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="510" y="200" width="160" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <rect x="510" y="200" width="160" height="60" rx="8" class="c-mask"/>
+          <rect x="510" y="200" width="160" height="60" rx="8" class="c-backend" data-animate="node" style="--step:5" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(516 206) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
@@ -5019,8 +5255,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-espn_pipeline" data-node-id="espn_pipeline" data-node-label="Data Ingestion Layer" tabindex="0" role="button" aria-label="Focus Data Ingestion Layer, Rosters, Wire, Odds, Wx, Stats, Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Rosters, Wire, Odds, Wx, Stats" data-node-context="Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)">
           <title>Data Ingestion Layer · Rosters, Wire, Odds, Wx, Stats · Cloud Run: fantasy-agent (FastAPI + Uvicorn) › Google Cloud Platform: us-central1 ($0.00 Idle)</title>
-          <rect x="510" y="310" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="510" y="310" width="160" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <rect x="510" y="310" width="160" height="60" rx="8" class="c-mask"/>
+          <rect x="510" y="310" width="160" height="60" rx="8" class="c-backend" data-animate="node" style="--step:8" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(516 316) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
@@ -5030,8 +5266,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-odds_weather" data-node-id="odds_weather" data-node-label="Vegas, Weather &amp; Stats" tabindex="0" role="button" aria-label="Focus Vegas, Weather &amp; Stats, ESPN, Open-Meteo, nflverse, Upstream External APIs (Stateless Feeds)" aria-pressed="false" data-node-kind="external" data-node-sublabel="ESPN, Open-Meteo, nflverse" data-node-context="Upstream External APIs (Stateless Feeds)">
           <title>Vegas, Weather &amp; Stats · ESPN, Open-Meteo, nflverse · Upstream External APIs (Stateless Feeds)</title>
-          <rect x="770" y="90" width="170" height="60" rx="6" class="c-mask"/>
-          <rect x="770" y="90" width="170" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <rect x="770" y="90" width="170" height="60" rx="8" class="c-mask"/>
+          <rect x="770" y="90" width="170" height="60" rx="8" class="c-external" data-animate="node" style="--step:10" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(776 96) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
@@ -5042,8 +5278,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-espn_v3" data-node-id="espn_v3" data-node-label="ESPN Fantasy v3 API" tabindex="0" role="button" aria-label="Focus ESPN Fantasy v3 API, Private Auth (S2/SWID), Upstream External APIs (Stateless Feeds)" aria-pressed="false" data-node-kind="external" data-node-sublabel="Private Auth (S2/SWID)" data-node-context="Upstream External APIs (Stateless Feeds)">
           <title>ESPN Fantasy v3 API · Private Auth (S2/SWID) · Upstream External APIs (Stateless Feeds)</title>
-          <rect x="770" y="200" width="170" height="60" rx="6" class="c-mask"/>
-          <rect x="770" y="200" width="170" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <rect x="770" y="200" width="170" height="60" rx="8" class="c-mask"/>
+          <rect x="770" y="200" width="170" height="60" rx="8" class="c-external" data-animate="node" style="--step:11" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(776 206) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
@@ -5054,8 +5290,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <g id="node-sleeper_wire" data-node-id="sleeper_wire" data-node-label="Sleeper Fantasy API" tabindex="0" role="button" aria-label="Focus Sleeper Fantasy API, Trending Adds &amp; Injuries, Upstream External APIs (Stateless Feeds)" aria-pressed="false" data-node-kind="external" data-node-sublabel="Trending Adds &amp; Injuries" data-node-context="Upstream External APIs (Stateless Feeds)">
           <title>Sleeper Fantasy API · Trending Adds &amp; Injuries · Upstream External APIs (Stateless Feeds)</title>
-          <rect x="770" y="310" width="170" height="60" rx="6" class="c-mask"/>
-          <rect x="770" y="310" width="170" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <rect x="770" y="310" width="170" height="60" rx="8" class="c-mask"/>
+          <rect x="770" y="310" width="170" height="60" rx="8" class="c-external" data-animate="node" style="--step:12" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(776 316) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
@@ -5118,21 +5354,21 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
           <text x="40" y="422" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="442" data-legend-width="78">
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="442" data-legend-width="87">
             <rect x="40" y="433" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
             <text x="62" y="442" class="t-muted" font-size="10" font-weight="500">Backend</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="140" data-legend-baseline="442" data-legend-width="83">
-            <rect x="140" y="433" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="162" y="442" class="t-muted" font-size="10" font-weight="500">Database</text>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="149" data-legend-baseline="442" data-legend-width="93">
+            <rect x="149" y="433" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="171" y="442" class="t-muted" font-size="10" font-weight="500">Database</text>
           </g>
-          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Cloud" data-legend-x="245" data-legend-baseline="442" data-legend-width="68">
-            <rect x="245" y="433" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
-            <text x="267" y="442" class="t-muted" font-size="10" font-weight="500">Cloud</text>
+          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Cloud" data-legend-x="264" data-legend-baseline="442" data-legend-width="74">
+            <rect x="264" y="433" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
+            <text x="286" y="442" class="t-muted" font-size="10" font-weight="500">Cloud</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External" data-legend-x="335" data-legend-baseline="442" data-legend-width="83">
-            <rect x="335" y="433" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="357" y="442" class="t-muted" font-size="10" font-weight="500">External</text>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External" data-legend-x="360" data-legend-baseline="442" data-legend-width="93">
+            <rect x="360" y="433" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="382" y="442" class="t-muted" font-size="10" font-weight="500">External</text>
           </g>
         </g>
       
