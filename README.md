@@ -1,6 +1,6 @@
 # 🏈 Mad Dawg's NFL Fantasy Football Agent
 
-AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google Cloud Run** with **\$0.00 idle cost**, powered by **dynamic Gemini Pro model negotiation** (auto-probes `gemini-3.1-pro-preview` → `gemini-2.5-pro` stable fallback) with **429 exponential backoff retry** and hosted on **~90% clean renewable wind energy** in `us-central1`.
+AI-powered senior Fantasy Football analyst managing two ESPN leagues on **Google Cloud Run** with **\$0.00 idle cost**, powered by **Vertex AI Gemini 4 Argon native thinking** (with automatic `gemini-3.1-pro` and `gemini-2.5-pro` failover) with **429 exponential backoff retry** and hosted on **~90% clean renewable wind energy** in `us-central1`.
 
 📖 **[System Architecture Specification](ARCHITECTURE.md)** • 🌐 **[Live Web Portal](https://fantasy-agent-3pky7gmu6q-uc.a.run.app)** • 🛠️ **[Swagger Docs](https://fantasy-agent-3pky7gmu6q-uc.a.run.app/docs)**
 

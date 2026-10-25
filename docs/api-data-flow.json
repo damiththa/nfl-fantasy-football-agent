@@ -16,7 +16,7 @@
         "id": "ondemand-flow",
         "label": "On-Demand REST Flow",
         "focus": ["browser_user", "api_queries", "pydantic_contracts", "gemini_ladder", "gcs_memory_store", "espn_pipeline"],
-        "note": "Live start/sit, waiver priority, trade proposals & lessons queried via HTTP keep-alive streaming with native thinking Gemini 4 Argon and ROS bye-week asset protection."
+        "note": "Live start/sit, waivers & trades queried via HTTP keep-alive streaming with native Gemini 4 Argon thinking & ROS bye-week protection."
       },
       {
         "id": "stateless-lineage",

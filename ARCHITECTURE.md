@@ -88,7 +88,8 @@ flowchart TB
     end
 
     subgraph External_Services ["🌐 External APIs & Upstream Providers"]
-        Gemini_31_Preview["gemini-3.1-pro-preview<br/>(Vertex Global — Primary Active)"]
+        Gemini_4_Argon["gemini-4-argon<br/>(Vertex Global — Primary Active)"]
+        Gemini_31_Preview["gemini-3.1-pro-preview<br/>(Vertex Global — Fallback)"]
         Gemini_25_Pro["gemini-2.5-pro<br/>(Stable Fallback — EOL Oct 2026)"]
         SendGrid_API["SendGrid v3 Mail API<br/>(api.sendgrid.com)"]
         Odds_API["ESPN Scoreboard API<br/>(Vegas Spreads & Totals)"]
@@ -178,6 +179,7 @@ flowchart LR
     end
 
     subgraph AILayer ["🧠 Gemini Model Ladder"]
+        G4A["gemini-4-argon (Native Thinking)"]
         G31P["gemini-3.1-pro-preview"]
         G31["gemini-3.1-pro"]
         G25["gemini-2.5-pro"]
@@ -313,9 +315,9 @@ flowchart LR
 
 * **Dynamic Model Negotiation (`negotiate_active_model()`):**
   * At startup and on-demand via `/health/models?force=true`, probes each model in the preference ladder:
-    1. `gemini-3.1-pro-preview` (Primary Target — Preview)
-    2. `gemini-3.1-pro` (GA Alias)
-    3. `gemini-3-pro-preview` (Secondary Preview)
+    1. `gemini-4-argon` (Primary Target — Vertex AI Native Thinking)
+    2. `gemini-3.1-pro-preview` (Preview Fallback)
+    3. `gemini-3.1-pro` (GA Alias)
     4. `gemini-2.5-pro` (Stable Fallback — EOL October 2026)
   * Result cached in `_NEGOTIATED_MODEL`. Interactive 🧠 Brain Badge in the UI displays the active model with color-coded status (green = target, amber = fallback).
 * **429 Exponential Backoff Retry:**
