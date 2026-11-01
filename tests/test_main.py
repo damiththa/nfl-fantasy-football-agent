@@ -290,6 +290,7 @@ def test_weekly_analysis_triggers_espn_auth_alert_on_401(client, monkeypatch):
 
 def test_fetch_league_free_agents_augments_kickers_and_defenses():
     from unittest.mock import MagicMock
+
     from src.main import fetch_league_free_agents
 
     mock_league = MagicMock()
@@ -360,6 +361,7 @@ def test_query_roster_players_no_cache_and_load_roster_week(client, monkeypatch)
 
 def test_query_trade_calls_load_roster_week(client, monkeypatch):
     from unittest.mock import MagicMock
+
     from src.intelligence.schemas import TradeEvaluation
 
     mock_league = MagicMock()

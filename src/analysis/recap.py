@@ -34,12 +34,14 @@ def _compute_optimal_points(
     def get_pts(p: RosterPlayer) -> float:
         return p.actual_points if is_final else (p.actual_points if p.has_played else p.projected_points)
 
-    qbs = sorted([p for p in players if p.position.upper() == "QB"], key=get_pts, reverse=True)
-    rbs = sorted([p for p in players if p.position.upper() == "RB"], key=get_pts, reverse=True)
-    wrs = sorted([p for p in players if p.position.upper() == "WR"], key=get_pts, reverse=True)
-    tes = sorted([p for p in players if p.position.upper() == "TE"], key=get_pts, reverse=True)
-    dsts = sorted([p for p in players if p.position.upper() in ("D/ST", "DST")], key=get_pts, reverse=True)
-    ks = sorted([p for p in players if p.position.upper() == "K"], key=get_pts, reverse=True)
+    active_players = [p for p in players if (p.slot or "").upper() != "IR"]
+
+    qbs = sorted([p for p in active_players if p.position.upper() == "QB"], key=get_pts, reverse=True)
+    rbs = sorted([p for p in active_players if p.position.upper() == "RB"], key=get_pts, reverse=True)
+    wrs = sorted([p for p in active_players if p.position.upper() == "WR"], key=get_pts, reverse=True)
+    tes = sorted([p for p in active_players if p.position.upper() == "TE"], key=get_pts, reverse=True)
+    dsts = sorted([p for p in active_players if p.position.upper() in ("D/ST", "DST")], key=get_pts, reverse=True)
+    ks = sorted([p for p in active_players if p.position.upper() == "K"], key=get_pts, reverse=True)
 
     optimal: list[RosterPlayer] = []
     used_names: set[str] = set()

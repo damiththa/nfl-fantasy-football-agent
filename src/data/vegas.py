@@ -156,7 +156,10 @@ def get_player_game_odds(team_abbr: str, odds: list[GameOdds]) -> Optional[GameO
     team_abbr = normalize_team_abbr(team_abbr)
 
     for game in odds:
-        if game.home_team == team_abbr or game.away_team == team_abbr:
+        if (
+            normalize_team_abbr(game.home_team) == team_abbr
+            or normalize_team_abbr(game.away_team) == team_abbr
+        ):
             return game
 
     return None

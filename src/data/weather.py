@@ -6,6 +6,7 @@ Uses Open-Meteo API to fetch game day weather conditions based on stadium coordi
 
 import json
 import logging
+import zoneinfo
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -92,7 +93,12 @@ def fetch_game_weather(team_abbr: str, game_datetime: datetime) -> GameWeather:
         GameWeather object with forecast data.
     """
     stadiums = load_stadiums()
-    stadium = stadiums.get(team_abbr)
+    clean_abbr = (team_abbr or "").strip().upper()
+    stadium = stadiums.get(clean_abbr)
+    if not stadium:
+        from src.data.vegas import normalize_team_abbr
+
+        stadium = stadiums.get(normalize_team_abbr(clean_abbr))
 
     if not stadium:
         logger.warning(f"Stadium not found for team {team_abbr}")
@@ -139,14 +145,23 @@ def fetch_game_weather(team_abbr: str, game_datetime: datetime) -> GameWeather:
         hourly = data.get("hourly", {})
         times = hourly.get("time", [])
 
-        # Match game_datetime to closest forecast hour
+        # Open-Meteo returns hourly timestamps in America/New_York local time.
+        # Convert timezone-aware datetimes (e.g. UTC from ESPN scoreboard) to America/New_York first.
+        eastern = zoneinfo.ZoneInfo("America/New_York")
+        local_game_dt = (
+            game_datetime.astimezone(eastern)
+            if game_datetime.tzinfo is not None
+            else game_datetime
+        )
+
+        # Match local_game_dt to closest forecast hour
         target_idx = 0
-        target_str = game_datetime.strftime("%Y-%m-%dT%H:00")
+        target_str = local_game_dt.strftime("%Y-%m-%dT%H:00")
         if target_str in times:
             target_idx = times.index(target_str)
         elif times:
             try:
-                target_dt = game_datetime.replace(minute=0, second=0, microsecond=0, tzinfo=None)
+                target_dt = local_game_dt.replace(minute=0, second=0, microsecond=0, tzinfo=None)
                 diffs = [
                     abs((datetime.fromisoformat(t) - target_dt).total_seconds()) for t in times
                 ]
@@ -244,7 +259,9 @@ def build_roster_weather_map(
             except Exception as e:
                 logger.debug("Failed resolving host team odds for %s: %s", team, e)
 
-        cache_key = (host_team, game_dt.strftime("%Y-%m-%d-%H"))
+        eastern = zoneinfo.ZoneInfo("America/New_York")
+        cache_dt = game_dt.astimezone(eastern) if game_dt.tzinfo is not None else game_dt
+        cache_key = (host_team, cache_dt.strftime("%Y-%m-%d-%H"))
         if cache_key in stadium_cache:
             weather_map[team] = stadium_cache[cache_key]
             continue

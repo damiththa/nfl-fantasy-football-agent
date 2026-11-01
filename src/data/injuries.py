@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -7,8 +8,20 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Global cache for the full player database
+# Global cache for the full player database (15-minute TTL so pre-game inactives stay fresh)
 _ALL_PLAYERS_CACHE: Optional[dict[str, "PlayerInjuryInfo"]] = None
+_ALL_PLAYERS_CACHE_TS: float = 0.0
+_CACHE_TTL_SECONDS: float = 900.0
+
+_FANTASY_OFFENSIVE_POSITIONS = {"QB", "RB", "WR", "TE", "K", "PK"}
+_TEAM_ABBR_EQUIVALENTS: dict[str, set[str]] = {
+    "WAS": {"WAS", "WSH"},
+    "WSH": {"WAS", "WSH"},
+    "JAX": {"JAX", "JAC"},
+    "JAC": {"JAX", "JAC"},
+    "LAR": {"LAR", "LA"},
+    "LA": {"LAR", "LA"},
+}
 
 
 @dataclass
@@ -62,9 +75,14 @@ def fetch_all_players(force_refresh: bool = False) -> dict[str, PlayerInjuryInfo
     Returns:
         A dictionary mapping Sleeper player IDs to PlayerInjuryInfo objects.
     """
-    global _ALL_PLAYERS_CACHE
+    global _ALL_PLAYERS_CACHE, _ALL_PLAYERS_CACHE_TS
 
-    if _ALL_PLAYERS_CACHE is not None and not force_refresh:
+    now_ts = time.monotonic()
+    if (
+        _ALL_PLAYERS_CACHE is not None
+        and not force_refresh
+        and (now_ts - _ALL_PLAYERS_CACHE_TS) < _CACHE_TTL_SECONDS
+    ):
         return _ALL_PLAYERS_CACHE
 
     url = "https://api.sleeper.app/v1/players/nfl"
@@ -103,6 +121,7 @@ def fetch_all_players(force_refresh: bool = False) -> dict[str, PlayerInjuryInfo
                 )
 
             _ALL_PLAYERS_CACHE = players
+            _ALL_PLAYERS_CACHE_TS = time.monotonic()
             return players
 
     except Exception as e:
@@ -128,20 +147,33 @@ def get_injury_report(
     if not all_players:
         return []
 
-    # Create a mapping of normalized names to player objects
-    normalized_roster = {}
+    def _candidate_rank(p: PlayerInjuryInfo) -> tuple[int, int, int]:
+        pos_upper = (p.position or "").upper()
+        is_offense = 1 if pos_upper in _FANTASY_OFFENSIVE_POSITIONS else 0
+        is_active = 1 if (p.active and bool(p.team)) else (1 if p.active else 0)
+        has_inj = 1 if p.injury_status else 0
+        return (is_offense, is_active, has_inj)
+
+    # Create mappings for exact case-insensitive names and normalized names
+    exact_roster: dict[str, list[PlayerInjuryInfo]] = {}
+    normalized_roster: dict[str, list[PlayerInjuryInfo]] = {}
     for p in all_players.values():
         if p.full_name:
+            exact_key = p.full_name.strip().lower()
+            exact_roster.setdefault(exact_key, []).append(p)
             norm = normalize_name(p.full_name)
-            # Prefer active players or players with injury status if duplicate names exist
-            if norm not in normalized_roster or (p.active or p.injury_status):
-                normalized_roster[norm] = p
+            normalized_roster.setdefault(norm, []).append(p)
 
     results = []
     for name in player_names:
+        exact_key = (name or "").strip().lower()
         norm_name = normalize_name(name)
-        if norm_name in normalized_roster:
-            results.append(normalized_roster[norm_name])
+        if exact_key in exact_roster:
+            best = max(exact_roster[exact_key], key=_candidate_rank)
+            results.append(best)
+        elif norm_name in normalized_roster:
+            best = max(normalized_roster[norm_name], key=_candidate_rank)
+            results.append(best)
         else:
             logger.debug(f"Could not find Sleeper player info for: {name}")
 
@@ -163,12 +195,13 @@ def get_team_injuries(
     if all_players is None:
         all_players = fetch_all_players()
 
-    team_upper = team_abbr.upper()
+    team_upper = (team_abbr or "").strip().upper()
+    matching_teams = _TEAM_ABBR_EQUIVALENTS.get(team_upper, {team_upper})
 
     injured_players = [
         player
         for player in all_players.values()
-        if player.team == team_upper
+        if (player.team or "").upper() in matching_teams
         and (player.injury_status is not None or player.practice_participation is not None)
     ]
 

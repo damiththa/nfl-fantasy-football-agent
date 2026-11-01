@@ -11,14 +11,22 @@ import zoneinfo
 from datetime import datetime
 from typing import Any, Optional
 
-from src.analysis.trades import calculate_vorp, compute_optimal_starters, get_player_ros_value
+from src.analysis.trades import (
+    calculate_vorp,
+    check_trade_deadline,
+    compute_optimal_starters,
+    get_player_ros_value,
+)
 from src.config import LeagueConfig
-from src.espn.roster import ParsedRoster, parse_roster
+from src.espn.roster import ParsedRoster, enrich_roster_from_box_matchup, parse_roster
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_league_trade_prompt
 from src.intelligence.schemas import LeagueTradeReport, TradeProposal
 
 logger = logging.getLogger(__name__)
+
+DISQUALIFIED_STATUSES = ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION")
+DTD_STATUSES = ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q")
 
 
 def _extract_manager_name(team: Any) -> str:
@@ -40,6 +48,7 @@ def propose_league_trades(
     week: int,
     espn_league: Any,
     client: Optional[GeminiIntelligenceClient] = None,
+    odds: Optional[list[Any]] = None,
 ) -> LeagueTradeReport:
     """Scan all teams in the league and discover high-value trades the user should initiate.
 
@@ -48,10 +57,42 @@ def propose_league_trades(
         week: Current NFL week.
         espn_league: Connected espn_api League instance.
         client: Gemini intelligence client (optional).
+        odds: Optional Vegas game odds list for bye-week verification across rosters.
 
     Returns:
         LeagueTradeReport with recommended proactive trade proposals.
     """
+    eastern = zoneinfo.ZoneInfo("America/New_York")
+    gen_time = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
+
+    deadline_passed, days_to_deadline, deadline_str = check_trade_deadline(espn_league)
+    if deadline_passed:
+        return LeagueTradeReport(
+            league_id=league.league_id,
+            week=week,
+            is_trade_recommended=False,
+            coach_verdict="HOLD_ROSTER",
+            hold_roster_reasoning=(
+                f"🔒 League trade deadline ({deadline_str}) has officially passed. "
+                "Trades are locked for the remainder of the season—channel all roster upgrades through "
+                "waiver wire priority claims and free-agent streaming."
+            ),
+            proposals=[],
+            market_overview=(
+                f"🔒 TRADE DEADLINE PASSED ({deadline_str}): League trade window is closed. Focus on waivers and playoff matchup streaming."
+            ),
+            generated_at=gen_time,
+            intelligence_backend="deterministic_fallback",
+            fallback_reason="League trade deadline has passed",
+        )
+
+    trade_deadline_note: Optional[str] = None
+    if days_to_deadline is not None and 0 <= days_to_deadline <= 10 and deadline_str:
+        trade_deadline_note = (
+            f"URGENT DEADLINE WINDOW: League trade deadline is {deadline_str} "
+            f"({days_to_deadline} day(s) remaining). Prioritize playoff-consolidation upgrades now before rosters lock!"
+        )
+
     teams = getattr(espn_league, "teams", [])
     user_team = None
     other_teams_data = []
@@ -63,6 +104,8 @@ def propose_league_trades(
             user_team = team
         else:
             parsed = parse_roster(team, league, week=week)
+            if odds:
+                enrich_roster_from_box_matchup(parsed, current_week=week, odds=odds)
             manager = _extract_manager_name(team)
             other_teams_parsed.append((team, parsed))
             opp_opt_starters, opp_opt_bench, opp_opt_pts = compute_optimal_starters(parsed.players, league)
@@ -133,6 +176,8 @@ def propose_league_trades(
         )
 
     user_roster = parse_roster(user_team, league, week=week)
+    if odds:
+        enrich_roster_from_box_matchup(user_roster, current_week=week, odds=odds)
     user_opt_starters, user_opt_bench, user_opt_pts = compute_optimal_starters(user_roster.players, league)
     user_roster_data = {
         "team_name": user_roster.team_name,
@@ -198,6 +243,7 @@ def propose_league_trades(
             your_roster=user_roster_data,
             other_teams=other_teams_data,
             prior_lessons=prior_lessons,
+            trade_deadline_note=trade_deadline_note,
         )
         try:
             report = client.generate_structured(prompt=prompt, response_schema=LeagueTradeReport)
@@ -234,13 +280,13 @@ def propose_league_trades(
                         for p in opp_rost.players:
                             if any((p.name or "").lower() == (r or "").lower() for r in prop.receiving_players):
                                 p_inj = (p.injury_status or "").upper()
-                                if p_inj in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION"):
+                                if p_inj in DISQUALIFIED_STATUSES:
                                     logger.warning(
                                         "Rejecting AI trade proposal: target %s is disqualified due to status %s",
                                         p.name, p_inj
                                     )
                                     is_disqualified = True
-                                elif p_inj in ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q"):
+                                elif p_inj in DTD_STATUSES:
                                     prop.target_injury_status = p.injury_status
                                     if not getattr(prop, "injury_risk_alert", None):
                                         prop.injury_risk_alert = (
@@ -260,8 +306,7 @@ def propose_league_trades(
                         "Market scan filtered out trade proposals because the prospective targets carry severe injury designations (OUT/IR). "
                         "Hold your healthy roster and do not acquire injured assets."
                     )
-            eastern = zoneinfo.ZoneInfo("America/New_York")
-            report.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
+            report.generated_at = gen_time
             report.intelligence_backend = client.model
             report.fallback_reason = None
             return report
@@ -297,9 +342,6 @@ def propose_league_trades(
     if user_flex_starters and user_trade_candidates and other_teams_parsed:
         user_weakest_starter = user_flex_starters[0]
         target_pos = user_weakest_starter.position
-
-        DISQUALIFIED_STATUSES = ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION")
-        DTD_STATUSES = ("DTD", "DAY_TO_DAY", "QUESTIONABLE", "Q")
 
         for team, opp_roster in other_teams_parsed:
             opp_opt_starters, opp_opt_bench, opp_opt_pts = compute_optimal_starters(opp_roster.players, league)

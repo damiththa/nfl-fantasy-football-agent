@@ -6,6 +6,7 @@ and snap counts. Caches data in memory to avoid repeated network calls.
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -14,9 +15,12 @@ import polars as pl
 
 logger = logging.getLogger(__name__)
 
-# Module-level caches
+# Module-level caches (1-hour TTL so weekly nflverse Parquet updates refresh automatically)
+_STATS_CACHE_TTL_SECONDS: float = 3600.0
 _snap_counts_cache: Dict[int, pl.DataFrame] = {}
+_snap_counts_cache_ts: Dict[int, float] = {}
 _player_stats_cache: Dict[int, pl.DataFrame] = {}
+_player_stats_cache_ts: Dict[int, float] = {}
 
 
 @dataclass
@@ -67,29 +71,41 @@ def fetch_snap_counts(season: int) -> dict[str, PlayerStats]:
     Returns:
         Dictionary of PlayerStats keyed by player name.
     """
-    global _snap_counts_cache
-    if season not in _snap_counts_cache:
+    global _snap_counts_cache, _snap_counts_cache_ts
+    now_ts = time.monotonic()
+    cache_expired = (now_ts - _snap_counts_cache_ts.get(season, now_ts)) >= _STATS_CACHE_TTL_SECONDS
+    if season not in _snap_counts_cache or cache_expired:
         try:
             # load_snap_counts returns game-level data
             df = nfl.load_snap_counts([season])
             if df is None or (hasattr(df, "empty") and df.empty):
                 raise ValueError("Empty dataframe returned")
             _snap_counts_cache[season] = _to_polars(df)
+            _snap_counts_cache_ts[season] = now_ts
         except Exception as e:
             logger.warning(f"Could not load snap counts for season {season}: {e}")
-            return {}
+            if season not in _snap_counts_cache:
+                return {}
 
     df = _snap_counts_cache[season]
 
-    # We'll aggregate by player
+    # Aggregate across all games in the season per player (preserving current team on mid-season trades)
     try:
-        agg_df = df.group_by(["player", "pfr_player_id", "team", "position"]).agg(
-            [
-                pl.col("game_id").count().alias("games_played"),
-                pl.col("offense_snaps").sum().alias("snap_count"),
-                pl.col("offense_pct").mean().alias("snap_pct"),
-            ]
-        )
+        working_df = df.sort("week") if "week" in df.columns else df
+        agg_exprs = [
+            pl.col("game_id").count().alias("games_played")
+            if "game_id" in working_df.columns
+            else pl.len().alias("games_played"),
+            pl.col("offense_snaps").sum().alias("snap_count"),
+            pl.col("offense_pct").mean().alias("snap_pct"),
+        ]
+        if "team" in working_df.columns:
+            agg_exprs.append(pl.col("team").last().alias("team"))
+        if "position" in working_df.columns:
+            agg_exprs.append(pl.col("position").last().alias("position"))
+
+        group_cols = [c for c in ("player", "pfr_player_id") if c in working_df.columns]
+        agg_df = working_df.group_by(group_cols, maintain_order=True).agg(agg_exprs)
 
         results = {}
         for row in agg_df.iter_rows(named=True):
@@ -121,66 +137,73 @@ def fetch_player_stats(season: int) -> dict[str, PlayerStats]:
     Returns:
         Dictionary of PlayerStats keyed by player name.
     """
-    global _player_stats_cache
-    if season not in _player_stats_cache:
+    global _player_stats_cache, _player_stats_cache_ts
+    now_ts = time.monotonic()
+    cache_expired = (now_ts - _player_stats_cache_ts.get(season, now_ts)) >= _STATS_CACHE_TTL_SECONDS
+    if season not in _player_stats_cache or cache_expired:
         try:
             # load_player_stats returns weekly data
             df = nfl.load_player_stats([season])
             if df is None or (hasattr(df, "empty") and df.empty):
                 raise ValueError("Empty dataframe returned")
             _player_stats_cache[season] = _to_polars(df)
+            _player_stats_cache_ts[season] = now_ts
         except Exception as e:
             logger.warning(f"Could not load player stats for season {season}: {e}")
-            return {}
+            if season not in _player_stats_cache:
+                return {}
 
     df = _player_stats_cache[season]
 
     try:
-        team_col = "recent_team" if "recent_team" in df.columns else ("team" if "team" in df.columns else None)
-        group_cols = ["player_name", "player_id"]
-        if "player_display_name" in df.columns:
-            group_cols.append("player_display_name")
-        if team_col:
-            group_cols.append(team_col)
+        working_df = df.sort("week") if "week" in df.columns else df
+        team_col = "recent_team" if "recent_team" in working_df.columns else ("team" if "team" in working_df.columns else None)
+        group_cols = [
+            c
+            for c in ("player_name", "player_id", "player_display_name")
+            if c in working_df.columns
+        ]
 
-        # Aggregate weekly data to season level
-        agg_df = df.group_by(group_cols).agg(
-            [
-                pl.col("games").sum().alias("games_played")
-                if "games" in df.columns
-                else pl.len().alias("games_played"),
-                pl.col("targets").sum().alias("targets")
-                if "targets" in df.columns
-                else pl.lit(0).alias("targets"),
-                pl.col("target_share").mean().alias("target_share")
-                if "target_share" in df.columns
-                else pl.lit(0.0).alias("target_share"),
-                pl.col("receptions").sum().alias("receptions")
-                if "receptions" in df.columns
-                else pl.lit(0).alias("receptions"),
-                pl.col("receiving_yards").sum().alias("receiving_yards")
-                if "receiving_yards" in df.columns
-                else pl.lit(0).alias("receiving_yards"),
-                pl.col("carries").sum().alias("rushing_attempts")
-                if "carries" in df.columns
-                else pl.lit(0).alias("rushing_attempts"),
-                pl.col("rushing_yards").sum().alias("rushing_yards")
-                if "rushing_yards" in df.columns
-                else pl.lit(0).alias("rushing_yards"),
-                pl.col("red_zone_targets").sum().alias("red_zone_targets")
-                if "red_zone_targets" in df.columns
-                else pl.lit(0).alias("red_zone_targets"),
-                pl.col("red_zone_carries").sum().alias("red_zone_carries")
-                if "red_zone_carries" in df.columns
-                else pl.lit(0).alias("red_zone_carries"),
-                pl.col("air_yards_share").mean().alias("air_yards_share")
-                if "air_yards_share" in df.columns
-                else pl.lit(0.0).alias("air_yards_share"),
-                pl.col("wopr").mean().alias("wopr")
-                if "wopr" in df.columns
-                else pl.lit(0.0).alias("wopr"),
-            ]
-        )
+        agg_exprs = [
+            pl.col("games").sum().alias("games_played")
+            if "games" in working_df.columns
+            else pl.len().alias("games_played"),
+            pl.col("targets").sum().alias("targets")
+            if "targets" in working_df.columns
+            else pl.lit(0).alias("targets"),
+            pl.col("target_share").mean().alias("target_share")
+            if "target_share" in working_df.columns
+            else pl.lit(0.0).alias("target_share"),
+            pl.col("receptions").sum().alias("receptions")
+            if "receptions" in working_df.columns
+            else pl.lit(0).alias("receptions"),
+            pl.col("receiving_yards").sum().alias("receiving_yards")
+            if "receiving_yards" in working_df.columns
+            else pl.lit(0).alias("receiving_yards"),
+            pl.col("carries").sum().alias("rushing_attempts")
+            if "carries" in working_df.columns
+            else pl.lit(0).alias("rushing_attempts"),
+            pl.col("rushing_yards").sum().alias("rushing_yards")
+            if "rushing_yards" in working_df.columns
+            else pl.lit(0).alias("rushing_yards"),
+            pl.col("red_zone_targets").sum().alias("red_zone_targets")
+            if "red_zone_targets" in working_df.columns
+            else pl.lit(0).alias("red_zone_targets"),
+            pl.col("red_zone_carries").sum().alias("red_zone_carries")
+            if "red_zone_carries" in working_df.columns
+            else pl.lit(0).alias("red_zone_carries"),
+            pl.col("air_yards_share").mean().alias("air_yards_share")
+            if "air_yards_share" in working_df.columns
+            else pl.lit(0.0).alias("air_yards_share"),
+            pl.col("wopr").mean().alias("wopr")
+            if "wopr" in working_df.columns
+            else pl.lit(0.0).alias("wopr"),
+        ]
+        if team_col:
+            agg_exprs.append(pl.col(team_col).last().alias(team_col))
+
+        # Aggregate weekly data to season level per player (across any mid-season team changes)
+        agg_df = working_df.group_by(group_cols, maintain_order=True).agg(agg_exprs)
 
         results = {}
         for row in agg_df.iter_rows(named=True):

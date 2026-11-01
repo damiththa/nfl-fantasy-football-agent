@@ -143,6 +143,8 @@ def format_waiver_prompt(
     trending_adds: list[dict[str, Any]],
     injuries: list[dict[str, Any]],
     starter_holes: list[dict[str, Any]] | None = None,
+    waiver_context: str | None = None,
+    ir_lifecycle_notes: list[str] | None = None,
 ) -> str:
     """Format prompt for waiver wire recommendations."""
     holes_section = ""
@@ -170,16 +172,25 @@ STARTING LINEUP HOLES & BYE WEEK STREAMING STATUS:
 {chr(10).join(hole_lines)}
 """
 
+    ir_section = ""
+    if ir_lifecycle_notes:
+        ir_lines = "\n".join(f"- {note}" for note in ir_lifecycle_notes)
+        ir_section = f"""
+IR SLOT LIFECYCLE & ROSTER SPOT ALERTS (HIGH PRIORITY):
+{ir_lines}
+"""
+
+    waiver_type_str = waiver_context or "Rolling Waiver Priority (Non-FAAB)"
+
     return f"""Evaluate waiver wire opportunities for Week {week} in league '{league.name}'.
 
 LEAGUE SETUP:
-- {league.num_teams}-team, Full PPR, {league.roster.flex} FLEX, {league.scoring.pass_td}pt Pass TD
-- Waiver Type: Rolling Waiver Priority (Non-FAAB)
+- {league.num_teams}-team, Full PPR, {league.roster.flex} FLEX, {league.scoring.pass_td}pt Pass TD, {league.roster.ir} IR Slot(s)
+- Waiver Type: {waiver_type_str}
 
 YOUR ROSTER:
 {your_roster}
-{holes_section}
-AVAILABLE FREE AGENTS (High Owned/Projected & Streaming Options):
+{holes_section}{ir_section}AVAILABLE FREE AGENTS (High Owned/Projected & Streaming Options):
 {available_players}
 
 SLEEPER LEAGUE-WIDE 24H TRENDING ADDS:
@@ -334,16 +345,24 @@ def format_matchup_prompt(
     opp_projected: float,
     vegas_odds: list[dict[str, Any]],
     weather_reports: list[dict[str, Any]],
+    lineup_alerts: list[str] | None = None,
 ) -> str:
     """Format prompt for comprehensive weekly scouting report."""
     margin = user_projected - opp_projected
+    alerts_block = ""
+    if lineup_alerts:
+        alert_lines = "\n".join(f"- {a}" for a in lineup_alerts)
+        alerts_block = f"""
+🚨 CRITICAL STARTING LINEUP ALERTS (MUST SURFACE IN key_vulnerabilities & strategic_summary):
+{alert_lines}
+"""
     return f"""Generate a comprehensive Week {week} Matchup Preview for league '{league.name}'.
 
 PROJECTED SCORE:
 - Mad Dawg (You): {user_projected:.1f}
 - Opponent: {opp_projected:.1f}
 - Margin: {margin:+.1f}
-
+{alerts_block}
 YOUR ROSTER:
 {your_roster}
 
@@ -367,11 +386,16 @@ def format_league_trade_prompt(
     your_roster: dict[str, Any],
     other_teams: list[dict[str, Any]],
     prior_lessons: str | None = None,
+    trade_deadline_note: str | None = None,
 ) -> str:
     """Format prompt for scanning the entire league to find proactive, winning trade proposals."""
     prior_lessons_section = ""
     if prior_lessons and prior_lessons.strip():
         prior_lessons_section = f"\n{prior_lessons.strip()}\n"
+
+    deadline_section = ""
+    if trade_deadline_note:
+        deadline_section = f"\n⏰ LEAGUE TRADE DEADLINE CONTEXT:\n- {trade_deadline_note}\n"
 
     return f"""Analyze the entire league rosters in '{league.name}' (Week {week}) as a veteran fantasy strategist looking after our team.
 
@@ -379,7 +403,7 @@ LEAGUE FORMAT:
 - Teams: {league.num_teams}
 - Scoring: Full PPR (1.0 pt/rec, {league.scoring.pass_td} pt pass TD)
 - Starters: QB:{league.roster.qb}, RB:{league.roster.rb}, WR:{league.roster.wr}, TE:{league.roster.te}, FLEX:{league.roster.flex}, D/ST:{league.roster.dst}, K:{league.roster.k}
-
+{deadline_section}
 OUR ROSTER (Mad Dawg):
 {your_roster}
 

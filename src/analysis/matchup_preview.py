@@ -5,7 +5,7 @@ Compiles user and opponent rosters, Vegas lines, and game weather into a full sc
 
 import logging
 import math
-from typing import Optional
+from typing import Any, Optional
 
 from src.config import LeagueConfig
 from src.data.vegas import GameOdds
@@ -26,6 +26,45 @@ def _calculate_win_probability(margin: float) -> float:
     return round(prob, 2)
 
 
+def _detect_unswapped_starter_alerts(
+    matchup: MatchupData,
+    week: int,
+    injuries: Optional[list[Any]] = None,
+) -> list[str]:
+    """Detect unswapped OUT/IR/DOUBTFUL/BYE/0.0 starters in Saturday scouting preview."""
+    inj_map: dict[str, Any] = {}
+    if injuries:
+        for inj in injuries:
+            full_name = getattr(inj, "full_name", "") or ""
+            if full_name:
+                inj_map[full_name.lower()] = inj
+
+    alerts: list[str] = []
+    for p in matchup.your_team.starters:
+        status_up = (getattr(p, "injury_status", "") or "").upper()
+        inj_obj = inj_map.get(p.name.lower())
+        ext_status = (getattr(inj_obj, "injury_status", "") or "").upper() if inj_obj else ""
+        effective_status = (
+            ext_status
+            if ext_status in ("OUT", "IR", "DOUBTFUL", "SUSPENSION", "SUSPENDED")
+            else status_up
+        )
+
+        if effective_status in ("OUT", "IR", "INJURY_RESERVE", "DOUBTFUL", "SUS", "SUSPENSION", "SUSPENDED"):
+            alerts.append(
+                f"🚨 UNSWAPPED LINEUP HOLE: {p.name} ({p.slot}) is {effective_status} — swap out before kickoff!"
+            )
+        elif p.is_on_bye(week):
+            alerts.append(
+                f"🚨 UNSWAPPED BYE STARTER: {p.name} ({p.slot}) is on Week {week} BYE — swap out before kickoff!"
+            )
+        elif not getattr(p, "has_played", False) and (getattr(p, "projected_points", 0.0) or 0.0) <= 0.0:
+            alerts.append(
+                f"⚠️ ZERO-PROJECTION STARTER: {p.name} ({p.slot}) is projected for 0.0 pts — verify active status!"
+            )
+    return alerts
+
+
 def generate_matchup_preview(
     league: LeagueConfig,
     week: int,
@@ -33,6 +72,7 @@ def generate_matchup_preview(
     odds: Optional[list[GameOdds]] = None,
     weather_map: Optional[dict[str, GameWeather]] = None,
     client: Optional[GeminiIntelligenceClient] = None,
+    injuries: Optional[list[Any]] = None,
 ) -> MatchupReport:
     """Generate a weekly matchup preview and scouting report.
 
@@ -43,6 +83,7 @@ def generate_matchup_preview(
         odds: List of game odds (optional).
         weather_map: Map of team to game weather (optional).
         client: Gemini intelligence client (optional).
+        injuries: Optional list of PlayerInjuryInfo objects to flag unswapped OUT/bye starters.
 
     Returns:
         MatchupReport with comprehensive scouting breakdown.
@@ -52,18 +93,32 @@ def generate_matchup_preview(
     margin = round(user_proj - opp_proj, 1)
     win_prob = _calculate_win_probability(margin)
     opp_name = matchup.opponent_team.team_name if matchup.opponent_team else "Opponent"
+    lineup_alerts = _detect_unswapped_starter_alerts(matchup, week, injuries=injuries)
 
     fallback_err: Optional[str] = None
     # If Gemini client provided, use Gemini Pro for reasoning
     if client is not None:
         your_roster_data = [
-            {"name": p.name, "pos": p.position, "pts": p.projected_points, "slot": p.slot}
+            {
+                "name": p.name,
+                "pos": p.position,
+                "pts": p.projected_points,
+                "slot": p.slot,
+                "injury": p.injury_status,
+                "is_on_bye": p.is_on_bye(week),
+            }
             for p in matchup.your_team.starters
         ]
         opp_roster_data = []
         if matchup.opponent_team:
             opp_roster_data = [
-                {"name": p.name, "pos": p.position, "pts": p.projected_points, "slot": p.slot}
+                {
+                    "name": p.name,
+                    "pos": p.position,
+                    "pts": p.projected_points,
+                    "slot": p.slot,
+                    "injury": p.injury_status,
+                }
                 for p in matchup.opponent_team.starters
             ]
 
@@ -101,10 +156,19 @@ def generate_matchup_preview(
             opp_projected=opp_proj,
             vegas_odds=odds_data,
             weather_reports=weather_data,
+            lineup_alerts=lineup_alerts or None,
         )
 
         try:
             report = client.generate_structured(prompt=prompt, response_schema=MatchupReport)
+            if lineup_alerts:
+                existing_vulns_lower = " ".join(report.key_vulnerabilities).lower()
+                missing_alerts = [
+                    a for a in lineup_alerts
+                    if a.split(":")[1].split("(")[0].strip().lower() not in existing_vulns_lower
+                ]
+                if missing_alerts:
+                    report.key_vulnerabilities = missing_alerts + list(report.key_vulnerabilities)
             report.intelligence_backend = client.model
             report.fallback_reason = None
             return report
@@ -117,7 +181,7 @@ def generate_matchup_preview(
 
     # Deterministic fallback algorithm when LLM client is None
     advantages = []
-    vulnerabilities = []
+    vulnerabilities = list(lineup_alerts)
 
     # Compare position-by-position projected totals
     user_pos_pts: dict[str, float] = {}

@@ -103,19 +103,30 @@ def negotiate_active_model(
     force: bool = False,
     api_key: Optional[str] = None,
     mock_client: Optional[Any] = None,
+    probe_all: bool = True,
 ) -> tuple[str, dict[str, Any]]:
-    """Probe candidate models in preference order (gemini-3.1-pro -> gemini-2.5-pro).
+    """Probe candidate models in preference order (gemini-4-argon -> gemini-2.5-pro).
+
+    Args:
+        force: Force re-probing even if a negotiated model is cached.
+        api_key: Optional explicit API key.
+        mock_client: Optional mock client for testing.
+        probe_all: If True (default), probe all candidates for full `/health/models`
+            diagnostics. If False (e.g., Cloud Run cold-start lifespan), stop
+            immediately as soon as the highest-priority reachable model responds.
 
     Returns:
         (active_model, diagnostics_dict)
     """
     global _NEGOTIATED_MODEL, _MODEL_PROBE_CACHE
     if not force and _NEGOTIATED_MODEL is not None and _MODEL_PROBE_CACHE:
-        return _NEGOTIATED_MODEL, _MODEL_PROBE_CACHE
+        if not probe_all or not _MODEL_PROBE_CACHE.get("fast_probe", False):
+            return _NEGOTIATED_MODEL, _MODEL_PROBE_CACHE
 
     diagnostics: dict[str, Any] = {
         "preferred_target": PREFERRED_MODELS[0],
         "candidates": {},
+        "fast_probe": not probe_all,
     }
 
     forced_model = os.environ.get("GEMINI_MODEL")
@@ -147,6 +158,8 @@ def negotiate_active_model(
                             candidate,
                             PREFERRED_MODELS[0],
                         )
+                if not probe_all and selected_model is not None:
+                    break
             else:
                 diagnostics["candidates"][candidate] = {
                     "available": False,
@@ -158,6 +171,7 @@ def negotiate_active_model(
                 "status": str(e),
             }
 
+    all_probes_failed = selected_model is None
     if selected_model is None:
         selected_model = PREFERRED_MODELS[-1]
         logger.warning(
@@ -167,7 +181,8 @@ def negotiate_active_model(
     _NEGOTIATED_MODEL = selected_model
     diagnostics["active_model"] = selected_model
     diagnostics["auto_upgrade_active"] = selected_model != PREFERRED_MODELS[-1]
-    _MODEL_PROBE_CACHE = diagnostics
+    # Do not lock a transient total-network-outage failure into the probe cache indefinitely
+    _MODEL_PROBE_CACHE = {} if all_probes_failed else diagnostics
 
     return selected_model, diagnostics
 
@@ -246,7 +261,7 @@ class GeminiIntelligenceClient:
                 models_to_try.append(fallback)
 
         last_err: Optional[Exception] = None
-        for model_id in models_to_try:
+        for idx, model_id in enumerate(models_to_try):
             config = types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
@@ -286,12 +301,12 @@ class GeminiIntelligenceClient:
                         backoff *= BACKOFF_MULTIPLIER
                         continue
                     # Non-429 error or retries exhausted: try next model
-                    if model_id != models_to_try[-1]:
+                    if idx + 1 < len(models_to_try):
                         logger.warning(
                             "Primary model %s failed (%s). Attempting in-flight failover to %s...",
                             model_id,
                             e,
-                            models_to_try[-1],
+                            models_to_try[idx + 1],
                         )
                     else:
                         logger.error("Gemini API request failed (%s): %s", model_id, e)
@@ -325,7 +340,7 @@ class GeminiIntelligenceClient:
                 models_to_try.append(fallback)
 
         last_err: Optional[Exception] = None
-        for model_id in models_to_try:
+        for idx, model_id in enumerate(models_to_try):
             config = types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 temperature=resolve_temperature(model_id, temperature),
@@ -360,12 +375,12 @@ class GeminiIntelligenceClient:
                         time.sleep(backoff)
                         backoff *= BACKOFF_MULTIPLIER
                         continue
-                    if model_id != models_to_try[-1]:
+                    if idx + 1 < len(models_to_try):
                         logger.warning(
                             "Primary model %s failed (%s). Attempting in-flight failover to %s...",
                             model_id,
                             e,
-                            models_to_try[-1],
+                            models_to_try[idx + 1],
                         )
                     else:
                         logger.error("Gemini text generation failed (%s): %s", model_id, e)

@@ -9,13 +9,19 @@ import zoneinfo
 from datetime import datetime
 from typing import Any, Optional
 
+from src.analysis.trades import check_trade_deadline
 from src.config import LeagueConfig
 from src.data.injuries import PlayerInjuryInfo, normalize_name
 from src.data.stats import fetch_player_stats, fetch_snap_counts
 from src.data.vegas import GameOdds, get_player_game_odds, normalize_team_abbr
 from src.data.weather import GameWeather
 from src.espn.matchup import MatchupData
-from src.espn.roster import ParsedRoster, RosterPlayer, get_safe_drop_candidates
+from src.espn.roster import (
+    ParsedRoster,
+    RosterPlayer,
+    get_safe_drop_candidates,
+    parse_roster,
+)
 from src.intelligence.gemini_client import GeminiIntelligenceClient
 from src.intelligence.prompts import format_lineup_prompt
 from src.intelligence.schemas import (
@@ -184,7 +190,7 @@ def detect_lineup_holes_and_solutions(
             "SUSPENDED",
             "DOUBTFUL",
         )
-        is_bye = getattr(p, "bye_week", 0) == current_week and current_week > 0
+        is_bye = p.is_on_bye(current_week)
         is_zero_proj = not getattr(p, "has_played", False) and getattr(p, "projected_points", 0.0) <= 0.0
 
         inj_info = injury_map.get(p.name.lower())
@@ -247,14 +253,29 @@ def detect_lineup_holes_and_solutions(
     free_agents_by_pos: dict[str, list[Any]] = {}
     if espn_league and hasattr(espn_league, "free_agents"):
         try:
-            try:
-                fa_list = espn_league.free_agents(size=100)
-            except Exception:
-                fa_list = espn_league.free_agents(size=50)
+            fa_list = None
+            if current_week and current_week > 0:
+                try:
+                    fa_list = espn_league.free_agents(week=current_week, size=100)
+                except TypeError:
+                    fa_list = None
+                except Exception:
+                    fa_list = None
+            if fa_list is None:
+                try:
+                    fa_list = espn_league.free_agents(size=100)
+                except Exception:
+                    fa_list = espn_league.free_agents(size=50)
             for fa in fa_list:
                 inj = str(getattr(fa, "injuryStatus", "") or "").upper().strip()
                 is_inj = bool(getattr(fa, "injured", False))
                 pts = float(getattr(fa, "projected_points", 0.0) or 0.0)
+                if pts <= 0.0:
+                    stats_d = getattr(fa, "stats", None)
+                    if isinstance(stats_d, dict) and current_week:
+                        wk_d = stats_d.get(current_week) or stats_d.get(str(current_week))
+                        if isinstance(wk_d, dict) and isinstance(wk_d.get("projected_points"), (int, float)):
+                            pts = float(wk_d["projected_points"])
                 if (
                     inj in ("INJURY_RESERVE", "IR", "OUT", "PUP", "SUS", "SUSPENSION", "SUSPENDED")
                     or (is_inj and pts <= 0.0)
@@ -268,23 +289,39 @@ def detect_lineup_holes_and_solutions(
         except Exception:
             pass
 
-    # Build league teams for trade surplus lookup
-    other_teams_by_surplus: dict[str, list[tuple[Any, Any]]] = {}  # pos -> [(team, player)]
-    if espn_league and hasattr(espn_league, "teams"):
+    # Build league teams for trade surplus lookup (respecting trade deadline & ESPN Player.stats)
+    deadline_passed, _days_to_dl, deadline_str = check_trade_deadline(espn_league)
+    other_teams_by_surplus: dict[str, list[tuple[Any, Any]]] = {}  # pos -> [(team, RosterPlayer)]
+    if not deadline_passed and espn_league and hasattr(espn_league, "teams"):
         try:
             for t in espn_league.teams:
                 if getattr(t, "team_id", None) == league.team_id:
                     continue
-                team_players_by_pos: dict[str, list[Any]] = {}
-                for p in getattr(t, "roster", []):
-                    pos = (getattr(p, "position", "") or "").upper()
-                    pts = float(getattr(p, "projected_points", 0.0) or 0.0)
-                    if pts >= 8.0:
-                        team_players_by_pos.setdefault(pos, []).append(p)
+                parsed_rival = parse_roster(t, league, week=current_week if current_week > 0 else None)
+                team_players_by_pos: dict[str, list[RosterPlayer]] = {}
+                for rp in parsed_rival.players:
+                    if (rp.injury_status or "").upper() in (
+                        "OUT",
+                        "IR",
+                        "INJURY_RESERVE",
+                        "DOUBTFUL",
+                        "SUS",
+                        "SUSPENSION",
+                        "SUSPENDED",
+                    ):
+                        continue
+                    pos = (rp.position or "").upper()
+                    eff_pts = max(float(rp.projected_points or 0.0), float(rp.ros_baseline_ppg or 0.0))
+                    if eff_pts >= 8.0:
+                        team_players_by_pos.setdefault(pos, []).append(rp)
                 for pos, pl_list in team_players_by_pos.items():
                     if len(pl_list) >= 2:
-                        for p in pl_list:
-                            other_teams_by_surplus.setdefault(pos, []).append((t, p))
+                        pl_list.sort(
+                            key=lambda p: max(float(p.projected_points or 0.0), float(p.ros_baseline_ppg or 0.0)),
+                            reverse=True,
+                        )
+                        for rp in pl_list:
+                            other_teams_by_surplus.setdefault(pos, []).append((t, rp))
         except Exception:
             pass
 
@@ -323,7 +360,7 @@ def detect_lineup_holes_and_solutions(
                 "SUSPENDED",
                 "DOUBTFUL",
             )
-            b_bye = getattr(b, "bye_week", 0) == current_week and current_week > 0
+            b_bye = b.is_on_bye(current_week)
             b_zero_proj = not getattr(b, "has_played", False) and getattr(b, "projected_points", 0.0) <= 0.0
             b_locked = getattr(b, "is_locked", False) or getattr(b, "has_played", False)
 
@@ -360,13 +397,21 @@ def detect_lineup_holes_and_solutions(
             )
 
         # Tier 2: Waiver Wire Pickup
+        def _fa_pts(fa_item: Any) -> float:
+            raw = float(getattr(fa_item, "projected_points", 0.0) or 0.0)
+            if raw <= 0.0 and current_week:
+                sd = getattr(fa_item, "stats", None)
+                if isinstance(sd, dict):
+                    wd = sd.get(current_week) or sd.get(str(current_week))
+                    if isinstance(wd, dict) and isinstance(wd.get("projected_points"), (int, float)):
+                        return float(wd["projected_points"])
+            return raw
+
         pos_for_fa = ["RB", "WR", "TE"] if slot_name == "FLEX" else [pos_target]
         fa_options: list[Any] = []
         for p_fa in pos_for_fa:
             fa_options.extend(free_agents_by_pos.get(p_fa, []))
-        fa_options.sort(
-            key=lambda fa: float(getattr(fa, "projected_points", 0.0) or 0.0), reverse=True
-        )
+        fa_options.sort(key=_fa_pts, reverse=True)
 
         # Check if starter is eligible to be placed on IR to open an active roster spot
         ir_tip = ""
@@ -377,7 +422,7 @@ def detect_lineup_holes_and_solutions(
 
         if fa_options:
             top_fa = fa_options[0]
-            top_fa_pts = float(getattr(top_fa, "projected_points", 0.0) or 0.0)
+            top_fa_pts = _fa_pts(top_fa)
             top_fa_team = getattr(top_fa, "proTeam", "FA")
             top_fa_pos = getattr(top_fa, "position", pos_target)
             if drop_candidate and (
@@ -406,25 +451,33 @@ def detect_lineup_holes_and_solutions(
                 )
 
         # Tier 3: Trade Target Solution
-        trade_candidates = other_teams_by_surplus.get(pos_target, [])
-        if slot_name == "FLEX" and not trade_candidates:
-            trade_candidates = other_teams_by_surplus.get("RB", []) + other_teams_by_surplus.get(
-                "WR", []
-            )
-
-        if trade_candidates:
-            target_team, target_player = trade_candidates[0]
-            t_pts = float(getattr(target_player, "projected_points", 0.0) or 0.0)
-            t_name = getattr(target_team, "team_name", "Manager")
+        if deadline_passed:
             trade_rec = (
-                f"🤝 Target {target_player.name} ({target_player.position}, {t_pts:.1f} pts) from '{t_name}' "
-                f"(they carry surplus at {pos_target}); offer your bench depth to secure an immediate starter."
+                f"🔒 League trade deadline ({deadline_str}) has passed; address {slot_name} via bench or waivers."
             )
         else:
-            trade_rec = (
-                f"🤝 Propose trade targeting rival managers carrying surplus {pos_target} depth "
-                "in exchange for your bench assets."
-            )
+            trade_candidates = other_teams_by_surplus.get(pos_target, [])
+            if slot_name == "FLEX" and not trade_candidates:
+                trade_candidates = other_teams_by_surplus.get("RB", []) + other_teams_by_surplus.get(
+                    "WR", []
+                )
+
+            if trade_candidates:
+                target_team, target_player = trade_candidates[0]
+                t_pts = max(
+                    float(getattr(target_player, "projected_points", 0.0) or 0.0),
+                    float(getattr(target_player, "ros_baseline_ppg", 0.0) or 0.0),
+                )
+                t_name = getattr(target_team, "team_name", "Manager")
+                trade_rec = (
+                    f"🤝 Target {target_player.name} ({target_player.position}, {t_pts:.1f} pts) from '{t_name}' "
+                    f"(they carry surplus at {pos_target}); offer your bench depth to secure an immediate starter."
+                )
+            else:
+                trade_rec = (
+                    f"🤝 Propose trade targeting rival managers carrying surplus {pos_target} depth "
+                    "in exchange for your bench assets."
+                )
 
         alerts.append(
             LineupHoleAlert(
@@ -459,7 +512,7 @@ def enrich_lineup_recommendation_with_espn_status(
     # Update recommended starters
     for s in rec.recommended_starters:
         s.current_slot = player_current_slots.get(s.player_name.lower(), "Bench")
-        if s.current_slot in ("Bench", "BE"):
+        if s.current_slot in ("Bench", "BE", "IR"):
             s.alignment = "SWAP_TO_START"
         else:
             s.alignment = "ALIGNED"
@@ -564,13 +617,23 @@ def enrich_lineup_recommendation_with_espn_status(
 
     swaps = []
     for ns, nb in zip(needs_start, needs_bench):
-        swaps.append(
-            f"⬇️ Bench {nb.player_name} ({nb.current_slot}) → ⬆️ Start {ns.player_name} ({ns.position})"
-        )
+        if (ns.current_slot or "").upper() == "IR":
+            swaps.append(
+                f"🏥 Activate {ns.player_name} from IR → ⬇️ Bench {nb.player_name} ({nb.current_slot}) & ⬆️ Start {ns.player_name} ({ns.position})"
+            )
+        else:
+            swaps.append(
+                f"⬇️ Bench {nb.player_name} ({nb.current_slot}) → ⬆️ Start {ns.player_name} ({ns.position})"
+            )
 
     if len(needs_start) > len(needs_bench):
         for ns in needs_start[len(needs_bench) :]:
-            swaps.append(f"⬆️ Insert {ns.player_name} ({ns.position}) into vacant starting slot")
+            if (ns.current_slot or "").upper() == "IR":
+                swaps.append(
+                    f"🏥 Activate {ns.player_name} from IR → ⬆️ Insert into vacant starting {ns.position} slot"
+                )
+            else:
+                swaps.append(f"⬆️ Insert {ns.player_name} ({ns.position}) into vacant starting slot")
     elif len(needs_bench) > len(needs_start):
         for nb in needs_bench[len(needs_start) :]:
             if locked_bench_names:
@@ -580,6 +643,46 @@ def enrich_lineup_recommendation_with_espn_status(
                 )
             else:
                 swaps.append(f"⬇️ Move {nb.player_name} ({nb.current_slot}) to Bench")
+
+    # Tier-2 Thursday / Early-Slate FLEX Slot Hygiene Guardrail:
+    # Never leave a Thursday/Saturday starter in the FLEX slot when a Sunday/Monday starter of the
+    # same position occupies a dedicated RB/WR/TE slot — keep FLEX unlocked for Sunday injury pivots!
+    for s in rec.recommended_starters:
+        s_lower = s.player_name.lower()
+        if s_lower in locked_starter_names or getattr(s, "has_played", False):
+            continue
+        cur_slot_norm = (s.current_slot or "").upper().replace("/", "")
+        if cur_slot_norm not in ("FLEX", "RBWRTE"):
+            continue
+        if not (s.game_time or "").startswith(("Thu", "Sat")):
+            continue
+        p_obj = roster_map.get(s_lower)
+        native_pos = (p_obj.position if p_obj else s.position or "").upper()
+        if native_pos not in ("RB", "WR", "TE"):
+            continue
+        sunday_same_pos = [
+            cand
+            for cand in rec.recommended_starters
+            if cand.player_name.lower() != s_lower
+            and cand.player_name.lower() not in locked_starter_names
+            and not getattr(cand, "has_played", False)
+            and (cand.current_slot or "").upper() == native_pos
+            and (
+                (roster_map.get(cand.player_name.lower()).position if roster_map.get(cand.player_name.lower()) else cand.position)
+                or ""
+            ).upper()
+            == native_pos
+            and (cand.game_time or "").startswith(("Sun", "Mon"))
+        ]
+        if sunday_same_pos:
+            pivot = sunday_same_pos[0]
+            hygiene_msg = (
+                f"🔄 FLEX Hygiene: Move {s.player_name} ({s.game_time}) out of FLEX into your {native_pos} slot "
+                f"(swapping with {pivot.player_name}, {pivot.game_time}) before kickoff so FLEX stays open for Sunday injury pivots."
+            )
+            swaps.append(hygiene_msg)
+            if hygiene_msg not in (rec.key_flex_decisions or []):
+                rec.key_flex_decisions = list(rec.key_flex_decisions or []) + [hygiene_msg]
 
     rec.actionable_swaps = swaps
 
@@ -769,6 +872,88 @@ def enrich_lineup_recommendation_with_espn_status(
                     action_detail=reason,
                     floor=round(p.projected_points * 0.7, 1),
                     ceiling=round(p.projected_points * 1.3, 1),
+                    game_script_note=None,
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
+                )
+            )
+
+    # Also surface IR-slot players in current_bench so healthy IR stashes or activation targets are never hidden
+    for p in getattr(roster, "ir", []) or []:
+        p_lower = p.name.lower()
+        opp, ha, m_disp, g_time = get_player_matchup_info(
+            p.team, odds, getattr(p, "bye_week", 0), current_week
+        )
+        act_pts = getattr(p, "actual_points", 0.0)
+        inj_up = (getattr(p, "injury_status", "") or "NORMAL").upper()
+        if p_lower in rec_starters_map:
+            s_rec = rec_starters_map[p_lower]
+            current_bench_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot="IR",
+                    projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=False,
+                    injury_status=p.injury_status,
+                    action="PROMOTE_TO_START",
+                    action_label="🏥 ACTIVATE & START",
+                    action_detail=f"Optimal starter currently in IR! Activate from IR into starting lineup. {s_rec.reasoning}",
+                    floor=s_rec.floor,
+                    ceiling=s_rec.ceiling,
+                    game_script_note=s_rec.game_script_note,
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
+                )
+            )
+        elif inj_up in ("NORMAL", "ACTIVE", ""):
+            current_bench_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot="IR",
+                    projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=False,
+                    injury_status=p.injury_status,
+                    action="STAY_ON_BENCH",
+                    action_label="🏥 HEALTHY IN IR (LOCK)",
+                    action_detail=(
+                        "🚨 Healthy player sitting in ESPN IR slot! ESPN blocks all waiver/FA claims "
+                        "until you activate or drop healthy players out of IR."
+                    ),
+                    floor=round(p.projected_points * 0.7, 1),
+                    ceiling=round(p.projected_points * 1.3, 1),
+                    game_script_note=None,
+                    opponent=opp,
+                    home_away=ha,
+                    matchup_display=m_disp,
+                    game_time=g_time,
+                )
+            )
+        else:
+            current_bench_items.append(
+                CurrentRosterPlayer(
+                    player_name=p.name,
+                    position=p.position,
+                    team=p.team,
+                    current_slot="IR",
+                    projected_points=p.projected_points,
+                    actual_points=act_pts,
+                    has_played=False,
+                    injury_status=p.injury_status,
+                    action="STAY_ON_BENCH",
+                    action_label=f"🏥 IR STASH ({p.injury_status})",
+                    action_detail=f"Stashed in ESPN IR slot ({p.injury_status}). Preserves active bench capacity.",
+                    floor=0.0,
+                    ceiling=0.0,
                     game_script_note=None,
                     opponent=opp,
                     home_away=ha,
@@ -1303,7 +1488,7 @@ def optimize_lineup(
             if p_odds:
                 implied = (
                     p_odds.home_implied_total
-                    if p.team == p_odds.home_team
+                    if normalize_team_abbr(p.team) == normalize_team_abbr(p_odds.home_team)
                     else p_odds.away_implied_total
                 )
                 game_note = f"Vegas implied team total: {implied} pts (O/U: {p_odds.over_under})"

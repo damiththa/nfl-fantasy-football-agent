@@ -111,13 +111,52 @@ def validate_trade_roster_ownership(
     return (len(errors) == 0, errors, matched_giving)
 
 
+def check_trade_deadline(
+    espn_league: Optional[Any],
+    now: Optional[datetime] = None,
+) -> tuple[bool, Optional[int], Optional[str]]:
+    """Inspect ESPN league settings for trade_deadline.
+
+    Returns:
+        (is_passed, days_remaining, formatted_deadline_et)
+    """
+    settings = getattr(espn_league, "settings", None) if espn_league is not None else None
+    raw_dl = getattr(settings, "trade_deadline", None) if settings is not None else None
+    if not isinstance(raw_dl, (int, float)) or isinstance(raw_dl, bool) or raw_dl <= 0:
+        return (False, None, None)
+
+    ts_seconds = float(raw_dl) / 1000.0 if raw_dl > 1e11 else float(raw_dl)
+    eastern = zoneinfo.ZoneInfo("America/New_York")
+    try:
+        dl_dt = datetime.fromtimestamp(ts_seconds, tz=eastern)
+    except (OverflowError, OSError, ValueError):
+        return (False, None, None)
+
+    if now is None:
+        now_et = datetime.now(eastern)
+    elif now.tzinfo is None:
+        now_et = now.replace(tzinfo=eastern)
+    else:
+        now_et = now.astimezone(eastern)
+
+    dl_str = dl_dt.strftime("%b %-d, %Y %-I:%M %p %Z")
+    is_passed = now_et > dl_dt
+    delta_days = int((dl_dt - now_et).total_seconds() // 86400)
+    return (is_passed, delta_days, dl_str)
+
+
 def get_player_ros_value(p: RosterPlayer) -> float:
     """Return a player's rest-of-season (ROS) weekly baseline points so a bye-week 0.0
-    projection never causes the trade engine to treat a star as a 0.0-point player.
+    projection never causes the trade engine to treat a star as a 0.0-point player,
+    without letting a single-week spike permanently override current projections.
     """
     proj = float(getattr(p, "projected_points", 0.0) or 0.0)
     ros = float(getattr(p, "ros_baseline_ppg", 0.0) or 0.0)
-    return max(proj, ros)
+    if proj <= 0.0:
+        return ros
+    if ros <= 0.0:
+        return proj
+    return round(0.55 * proj + 0.45 * ros, 2)
 
 
 def compute_optimal_starters(
@@ -126,13 +165,18 @@ def compute_optimal_starters(
     use_ros_baseline: bool = True,
 ) -> tuple[list[RosterPlayer], list[RosterPlayer], float]:
     """Deterministically calculate optimal starters and total starting points for a set of players."""
+    # Exclude unactivated IR-slot stashes from active starting lineup calculations
+    active_pool = [
+        p for p in players if (getattr(p, "slot", "") or "").upper() != "IR"
+    ]
+
     # Filter out active vs injured players (injuries sorted to bottom)
     def player_sort_key(p: RosterPlayer) -> tuple[int, float]:
-        is_injured = (getattr(p, "injury_status", "") or "").upper() in ("OUT", "IR")
+        is_injured = (getattr(p, "injury_status", "") or "").upper() in ("OUT", "IR", "DOUBTFUL")
         pts = get_player_ros_value(p) if use_ros_baseline else (getattr(p, "projected_points", 0.0) or 0.0)
         return (0 if not is_injured else 1, -pts)
 
-    sorted_players = sorted(players, key=player_sort_key)
+    sorted_players = sorted(active_pool, key=player_sort_key)
 
     slots_needed = {
         "QB": league.roster.qb,
@@ -194,6 +238,39 @@ def simulate_trade_roster_impact(
     post_roster_players = remaining_players + incoming_players
 
     post_starters, post_bench, post_pts = compute_optimal_starters(post_roster_players, league)
+
+    # Uneven trade roster-spot accounting (e.g., 1-for-2 or 1-for-3 overflowing active roster capacity)
+    forced_drops: list[RosterPlayer] = []
+    max_active_roster = league.roster.total_starters + league.roster.bench
+    active_post = [
+        p for p in post_roster_players if (getattr(p, "slot", "") or "").upper() != "IR"
+    ]
+    overflow = max(0, len(active_post) - max_active_roster)
+    if overflow > 0 and len(incoming_players) > len(matched_giving):
+        incoming_norm = {normalize_player_name(inc.name) for inc in incoming_players}
+        droppable_bench = [
+            p
+            for p in post_bench
+            if (getattr(p, "slot", "") or "").upper() != "IR"
+        ]
+        # Prefer dropping lowest-value existing bench fillers before newly acquired players
+        droppable_bench.sort(
+            key=lambda p: (
+                1 if normalize_player_name(p.name) in incoming_norm else 0,
+                1 if p.is_protected_asset else 0,
+                get_player_ros_value(p),
+            )
+        )
+        forced_drops = droppable_bench[:overflow]
+        if forced_drops:
+            dropped_norms = {normalize_player_name(dp.name) for dp in forced_drops}
+            post_roster_players = [
+                p for p in post_roster_players if normalize_player_name(p.name) not in dropped_norms
+            ]
+            post_starters, post_bench, post_pts = compute_optimal_starters(
+                post_roster_players, league
+            )
+
     net_starting_points = round(post_pts - pre_pts, 2)
 
     # Compare pre and post starting rosters
@@ -234,14 +311,24 @@ def simulate_trade_roster_impact(
                 f"does NOT crack your starting lineup (sits on bench behind current starters)."
             )
 
-    # Positional depth calculation
+    for dp in forced_drops:
+        lineup_changes.append(
+            f"✂️ Roster Spot Drop Required: Must drop {dp.name} ({dp.position}, {get_player_ros_value(dp):.1f} pts) "
+            "to clear active roster space for uneven trade."
+        )
+
+    # Positional depth calculation (excluding IR stashes)
     pre_counts: dict[str, int] = {}
     for p in roster.players:
+        if (getattr(p, "slot", "") or "").upper() == "IR":
+            continue
         pos = (p.position or "FLEX").upper()
         pre_counts[pos] = pre_counts.get(pos, 0) + 1
 
     post_counts: dict[str, int] = {}
     for p in post_roster_players:
+        if (getattr(p, "slot", "") or "").upper() == "IR":
+            continue
         pos = (p.position or "FLEX").upper()
         post_counts[pos] = post_counts.get(pos, 0) + 1
 
@@ -265,6 +352,7 @@ def simulate_trade_roster_impact(
         "positional_depth_impact": depth_str,
         "pre_starters": pre_starters,
         "post_starters": post_starters,
+        "forced_drops": forced_drops,
     }
 
 
@@ -288,15 +376,33 @@ def _build_incoming_roster_players(
     # Search league teams if available
     league_pool: dict[str, tuple[str, str, float, str, float]] = {}  # name_norm -> (pos, proTeam, pts, injury_status, ros_ppg)
     if espn_league and hasattr(espn_league, "teams"):
+        raw_cw = getattr(espn_league, "current_week", 1)
+        curr_wk = int(raw_cw) if isinstance(raw_cw, (int, float)) and raw_cw > 0 else 1
         for team in espn_league.teams:
             for p in getattr(team, "roster", []):
                 p_name = getattr(p, "name", "")
                 p_norm = normalize_player_name(p_name)
-                pts_val = float(getattr(p, "projected_points", 0.0) or 0.0)
-                pct_owned = float(getattr(p, "percent_owned", 0.0) or 0.0)
+                raw_pts = getattr(p, "projected_points", None)
+                pts_val = float(raw_pts) if isinstance(raw_pts, (int, float)) else 0.0
+                raw_pct = getattr(p, "percent_owned", None)
+                pct_owned = float(raw_pct) if isinstance(raw_pct, (int, float)) else 0.0
                 stats_dict = getattr(p, "stats", {})
                 weekly_samples: list[float] = []
+                season_avg_pts = 0.0
                 if isinstance(stats_dict, dict):
+                    # Resolve weekly projection from ESPN Team.roster Player.stats[curr_wk] if direct attr is 0.0
+                    wk_entry = stats_dict.get(curr_wk) or stats_dict.get(str(curr_wk))
+                    if pts_val <= 0.0 and isinstance(wk_entry, dict):
+                        wk_proj = wk_entry.get("projected_points")
+                        if isinstance(wk_proj, (int, float)):
+                            pts_val = float(wk_proj)
+
+                    s0 = stats_dict.get(0) or stats_dict.get("0")
+                    if isinstance(s0, dict):
+                        raw_avg = s0.get("avg_points")
+                        if isinstance(raw_avg, (int, float)) and raw_avg > 0:
+                            season_avg_pts = float(raw_avg)
+
                     for k, v in stats_dict.items():
                         if not isinstance(v, dict):
                             continue
@@ -311,8 +417,20 @@ def _build_incoming_roster_players(
                                 weekly_samples.append(float(w_pts))
                             elif isinstance(w_proj, (int, float)) and w_proj > 0:
                                 weekly_samples.append(float(w_proj))
-                if weekly_samples:
+                if season_avg_pts > 0:
+                    ros_val = (
+                        round(0.6 * season_avg_pts + 0.4 * pts_val, 2)
+                        if pts_val > 0
+                        else round(season_avg_pts, 2)
+                    )
+                elif len(weekly_samples) >= 2:
                     ros_val = round(sum(weekly_samples) / len(weekly_samples), 2)
+                elif len(weekly_samples) == 1:
+                    ros_val = (
+                        round(0.5 * weekly_samples[0] + 0.5 * pts_val, 2)
+                        if pts_val > 0
+                        else round(weekly_samples[0], 2)
+                    )
                 elif pts_val > 0:
                     ros_val = pts_val
                 elif pct_owned >= 85.0:
@@ -475,13 +593,28 @@ def evaluate_trade(
     net_pts = sim_impact["net_starting_points_change"]
     lineup_changes = sim_impact["starting_lineup_changes"]
     depth_impact = sim_impact["positional_depth_impact"]
+    forced_drops = sim_impact.get("forced_drops", [])
 
-    # Calculate net VORP as supporting metric (using ROS baseline so bye-week stars aren't valued at 0.0)
+    # Calculate net VORP as supporting metric (using ROS baseline so bye-week stars aren't valued at 0.0).
+    # In multi-player packages, clamp sub-replacement throw-ins at 0.0 so negative-VORP filler never artificially inflates trade value.
     giving_vorp = sum(
-        calculate_vorp(get_player_ros_value(p), p.position, league.num_teams) for p in matched_giving
+        (
+            max(0.0, calculate_vorp(get_player_ros_value(p), p.position, league.num_teams))
+            if len(matched_giving) > 1
+            else calculate_vorp(get_player_ros_value(p), p.position, league.num_teams)
+        )
+        for p in matched_giving
+    ) + sum(
+        max(0.0, calculate_vorp(get_player_ros_value(dp), dp.position, league.num_teams))
+        for dp in forced_drops
     )
     receiving_vorp = sum(
-        calculate_vorp(get_player_ros_value(p), p.position, league.num_teams) for p in incoming_players
+        (
+            max(0.0, calculate_vorp(get_player_ros_value(p), p.position, league.num_teams))
+            if len(incoming_players) > 1
+            else calculate_vorp(get_player_ros_value(p), p.position, league.num_teams)
+        )
+        for p in incoming_players
     )
     net_vorp = round(receiving_vorp - giving_vorp, 2)
 
@@ -701,6 +834,7 @@ def evaluate_trade(
         counter = "Target a player who actually upgrades one of your active starting slots."
     else:
         verdict = "COUNTER"
+        counter = "Offer a lower-tier bench asset instead of your current starter."
         time_horizon = "LONG_TERM_DECISION"
         time_horizon_detail = (
             f"Marginal net impact ({net_pts:+.1f} pts/wk): Does not represent a decisive long-term or weekly upgrade in its current form."
@@ -713,7 +847,6 @@ def evaluate_trade(
             f"Marginal net starting impact ({net_pts:+.1f} weekly points: {pre_pts:.1f} → {post_pts:.1f}). "
             f"The value is roughly balanced, but it does not decisively upgrade your weekly starting floor."
         )
-        counter = "Offer a lower-tier bench asset instead of your current starter."
 
     lineup_impact_summary = (
         f"Alters starting projection by {net_pts:+.1f} points/week ({pre_pts:.1f} → {post_pts:.1f}). "

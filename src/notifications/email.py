@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import zoneinfo
 from datetime import datetime
 from typing import Any
 
@@ -18,6 +19,7 @@ import httpx
 logger = logging.getLogger("fantasy_agent.email")
 
 SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send"
+DEFAULT_APP_URL = "https://fantasy-agent-3pky7gmu6q-uc.a.run.app"
 
 # Recipient — Mad Dawg's email
 RECIPIENT_EMAIL = "damiththa@gmail.com"
@@ -26,6 +28,11 @@ RECIPIENT_NAME = "Mad Dawg"
 # Sender — must be a verified sender in SendGrid
 SENDER_EMAIL = "damiththa@gmail.com"
 SENDER_NAME = "Fantasy Football Agent 🏈"
+
+
+def _now_et() -> datetime:
+    """Return current timezone-aware datetime in America/New_York."""
+    return datetime.now(zoneinfo.ZoneInfo("America/New_York"))
 
 
 def _get_sendgrid_key() -> str | None:
@@ -92,8 +99,9 @@ def _build_email_html(
         "Your roster is looking sharper than a fresh pair of cleats. Don't mess it up. 👟",
         "If you win this week, you're welcome. If you lose, you clearly ignored my advice. 😤",
     ]
-    # Deterministic pick based on day of year
-    signoff = signoffs[datetime.now().timetuple().tm_yday % len(signoffs)]
+    # Deterministic pick based on day of year (America/New_York)
+    signoff = signoffs[_now_et().timetuple().tm_yday % len(signoffs)]
+    app_url = os.environ.get("PUBLIC_APP_URL", DEFAULT_APP_URL)
 
     return f"""<!DOCTYPE html>
 <html>
@@ -126,7 +134,7 @@ def _build_email_html(
       <p style="color: #94a3b8; font-size: 13px; font-style: italic; margin: 0 0 12px 0;">{signoff}</p>
       <p style="color: #475569; font-size: 11px; margin: 0;">
         Sent by <strong style="color: #38bdf8;">Fantasy Football Agent</strong> • Powered by {active_backend}<br>
-        {timestamp} • <a href="https://fantasy-agent-652912521571.us-central1.run.app" style="color: #38bdf8; text-decoration: none;">Open Command Center →</a>
+        {timestamp} • <a href="{app_url}" style="color: #38bdf8; text-decoration: none;">Open Command Center →</a>
       </p>
     </div>
 
@@ -650,11 +658,65 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
     # Matchup preview highlights
     if data.get("win_probability") is not None:
         wp = data["win_probability"]
-        wp_color = "#22c55e" if wp > 55 else "#ef4444" if wp < 45 else "#eab308"
+        wp_float = float(wp)
+        wp_pct = round(wp_float * 100) if wp_float <= 1.0 else round(wp_float)
+        wp_color = "#22c55e" if wp_pct > 55 else "#ef4444" if wp_pct < 45 else "#eab308"
+        proj_u = data.get("projected_score_user")
+        proj_o = data.get("projected_score_opponent")
+        proj_margin = data.get("projected_margin")
+        opp_label = data.get("opponent_name") or "Opponent"
+        score_sub = ""
+        if isinstance(proj_u, (int, float)) and isinstance(proj_o, (int, float)):
+            margin_str = f" ({proj_margin:+.1f} pts)" if isinstance(proj_margin, (int, float)) else ""
+            score_sub = (
+                f'<p style="color: #cbd5e1; font-size: 13px; margin: 6px 0 0 0;">'
+                f'Projected: <strong style="color: #38bdf8;">{proj_u:.1f}</strong> vs '
+                f'{opp_label} <strong style="color: #f43f5e;">{proj_o:.1f}</strong>{margin_str}</p>'
+            )
         content_html += f"""
       <div style="text-align: center; padding: 12px; background: #0f172a; border-radius: 8px; margin: 14px 0;">
         <p style="color: #94a3b8; font-size: 12px; margin: 0;">WIN PROBABILITY</p>
-        <p style="color: {wp_color}; font-size: 32px; font-weight: bold; margin: 4px 0;">{wp}%</p>
+        <p style="color: {wp_color}; font-size: 32px; font-weight: bold; margin: 4px 0;">{wp_pct}%</p>
+        {score_sub}
+      </div>"""
+
+    if data.get("strategic_summary"):
+        content_html += f"""
+      <div style="background: #0f172a; border-left: 4px solid #38bdf8; padding: 10px 14px; border-radius: 0 6px 6px 0; margin-bottom: 12px;">
+        <p style="margin: 0; color: #e2e8f0; font-size: 13px; line-height: 1.4;">🎯 <strong>Scouting Summary:</strong> {data['strategic_summary']}</p>
+      </div>"""
+
+    if data.get("key_advantages"):
+        adv_items = "".join(
+            f"<li style='margin-bottom: 4px; color: #bbf7d0; font-size: 12px;'>{a}</li>"
+            for a in data["key_advantages"]
+        )
+        content_html += f"""
+      <div style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; padding: 10px 12px; border-radius: 0 6px 6px 0; margin-bottom: 10px;">
+        <h4 style="color: #22c55e; margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase;">✅ Key Matchup Advantages</h4>
+        <ul style="margin: 0; padding-left: 18px;">{adv_items}</ul>
+      </div>"""
+
+    if data.get("key_vulnerabilities"):
+        vuln_items = "".join(
+            f"<li style='margin-bottom: 4px; color: #fecaca; font-size: 12px;'>{v}</li>"
+            for v in data["key_vulnerabilities"]
+        )
+        content_html += f"""
+      <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 12px; border-radius: 0 6px 6px 0; margin-bottom: 10px;">
+        <h4 style="color: #f87171; margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase;">⚠️ Key Vulnerabilities & Lineup Alerts</h4>
+        <ul style="margin: 0; padding-left: 18px;">{vuln_items}</ul>
+      </div>"""
+
+    if data.get("weather_and_vegas_factors"):
+        wv_items = "".join(
+            f"<li style='margin-bottom: 4px; color: #cbd5e1; font-size: 12px;'>{f}</li>"
+            for f in data["weather_and_vegas_factors"]
+        )
+        content_html += f"""
+      <div style="background: #0f172a; border-left: 3px solid #a855f7; padding: 10px 12px; border-radius: 0 6px 6px 0; margin-bottom: 10px;">
+        <h4 style="color: #c084fc; margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase;">🌤️ Vegas & Weather Environment</h4>
+        <ul style="margin: 0; padding-left: 18px;">{wv_items}</ul>
       </div>"""
 
     if data.get("key_matchups"):
@@ -729,7 +791,7 @@ def send_digest_email(
         return False
 
     subject = _subject_for_job(job_type, day)
-    timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p ET")
+    timestamp = _now_et().strftime("%B %d, %Y at %I:%M %p %Z")
 
     html_body = _build_email_html(
         subject=subject,
@@ -783,7 +845,7 @@ def send_error_alert_email(job_type: str, error_detail: str) -> bool:
         return False
 
     subject = f"🚨 Fantasy Agent Alert — Failure in {job_type}"
-    timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p ET")
+    timestamp = _now_et().strftime("%B %d, %Y at %I:%M %p %Z")
     html_body = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>

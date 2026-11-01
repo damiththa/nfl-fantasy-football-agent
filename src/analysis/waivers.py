@@ -28,6 +28,79 @@ INELIGIBLE_INJURY_STATUSES = {
 }
 
 
+def _build_waiver_rules_context(league: LeagueConfig, espn_league: Optional[Any] = None) -> str:
+    """Inspect live ESPN league settings for FAAB budget vs rolling waiver priority."""
+    settings = getattr(espn_league, "settings", None) if espn_league is not None else None
+    is_faab = getattr(settings, "faab", None) if settings is not None else None
+    if not isinstance(is_faab, bool):
+        is_faab = "FAAB" in (league.waiver_type or "").upper()
+
+    my_team = None
+    if espn_league is not None and hasattr(espn_league, "teams"):
+        teams = getattr(espn_league, "teams", [])
+        if isinstance(teams, (list, tuple)):
+            my_team = next((t for t in teams if getattr(t, "team_id", None) == league.team_id), None)
+
+    if is_faab:
+        raw_budget = getattr(settings, "acquisition_budget", None) if settings is not None else None
+        total_budget = int(raw_budget) if isinstance(raw_budget, (int, float)) and raw_budget > 0 else 100
+        raw_spent = getattr(my_team, "acquisition_budget_spent", None) if my_team is not None else None
+        spent = int(raw_spent) if isinstance(raw_spent, (int, float)) and raw_spent >= 0 else 0
+        remaining = max(0, total_budget - spent)
+        return f"FAAB Bidding (${remaining}/${total_budget} budget remaining)"
+
+    raw_rank = getattr(my_team, "waiver_rank", None) if my_team is not None else None
+    if isinstance(raw_rank, int) and not isinstance(raw_rank, bool) and raw_rank > 0:
+        return f"Rolling Waiver Priority (Current Priority: #{raw_rank} of {league.num_teams}; Non-FAAB)"
+    return "Rolling Waiver Priority (Non-FAAB)"
+
+
+def _inspect_ir_slot_lifecycle(
+    league: LeagueConfig,
+    roster: ParsedRoster,
+) -> tuple[Optional[str], Optional[str], list[Any]]:
+    """Detect Tier-2 IR lifecycle alerts:
+    1. Healthy/active player stuck in an IR slot (ESPN locks all waiver claims until activated!).
+    2. Open IR slot(s) while an OUT/IR player sits on the active roster (free pickup without dropping anyone!).
+
+    Returns:
+        (ir_lock_warning, ir_open_opportunity, ir_storable_active_players)
+    """
+    ir_players = list(getattr(roster, "ir", []) or [])
+    healthy_in_ir = [
+        p
+        for p in ir_players
+        if (getattr(p, "injury_status", "") or "NORMAL").upper() in ("NORMAL", "ACTIVE", "")
+    ]
+    ir_lock_warning: Optional[str] = None
+    if healthy_in_ir:
+        names = ", ".join(f"{p.name} ({p.position})" for p in healthy_in_ir)
+        ir_lock_warning = (
+            f"🚨 ESPN IR ROSTER LOCK: {names} is healthy/active while still sitting in your IR slot. "
+            "ESPN blocks ALL waiver claims and free-agent pickups until you activate or drop healthy players out of IR!"
+        )
+
+    max_ir = getattr(league.roster, "ir", 0) or 0
+    open_ir_slots = max(0, max_ir - len(ir_players))
+    active_roster = list(roster.starters) + list(roster.bench)
+    ir_eligible_active = [
+        p
+        for p in active_roster
+        if (getattr(p, "injury_status", "") or "").upper() in ("OUT", "IR", "INJURY_RESERVE")
+    ]
+    ir_open_opportunity: Optional[str] = None
+    if open_ir_slots > 0 and ir_eligible_active:
+        elig_names = ", ".join(
+            f"{p.name} ({p.position}, {p.injury_status})" for p in ir_eligible_active[:2]
+        )
+        ir_open_opportunity = (
+            f"🏥 FREE ROSTER SPOT AVAILABLE ({len(ir_players)}/{max_ir} IR used): Move {elig_names} "
+            "into your open ESPN IR slot first to claim a waiver target with ZERO drop required!"
+        )
+
+    return ir_lock_warning, ir_open_opportunity, ir_eligible_active
+
+
 def evaluate_waivers(
     league: LeagueConfig,
     week: int,
@@ -36,6 +109,7 @@ def evaluate_waivers(
     trending_adds: Optional[list[TrendingPlayer]] = None,
     injuries: Optional[list[PlayerInjuryInfo]] = None,
     client: Optional[GeminiIntelligenceClient] = None,
+    espn_league: Optional[Any] = None,
 ) -> WaiverReport:
     """Evaluate waiver wire targets and identify roster drop candidates.
 
@@ -47,11 +121,17 @@ def evaluate_waivers(
         trending_adds: List of Sleeper trending adds (optional).
         injuries: List of player injuries (optional).
         client: Gemini intelligence client (optional).
+        espn_league: Optional connected ESPN League instance for live FAAB / waiver rank inspection.
 
     Returns:
         WaiverReport with ranked targets, drop candidates, and strategy.
     """
     fallback_err: Optional[str] = None
+    waiver_rules_ctx = _build_waiver_rules_context(league, espn_league)
+    ir_lock_warning, ir_open_opportunity, ir_eligible_active = _inspect_ir_slot_lifecycle(
+        league, roster
+    )
+    ir_notes = [n for n in (ir_lock_warning, ir_open_opportunity) if n]
 
     # Build injury lookup map
     injuries_map: dict[str, PlayerInjuryInfo] = {}
@@ -103,7 +183,7 @@ def evaluate_waivers(
 
     for s in roster.starters:
         is_out = (s.injury_status or "").upper() in ("OUT", "IR", "SUS", "SUSPENSION", "SUSPENDED", "DOUBTFUL")
-        is_bye = getattr(s, "bye_week", 0) == week and week > 0
+        is_bye = s.is_on_bye(week)
         is_zero_proj = not getattr(s, "has_played", False) and getattr(s, "projected_points", 0.0) <= 0.0
 
         if is_out or is_bye or is_zero_proj:
@@ -116,7 +196,7 @@ def evaluate_waivers(
             bench_cover = [
                 b for b in roster.bench
                 if (b.injury_status or "").upper() not in ("OUT", "IR", "SUS", "SUSPENDED", "DOUBTFUL")
-                and getattr(b, "bye_week", 0) != week
+                and not b.is_on_bye(week)
                 and not (not getattr(b, "has_played", False) and getattr(b, "projected_points", 0.0) <= 0.0)
                 and (
                     b.position.upper() == slot_norm
@@ -240,6 +320,8 @@ def evaluate_waivers(
             trending_adds=trending_data[:20],
             injuries=injury_data[:20],
             starter_holes=starter_holes_detail,
+            waiver_context=waiver_rules_ctx,
+            ir_lifecycle_notes=ir_notes or None,
         )
 
         try:
@@ -252,7 +334,11 @@ def evaluate_waivers(
             # Post-validation safety net:
             # 1. Reject any target that is on IR, Out, or injured with 0 projection
             # 2. Never allow dropping a bye-week player or protected core/star asset!
-            fallback_safe_drop = safe_bench_drops[0].name if safe_bench_drops else None
+            fallback_safe_drop = (
+                f"Move {ir_eligible_active[0].name} to IR (No Drop Needed)"
+                if (ir_open_opportunity and ir_eligible_active)
+                else (safe_bench_drops[0].name if safe_bench_drops else None)
+            )
             sanitized_targets = []
             for t in report.targets:
                 fa_match = next((fa for fa in free_agents if fa.get("name", "").lower() == t.player_name.lower()), None)
@@ -274,8 +360,10 @@ def evaluate_waivers(
                         continue
 
                 if t.recommended_drop:
+                    raw_drop_low = t.recommended_drop.lower()
+                    is_ir_move_directive = "to ir" in raw_drop_low and "move" in raw_drop_low
                     rec_drop_clean = t.recommended_drop.split("(")[0].strip().lower()
-                    if any(
+                    if not is_ir_move_directive and any(
                         rec_drop_clean == pname or pname in rec_drop_clean
                         for pname in protected_or_bye_names
                     ):
@@ -294,8 +382,17 @@ def evaluate_waivers(
                 report.roster_drop_candidates = [
                     d
                     for d in report.roster_drop_candidates
-                    if not any(pname in d.lower() for pname in protected_or_bye_names)
+                    if ("to ir" in d.lower() and "move" in d.lower())
+                    or not any(pname in d.lower() for pname in protected_or_bye_names)
                 ]
+
+            if ir_notes:
+                existing_strat = report.overall_waiver_strategy or ""
+                prefix_notes = [n for n in ir_notes if n[:24].lower() not in existing_strat.lower()]
+                if prefix_notes:
+                    report.overall_waiver_strategy = (
+                        " ".join(prefix_notes) + (" " + existing_strat if existing_strat else "")
+                    ).strip()
 
             if report.coach_verdict == "STAND_PAT" or not report.targets:
                 if has_unfilled_starter_hole:
@@ -314,6 +411,8 @@ def evaluate_waivers(
                             "None of the available healthy free agents represent a meaningful upgrade over your current assets. "
                             "Preserve your waiver priority and hold your bench."
                         )
+                    if ir_lock_warning and ir_lock_warning not in (report.stand_pat_reasoning or ""):
+                        report.stand_pat_reasoning = f"{ir_lock_warning} {report.stand_pat_reasoning}"
                     return report
             else:
                 report.is_move_recommended = True
@@ -357,38 +456,60 @@ def evaluate_waivers(
     top_fa_proj = float(top_fa.get("projected_points", 0.0) or 0.0) if top_fa else 0.0
 
     # 3. Coach decision: Is making a move genuinely warranted?
-    # If no starting hole, no clear droppable players, and top FA has mediocre projection:
+    # If an open IR slot allows stashing an OUT/IR active-roster player for FREE, we don't need to drop anyone!
+    has_free_ir_stash_move = bool(ir_open_opportunity and ir_eligible_active and top_fa_proj >= 7.0)
     best_bench_proj = max([p.projected_points for p in roster.bench], default=0.0)
     bench_is_strong = len(clear_drop_candidates) == 0 and (
         len(marginal_drop_candidates) == 0 or top_fa_proj < 8.0
     )
 
-    if not has_unfilled_starter_hole and bench_is_strong and top_fa_proj <= best_bench_proj:
+    ir_prefix = (" ".join(ir_notes) + " ") if ir_notes else ""
+
+    capital_term = "FAAB budget" if "FAAB" in waiver_rules_ctx and "Non-FAAB" not in waiver_rules_ctx else "waiver priority"
+
+    if (
+        not has_unfilled_starter_hole
+        and not has_free_ir_stash_move
+        and bench_is_strong
+        and top_fa_proj <= best_bench_proj
+    ):
         return WaiverReport(
             league_id=league.league_id,
             week=week,
             is_move_recommended=False,
             coach_verdict="STAND_PAT",
             stand_pat_reasoning=(
+                f"{ir_lock_warning + ' ' if ir_lock_warning else ''}"
                 "🛡️ Roster depth is rock solid. Your active starters are locked in and healthy, and your bench "
                 "is loaded with high-upside depth. None of the available waiver options offer a legitimate upgrade "
-                "over your current stashes. Churning the roster now would forfeit valuable waiver priority and cost "
+                f"over your current stashes. Churning the roster now would forfeit valuable {capital_term} and cost "
                 "you valuable bench assets. Hold your depth and stand pat."
             ),
             targets=[],
             roster_drop_candidates=[],
             overall_waiver_strategy=(
-                f"🛡️ COACH'S VERDICT: STAND PAT. League '{league.name}' uses traditional rolling waivers. "
-                "Save your waiver priority for high-impact injury breakouts or bellcow promotions later in the season. "
-                "Do not burn priority on lateral sidegrades."
+                f"{ir_prefix}🛡️ COACH'S VERDICT: STAND PAT. League '{league.name}' ({waiver_rules_ctx}). "
+                f"Save your {capital_term} for high-impact injury breakouts or bellcow promotions later in the season. "
+                f"Do not burn {capital_term} on lateral sidegrades."
             ),
         )
 
     # If an add is genuinely justified:
-    drop_pool = clear_drop_candidates or marginal_drop_candidates or safe_bench_drops
-    drop_p = drop_pool[0] if drop_pool else None
-    drop_name = drop_p.name if drop_p else None
-    drop_candidates_str = [f"{drop_p.name} ({drop_p.position} - {drop_p.projected_points:.1f} pts)"] if drop_p else []
+    if ir_open_opportunity and ir_eligible_active:
+        ir_target_p = ir_eligible_active[0]
+        drop_name = f"Move {ir_target_p.name} to IR (No Drop Needed)"
+        drop_candidates_str = [
+            f"🏥 Move {ir_target_p.name} ({ir_target_p.position}, {ir_target_p.injury_status}) to open IR slot — 0 drops required"
+        ]
+    else:
+        drop_pool = clear_drop_candidates or marginal_drop_candidates or safe_bench_drops
+        drop_p = drop_pool[0] if drop_pool else None
+        drop_name = drop_p.name if drop_p else None
+        drop_candidates_str = (
+            [f"{drop_p.name} ({drop_p.position} - {drop_p.projected_points:.1f} pts)"]
+            if drop_p
+            else []
+        )
 
     targets = []
     # If we have streaming needs (e.g. K, DST), first pick the best available free agent for each streaming need!
@@ -462,10 +583,15 @@ def evaluate_waivers(
             week=week,
             is_move_recommended=False,
             coach_verdict="STAND_PAT",
-            stand_pat_reasoning="No available free agents exceed the performance baseline of your current roster. Stand pat.",
+            stand_pat_reasoning=(
+                f"{ir_lock_warning + ' ' if ir_lock_warning else ''}"
+                "No available free agents exceed the performance baseline of your current roster. Stand pat."
+            ),
             targets=[],
             roster_drop_candidates=[],
-            overall_waiver_strategy="🛡️ COACH'S VERDICT: STAND PAT. Hold your roster and preserve waiver priority.",
+            overall_waiver_strategy=(
+                f"{ir_prefix}🛡️ COACH'S VERDICT: STAND PAT ({waiver_rules_ctx}). Hold your roster and preserve waiver capital."
+            ),
             intelligence_backend="deterministic_fallback",
             fallback_reason=fallback_err or "Gemini client was not provided",
         )
@@ -479,8 +605,13 @@ def evaluate_waivers(
         targets=targets,
         roster_drop_candidates=drop_candidates_str,
         overall_waiver_strategy=(
-            f"Target high-leverage opportunities at {targets[0].position}. "
-            f"Execute targeted claim for {targets[0].player_name} while dropping expendable depth."
+            f"{ir_prefix}Target high-leverage opportunities at {targets[0].position} ({waiver_rules_ctx}). "
+            f"Execute targeted claim for {targets[0].player_name} "
+            + (
+                f"after moving {ir_eligible_active[0].name} to your open IR slot."
+                if (ir_open_opportunity and ir_eligible_active)
+                else "while dropping expendable depth."
+            )
         ),
         intelligence_backend="deterministic_fallback",
         fallback_reason=fallback_err or "Gemini client was not provided",

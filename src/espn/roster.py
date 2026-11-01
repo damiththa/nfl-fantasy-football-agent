@@ -5,6 +5,7 @@ Models and functions for parsing ESPN roster data.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, List, Optional
 
 from src.config import SLOT_DISPLAY_NAMES, LeagueConfig
@@ -37,13 +38,37 @@ class RosterPlayer:
 
     def is_on_bye(self, current_week: int = 0) -> bool:
         """Returns True if the player is on a bye week in current_week."""
-        if current_week and self.bye_week == current_week:
+        opp_upper = (self.pro_opponent or "").strip().upper()
+        if opp_upper == "BYE":
             return True
+        # If the player's NFL team has a scheduled opponent this week, they are NOT on bye
+        if opp_upper and opp_upper not in ("BYE", "NONE"):
+            return False
+
+        inj_upper = (self.injury_status or "NORMAL").strip().upper()
+        if current_week and self.bye_week == current_week:
+            # Never misclassify an OUT/IR/PUP/Suspended/Doubtful player as "on bye" unless opponent=="BYE"
+            if inj_upper in (
+                "OUT",
+                "O",
+                "IR",
+                "INJURY_RESERVE",
+                "PUP",
+                "SUSPENSION",
+                "SUS",
+                "SUSPENDED",
+                "DOUBTFUL",
+                "D",
+            ):
+                return False
+            return True
+
         if (
             not self.has_played
             and self.projected_points <= 0.0
-            and (self.injury_status or "NORMAL").upper() in ("NORMAL", "ACTIVE", "")
-            and (not self.pro_opponent or self.pro_opponent.upper() in ("BYE", "NONE", ""))
+            and inj_upper in ("NORMAL", "ACTIVE", "")
+            and (not opp_upper or opp_upper in ("BYE", "NONE"))
+            and (self.team or "").strip().upper() not in ("FA", "FREE AGENT", "UNK", "")
         ):
             return True
         return False
@@ -58,8 +83,8 @@ class RosterPlayer:
             return False
         if self.percent_owned >= 65.0:
             return True
-        effective_ppg = max(self.projected_points, self.ros_baseline_ppg)
-        if effective_ppg >= 10.0:
+        effective_ppg = self.ros_baseline_ppg if self.ros_baseline_ppg > 0 else self.projected_points
+        if effective_ppg >= 12.0:
             return True
         return False
 
@@ -85,6 +110,24 @@ class ParsedRoster:
     starters: List[RosterPlayer] = field(default_factory=list)
     bench: List[RosterPlayer] = field(default_factory=list)
     ir: List[RosterPlayer] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.players and not (self.starters or self.bench or self.ir):
+            for p in self.players:
+                slot_upper = (p.slot or "").upper()
+                if slot_upper in ("BENCH", "BE"):
+                    self.bench.append(p)
+                elif slot_upper == "IR":
+                    self.ir.append(p)
+                else:
+                    self.starters.append(p)
+        elif not self.players and (self.starters or self.bench or self.ir):
+            self.players = list(self.starters) + list(self.bench) + list(self.ir)
+
+    @property
+    def total_projected(self) -> float:
+        """Sum of projected points across current starters."""
+        return round(sum(p.projected_points for p in self.starters), 1)
 
 
 def get_safe_drop_candidates(
@@ -206,7 +249,9 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         stat_actual = week_stat.get("points") if isinstance(week_stat, dict) else None
         stat_proj = week_stat.get("projected_points") if isinstance(week_stat, dict) else None
 
-        # Resolve actual points and whether the player has already played
+        # Resolve actual points and whether the player has already played.
+        # Note: espn_api populates stats[week]["points"] = 0.0 as a placeholder BEFORE kickoff;
+        # a 0.0 stat_actual without game_played==100 must NOT falsely lock an unplayed player.
         has_played = False
         actual_pts = 0.0
 
@@ -215,14 +260,14 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         ):
             actual_pts = round(float(direct_actual), 2)
             has_played = True
-        elif stat_actual is not None:
+        elif isinstance(stat_actual, (int, float)) and stat_actual != 0.0:
             actual_pts = round(float(stat_actual), 2)
             has_played = True
         elif direct_actual is not None and direct_actual != 0.0:
             actual_pts = round(float(direct_actual), 2)
             has_played = True
         elif game_played_attr is not None and game_played_attr == 100:
-            # Player played but scored 0.0 points
+            # Player completed game and scored 0.0 points
             actual_pts = 0.0
             has_played = True
 
@@ -238,12 +283,23 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         else:
             proj_pts = 0.0
 
-        espn_locked = bool(
-            getattr(player, "lineupLocked", False)
-            or getattr(player, "lineup_locked", False)
-            or getattr(player, "is_locked", False)
+        # Check kickoff timestamp (BoxPlayer.game_date) to lock players whose game is already underway
+        kickoff_passed = False
+        game_date_attr = getattr(player, "game_date", None)
+        if isinstance(game_date_attr, datetime):
+            now_cmp = (
+                datetime.now(game_date_attr.tzinfo)
+                if game_date_attr.tzinfo is not None
+                else datetime.now()
+            )
+            if now_cmp >= game_date_attr:
+                kickoff_passed = True
+
+        espn_locked = any(
+            getattr(player, attr, None) is True
+            for attr in ("lineupLocked", "lineup_locked", "is_locked")
         )
-        is_locked = bool(has_played or espn_locked)
+        is_locked = bool(has_played or espn_locked or kickoff_passed)
 
         slot_upper = slot_name.upper()
         if is_locked:
@@ -256,19 +312,43 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         else:
             lock_status = "UNLOCKED_ACTIONABLE"
 
-        pro_opp = getattr(player, "pro_opponent", "") or getattr(player, "proOpponent", "")
+        raw_pro_opp = getattr(player, "pro_opponent", "") or getattr(player, "proOpponent", "")
+        pro_opp = raw_pro_opp if isinstance(raw_pro_opp, str) else ""
         opp_rank = getattr(player, "pro_pos_rank", None) or getattr(player, "proPosRank", None)
         opp_pos_rank = None
         if isinstance(opp_rank, (int, float)) and opp_rank > 0:
             opp_pos_rank = int(opp_rank)
 
-        detected_bye = getattr(player, "bye_week", 0) or 0
+        inj_status_raw = getattr(player, "injuryStatus", "NORMAL")
+        inj_status = inj_status_raw if isinstance(inj_status_raw, str) and inj_status_raw else "NORMAL"
+        inj_upper = inj_status.strip().upper()
+
+        pro_team_raw = getattr(player, "proTeam", "UNK")
+        pro_team_str = pro_team_raw if isinstance(pro_team_raw, str) and pro_team_raw else "UNK"
+
+        raw_bye = getattr(player, "bye_week", 0)
+        detected_bye = int(raw_bye) if isinstance(raw_bye, (int, float)) else 0
         if not detected_bye and target_week and target_week > 0:
-            if not has_played and proj_pts <= 0.0 and (not pro_opp or str(pro_opp).upper() in ("BYE", "NONE", "")):
+            if pro_opp.strip().upper() == "BYE":
+                detected_bye = target_week
+            elif (
+                not has_played
+                and proj_pts <= 0.0
+                and inj_upper in ("NORMAL", "ACTIVE", "")
+                and not pro_opp.strip()
+                and pro_team_str.strip().upper() not in ("FA", "FREE AGENT", "UNK", "")
+            ):
                 detected_bye = target_week
 
         # Compute rest-of-season (ROS) / multi-week baseline PPG so bye-week 0.0 projections
-        # never disguise a star player as a 0.0-point scrub
+        # never disguise a star player as a 0.0-point scrub, and single-week spikes do not
+        # distort full-season averages when stats[0]['avg_points'] is available.
+        season_stat = stats_dict.get(0) or stats_dict.get("0") or {}
+        season_avg = season_stat.get("avg_points") if isinstance(season_stat, dict) else None
+        season_proj_avg = (
+            season_stat.get("projected_avg_points") if isinstance(season_stat, dict) else None
+        )
+
         weekly_samples: list[float] = []
         for k, v in stats_dict.items():
             if not isinstance(v, dict):
@@ -277,18 +357,41 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
                 k_int = int(k)
             except (ValueError, TypeError):
                 continue
-            # Ignore season-total keys (0 or >= 2000) and focus on weekly entries (1..18)
+            # Focus on weekly entries (1..18)
             if 1 <= k_int <= 18:
                 w_pts = v.get("points")
                 w_proj = v.get("projected_points")
                 if isinstance(w_pts, (int, float)) and w_pts > 0:
                     weekly_samples.append(float(w_pts))
+                elif (
+                    k_int < target_week
+                    and isinstance(w_pts, (int, float))
+                    and w_pts == 0.0
+                    and isinstance(w_proj, (int, float))
+                    and w_proj > 0
+                ):
+                    # Completed past game where an active projected player scored 0.0
+                    weekly_samples.append(0.0)
                 elif isinstance(w_proj, (int, float)) and w_proj > 0:
                     weekly_samples.append(float(w_proj))
 
-        pct_owned = float(getattr(player, "percent_owned", 0.0) or 0.0)
-        if weekly_samples:
+        raw_pct_owned = getattr(player, "percent_owned", 0.0)
+        pct_owned = float(raw_pct_owned) if isinstance(raw_pct_owned, (int, float)) else 0.0
+
+        if isinstance(season_avg, (int, float)) and season_avg > 0:
+            if proj_pts > 0:
+                ros_baseline = round(0.6 * float(season_avg) + 0.4 * proj_pts, 2)
+            else:
+                ros_baseline = round(float(season_avg), 2)
+        elif len(weekly_samples) >= 2:
             ros_baseline = round(sum(weekly_samples) / len(weekly_samples), 2)
+        elif len(weekly_samples) == 1:
+            if proj_pts > 0:
+                ros_baseline = round(0.5 * weekly_samples[0] + 0.5 * proj_pts, 2)
+            else:
+                ros_baseline = round(weekly_samples[0], 2)
+        elif isinstance(season_proj_avg, (int, float)) and season_proj_avg > 0:
+            ros_baseline = round(float(season_proj_avg), 2)
         elif proj_pts > 0:
             ros_baseline = proj_pts
         elif pct_owned >= 85.0:
@@ -300,20 +403,25 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         else:
             ros_baseline = 0.0
 
+        raw_name = getattr(player, "name", "Unknown Player")
+        p_name = raw_name if isinstance(raw_name, str) and raw_name else "Unknown Player"
+        raw_pos = getattr(player, "position", "UNK")
+        p_pos = raw_pos if isinstance(raw_pos, str) and raw_pos else "UNK"
+
         rp = RosterPlayer(
-            name=getattr(player, "name", "Unknown Player") or "Unknown Player",
-            position=getattr(player, "position", "UNK") or "UNK",
-            team=getattr(player, "proTeam", "UNK") or "UNK",
+            name=p_name,
+            position=p_pos,
+            team=pro_team_str,
             slot=slot_name,
             projected_points=proj_pts,
             actual_points=actual_pts,
-            injury_status=getattr(player, "injuryStatus", "NORMAL") or "NORMAL",
+            injury_status=inj_status,
             bye_week=detected_bye,
             percent_owned=pct_owned,
             has_played=has_played,
             is_locked=is_locked,
             lock_status=lock_status,
-            pro_opponent=str(pro_opp) if pro_opp else "",
+            pro_opponent=pro_opp.strip(),
             opponent_pos_rank=opp_pos_rank,
             ros_baseline_ppg=ros_baseline,
         )
@@ -330,3 +438,62 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
             parsed.starters.append(rp)
 
     return parsed
+
+
+def enrich_roster_from_box_matchup(
+    roster: ParsedRoster,
+    matchup_roster: Optional[ParsedRoster] = None,
+    current_week: int = 0,
+    odds: Optional[list[Any]] = None,
+) -> ParsedRoster:
+    """Enrich a Team-parsed roster with BoxPlayer fields (pro_opponent, opponent_pos_rank,
+    live game locks/points, and confirmed BYE status) and/or Vegas weekly schedule odds.
+    """
+    box_map: dict[str, RosterPlayer] = {}
+    if matchup_roster and matchup_roster.players:
+        for bp in matchup_roster.players:
+            box_map[bp.name.lower()] = bp
+
+    from src.data.vegas import get_player_game_odds, normalize_team_abbr
+
+    for p in roster.players:
+        bp = box_map.get(p.name.lower())
+        if bp is not None:
+            if bp.pro_opponent and not p.pro_opponent:
+                p.pro_opponent = bp.pro_opponent
+            if bp.opponent_pos_rank is not None and p.opponent_pos_rank is None:
+                p.opponent_pos_rank = bp.opponent_pos_rank
+            if bp.projected_points > 0 and p.projected_points <= 0:
+                p.projected_points = bp.projected_points
+            if bp.has_played and not p.has_played:
+                p.has_played = True
+                p.actual_points = bp.actual_points
+            if bp.is_locked and not p.is_locked:
+                p.is_locked = True
+                slot_upper = (p.slot or "").upper()
+                if slot_upper in ("BENCH", "BE"):
+                    p.lock_status = "LOCKED_ON_BENCH"
+                elif slot_upper == "IR":
+                    p.lock_status = "LOCKED_ON_IR"
+                else:
+                    p.lock_status = "LOCKED_IN_STARTING_LINEUP"
+            if bp.pro_opponent.upper() == "BYE" and current_week > 0:
+                p.bye_week = current_week
+
+        # Cross-reference Vegas schedule if pro_opponent is still empty
+        if not p.pro_opponent and odds:
+            team_clean = (p.team or "").strip().upper()
+            if team_clean not in ("", "UNK", "FA", "FREE AGENT", "NONE"):
+                game = get_player_game_odds(team_clean, odds)
+                if game:
+                    norm_team = normalize_team_abbr(team_clean)
+                    norm_home = normalize_team_abbr(game.home_team)
+                    p.pro_opponent = game.away_team if norm_team == norm_home else game.home_team
+                    if current_week and p.bye_week == current_week:
+                        p.bye_week = 0
+                elif len(odds) >= 10:
+                    p.pro_opponent = "BYE"
+                    if current_week > 0:
+                        p.bye_week = current_week
+
+    return roster

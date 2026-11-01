@@ -28,7 +28,7 @@ from src.data.vegas import fetch_week_odds
 from src.data.weather import build_roster_weather_map
 from src.espn.client import LeagueClient
 from src.espn.matchup import get_current_week, get_weekly_matchup
-from src.espn.roster import parse_roster
+from src.espn.roster import enrich_roster_from_box_matchup, parse_roster
 from src.intelligence.gemini_client import (
     PREFERRED_MODELS,
     GeminiIntelligenceClient,
@@ -87,15 +87,25 @@ def check_gemini_connectivity(force: bool = False) -> dict[str, Any]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run diagnostics and model negotiation on app startup."""
-    active_model, diag = negotiate_active_model(force=True)
+    """Run fast single-probe model negotiation on app startup to minimize Cloud Run cold start."""
+    global _gemini_health_cache
+    active_model, diag = negotiate_active_model(force=True, probe_all=False)
     logger.info(
         "Startup model negotiation: active=%s (target=%s, ready=%s)",
         active_model,
         PREFERRED_MODELS[0],
         diag.get("auto_upgrade_active"),
     )
-    check_gemini_connectivity(force=True)
+    cand_info = diag.get("candidates", {}).get(active_model, {})
+    if cand_info.get("available"):
+        _gemini_health_cache = {
+            "status": "connected",
+            "model": active_model,
+            "last_checked": datetime.now().isoformat(),
+            "error": None,
+        }
+    else:
+        check_gemini_connectivity(force=True)
     yield
 
 
@@ -1999,12 +2009,14 @@ def run_weekly_analysis() -> dict[str, Any]:
 
                 if recap_matchup:
                     try:
+                        # On Tuesday morning post-MNF, the recapped week is always complete (even when ESPN
+                        # has not incremented current_week yet), ensuring FINAL classification & GCS memory persistence.
                         recap = generate_weekly_recap(
                             league=league_config,
                             week=recap_week,
                             matchup=recap_matchup,
                             client=client,
-                            is_past_week=(recap_week < current_week),
+                            is_past_week=True,
                         )
                         league_res[f"{league_config.short_name} Film Room"] = recap.model_dump()
                     except Exception as recap_err:
@@ -2021,27 +2033,42 @@ def run_weekly_analysis() -> dict[str, Any]:
                         recap_week,
                     )
 
-                # 2. Waiver Wire Analysis
-                free_agents = fetch_league_free_agents(espn, week=current_week)
+                # 2. Waiver Wire Analysis — always target the upcoming week when ESPN hasn't rolled current_week yet
+                waiver_week = (
+                    min(recap_week + 1, 18) if recap_week == current_week else current_week
+                )
+                waiver_roster = (
+                    parse_roster(my_team, league_config, week=waiver_week)
+                    if waiver_week != current_week
+                    else parsed_roster
+                )
+                free_agents = fetch_league_free_agents(espn, week=waiver_week)
                 trending = fetch_trending_adds(lookback_hours=24, limit=25)
-                roster_names = [p.name for p in parsed_roster.players]
+                roster_names = [p.name for p in waiver_roster.players]
                 fa_names = [fa["name"] for fa in free_agents]
                 injuries = get_injury_report(roster_names + fa_names)
                 report = evaluate_waivers(
                     league_config,
-                    current_week,
-                    parsed_roster,
+                    waiver_week,
+                    waiver_roster,
                     free_agents,
                     trending_adds=trending,
                     injuries=injuries,
                     client=client,
+                    espn_league=espn,
                 )
                 league_res[league_config.short_name] = report.model_dump()
 
             elif weekday in (3, 4):  # Thursday/Friday: Injury & TNF Check
+                odds = fetch_week_odds()
+                enrich_roster_from_box_matchup(
+                    parsed_roster,
+                    matchup.your_team if matchup else None,
+                    current_week=current_week,
+                    odds=odds,
+                )
                 roster_names = [p.name for p in parsed_roster.players]
                 injuries = get_injury_report(roster_names)
-                odds = fetch_week_odds()
                 weather_map = build_roster_weather_map(parsed_roster.players, odds)
                 lineup = optimize_lineup(
                     league_config,
@@ -2058,8 +2085,20 @@ def run_weekly_analysis() -> dict[str, Any]:
 
             elif weekday == 5:  # Saturday: Full Matchup Preview & Scouting
                 odds = fetch_week_odds()
+                enrich_roster_from_box_matchup(
+                    parsed_roster,
+                    matchup.your_team if matchup else None,
+                    current_week=current_week,
+                    odds=odds,
+                )
+                roster_names = [p.name for p in parsed_roster.players]
+                injuries = get_injury_report(roster_names)
                 weather_map = build_roster_weather_map(parsed_roster.players, odds)
                 if matchup:
+                    if matchup.your_team:
+                        enrich_roster_from_box_matchup(
+                            matchup.your_team, current_week=current_week, odds=odds
+                        )
                     report = generate_matchup_preview(
                         league_config,
                         current_week,
@@ -2067,6 +2106,7 @@ def run_weekly_analysis() -> dict[str, Any]:
                         odds=odds,
                         weather_map=weather_map,
                         client=client,
+                        injuries=injuries,
                     )
                     league_res[league_config.short_name] = report.model_dump()
 
@@ -2146,6 +2186,12 @@ def run_sunday_pregame() -> dict[str, Any]:
 
             parsed_roster = parse_roster(my_team, league_config, week=current_week)
             matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
+            enrich_roster_from_box_matchup(
+                parsed_roster,
+                matchup.your_team if matchup else None,
+                current_week=current_week,
+                odds=odds,
+            )
 
             # Live injury and weather check for roster
             roster_names = [p.name for p in parsed_roster.players]
@@ -2268,9 +2314,15 @@ def query_lineup(league_id: int = Query(..., description="ESPN League ID")):
 
         parsed_roster = parse_roster(my_team, league_config, week=current_week)
         matchup = get_weekly_matchup(espn, league_config.team_id, current_week, league_config)
+        odds = fetch_week_odds()
+        enrich_roster_from_box_matchup(
+            parsed_roster,
+            matchup.your_team if matchup else None,
+            current_week=current_week,
+            odds=odds,
+        )
         roster_names = [p.name for p in parsed_roster.players]
         injuries = get_injury_report(roster_names)
-        odds = fetch_week_odds()
         weather_map = build_roster_weather_map(parsed_roster.players, odds)
 
         client = None
@@ -2357,6 +2409,10 @@ def query_trade(req: TradeRequest):
             logger.warning("load_roster_week(%s) failed in trade evaluation for league %s: %s", current_week, req.league_id, e)
         my_team = next((t for t in espn.teams if t.team_id == league_config.team_id), None)
         parsed_roster = parse_roster(my_team, league_config, week=current_week) if my_team else None
+        if parsed_roster:
+            enrich_roster_from_box_matchup(
+                parsed_roster, current_week=current_week, odds=fetch_week_odds()
+            )
 
         client = None
         try:
@@ -2389,6 +2445,7 @@ def query_propose_trades(league_id: int = Query(..., description="ESPN League ID
     def _compute() -> dict[str, Any]:
         espn = LeagueClient().get_league(league_config)
         current_week = get_current_week(espn)
+        odds = fetch_week_odds()
 
         client = None
         try:
@@ -2401,6 +2458,7 @@ def query_propose_trades(league_id: int = Query(..., description="ESPN League ID
             week=current_week,
             espn_league=espn,
             client=client,
+            odds=odds,
         )
         return report.model_dump()
 
@@ -2427,6 +2485,9 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")):
             )
 
         parsed_roster = parse_roster(my_team, league_config, week=current_week)
+        enrich_roster_from_box_matchup(
+            parsed_roster, current_week=current_week, odds=fetch_week_odds()
+        )
         free_agents = fetch_league_free_agents(espn, week=current_week)
         trending = fetch_trending_adds(lookback_hours=24, limit=25)
         roster_names = [p.name for p in parsed_roster.players]
@@ -2447,6 +2508,7 @@ def query_waivers(league_id: int = Query(..., description="ESPN League ID")):
             trending_adds=trending,
             injuries=injuries,
             client=client,
+            espn_league=espn,
         )
         return report.model_dump()
 
