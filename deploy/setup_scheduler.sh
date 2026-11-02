@@ -96,14 +96,14 @@ upsert_cron_job \
     "/run/weekly" \
     "Thursday 6:50 PM ET official TNF 90-minute inactives and start/sit confirmation"
 
-# 3. Sunday Game Day Kickoff Inactives (11:45 AM ET & 2:45 PM ET)
-# 11:45 AM ET: Captures official inactives and final stadium weather 75 mins before 1:00 PM kickoff
-# 2:45 PM ET: Captures late-afternoon slate inactives for final 4:05/4:25 PM flex swaps
+# 3. Sunday Game Day Kickoff Inactives (11:30 AM ET & 2:30 PM ET)
+# 11:30 AM ET: Captures official inactives and final stadium weather 90 mins before 1:00 PM kickoff
+# 2:30 PM ET: Captures late-afternoon slate inactives for final 4:05/4:25 PM flex swaps
 upsert_cron_job \
     "sunday-gameday-inactives" \
-    "45 11,14 * * 0" \
+    "30 11,14 * * 0" \
     "/run/sunday-pregame" \
-    "Sunday 11:45 AM ET (1:00 PM kickoff) and 2:45 PM ET (late slate) official inactives"
+    "Sunday 11:30 AM ET (1:00 PM kickoff) and 2:30 PM ET (late slate) official inactives"
 
 echo ""
 echo "============================================================"

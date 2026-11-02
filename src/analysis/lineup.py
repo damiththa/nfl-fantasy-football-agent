@@ -5,14 +5,17 @@ cross-referencing injuries, Vegas totals, and weather conditions.
 """
 
 import logging
-import zoneinfo
-from datetime import datetime
 from typing import Any, Optional
 
 from src.analysis.trades import check_trade_deadline
 from src.config import LeagueConfig
 from src.data.injuries import PlayerInjuryInfo, normalize_name
 from src.data.stats import fetch_player_stats, fetch_snap_counts
+from src.data.time_utils import (
+    format_et,
+    get_imminent_slate_info,
+    now_et,
+)
 from src.data.vegas import GameOdds, get_player_game_odds, normalize_team_abbr
 from src.data.weather import GameWeather
 from src.espn.matchup import MatchupData
@@ -127,17 +130,8 @@ def get_player_matchup_info(
             prefix = "vs." if is_home else "@"
             matchup_display = f"{prefix} {opponent}"
 
-            # Format game_time in Eastern Time
-            eastern = zoneinfo.ZoneInfo("America/New_York")
-            if game.game_time.tzinfo is None:
-                game_time_dt = game.game_time.replace(tzinfo=eastern)
-            else:
-                game_time_dt = game.game_time.astimezone(eastern)
-
-            time_str = game_time_dt.strftime("%I:%M %p").lstrip("0")
-            day_str = game_time_dt.strftime("%a")
-            game_time_display = f"{day_str} {time_str} ET"
-
+            # Format game_time dynamically in Eastern Time
+            game_time_display = format_et(game.game_time, "%a %-I:%M %p ET")
             return opponent, home_away, matchup_display, game_time_display
 
         # If odds list has full week schedule (>= 10 games) and team is not in it, it's on Bye
@@ -593,6 +587,12 @@ def enrich_lineup_recommendation_with_espn_status(
             )
     rec.suboptimal_starters = suboptimal
 
+    # Kickoff slate categorization and metadata
+    if odds:
+        slate_info = get_imminent_slate_info(odds)
+        rec.slate_label = slate_info.get("slate_label")
+        rec.imminent_slate = slate_info
+
     # Generate explicit actionable swap instructions (filter out players whose games are locked)
     locked_starter_names = {
         p.name.lower()
@@ -1003,8 +1003,7 @@ def enrich_lineup_recommendation_with_espn_status(
             )
             rec.opponent_matchup_breakdown = f"Scouting Report vs {opp_name}: {edge_desc}"
 
-    eastern = zoneinfo.ZoneInfo("America/New_York")
-    rec.generated_at = datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
+    rec.generated_at = format_et(now_et(), "%A, %B %-d, %Y at %-I:%M %p %Z")
 
     return rec
 

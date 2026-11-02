@@ -18,6 +18,19 @@ from src.data.stats import (
     fetch_snap_counts,
     get_player_trends,
 )
+from src.data.time_utils import (
+    EASTERN_TZ,
+    UTC_TZ,
+    format_et,
+    format_iso,
+    get_imminent_slate_info,
+    is_kickoff_passed,
+    minutes_until,
+    now_et,
+    now_utc,
+    to_et,
+    to_utc,
+)
 from src.data.trending import (
     TrendingPlayer,
     fetch_trending_adds,
@@ -63,5 +76,17 @@ __all__ = [
     "classify_conditions",
     "fetch_game_weather",
     "load_stadiums",
+    # Time & Timezone Services
+    "EASTERN_TZ",
+    "UTC_TZ",
+    "format_et",
+    "format_iso",
+    "get_imminent_slate_info",
+    "is_kickoff_passed",
+    "minutes_until",
+    "now_et",
+    "now_utc",
+    "to_et",
+    "to_utc",
 ]
 

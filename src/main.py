@@ -23,6 +23,13 @@ from src.analysis.trades import evaluate_trade
 from src.analysis.waivers import evaluate_waivers
 from src.config import ALL_LEAGUES, get_current_season, get_gemini_model
 from src.data.injuries import get_injury_report
+from src.data.time_utils import (
+    EASTERN_TZ,
+    format_et,
+    format_iso,
+    get_imminent_slate_info,
+    now_et,
+)
 from src.data.trending import fetch_trending_adds
 from src.data.vegas import fetch_week_odds
 from src.data.weather import build_roster_weather_map
@@ -58,7 +65,7 @@ def check_gemini_connectivity(force: bool = False) -> dict[str, Any]:
             _gemini_health_cache = {
                 "status": "connected",
                 "model": client.model,
-                "last_checked": datetime.now().isoformat(),
+                "last_checked": format_iso(now_et()),
                 "error": None,
             }
             logger.info("Gemini connectivity verified: %s reachable", client.model)
@@ -66,7 +73,7 @@ def check_gemini_connectivity(force: bool = False) -> dict[str, Any]:
             _gemini_health_cache = {
                 "status": "unreachable",
                 "model": client.model,
-                "last_checked": datetime.now().isoformat(),
+                "last_checked": format_iso(now_et()),
                 "error": "Model validation returned False",
             }
             logger.warning(
@@ -77,7 +84,7 @@ def check_gemini_connectivity(force: bool = False) -> dict[str, Any]:
         _gemini_health_cache = {
             "status": "unreachable",
             "model": get_gemini_model(),
-            "last_checked": datetime.now().isoformat(),
+            "last_checked": format_iso(now_et()),
             "error": str(e),
         }
         logger.warning("Gemini connectivity check error: %s. Fallback active.", e)
@@ -101,7 +108,7 @@ async def lifespan(app: FastAPI):
         _gemini_health_cache = {
             "status": "connected",
             "model": active_model,
-            "last_checked": datetime.now().isoformat(),
+            "last_checked": format_iso(now_et()),
             "error": None,
         }
     else:
@@ -1908,7 +1915,7 @@ def health_models(force: bool = False) -> dict[str, Any]:
         "auto_upgrade_enabled": True,
         "auto_upgrade_active": diag.get("auto_upgrade_active", False),
         "candidates": diag.get("candidates", {}),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": format_iso(now_et()),
     }
 
 
@@ -1934,7 +1941,7 @@ def health_check(check_gemini: bool = False) -> dict[str, Any]:
             }
             for cfg in ALL_LEAGUES.values()
         ],
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": format_iso(now_et()),
     }
 
 
@@ -1945,11 +1952,8 @@ def run_weekly_analysis() -> dict[str, Any]:
     Routes internally based on current weekday (America/New_York).
     Processes leagues concurrently to stay well below execution deadlines.
     """
-    import zoneinfo
-
-    eastern = zoneinfo.ZoneInfo("America/New_York")
-    now_et = datetime.now(eastern)
-    weekday = now_et.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+    current_dt = datetime.now(EASTERN_TZ)
+    weekday = current_dt.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
     day_name = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][
         weekday
     ]
@@ -2144,8 +2148,8 @@ def run_weekly_analysis() -> dict[str, Any]:
             "job": "weekly_analysis",
             "day": day_name,
             "results": results,
-            "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
-            "timestamp": datetime.now().isoformat(),
+            "generated_at": format_et(current_dt, "%A, %B %-d, %Y at %-I:%M %p %Z"),
+            "timestamp": format_iso(current_dt),
         }
     except Exception as fatal_err:
         logger.error("Fatal error in weekly_analysis: %s", fatal_err, exc_info=True)
@@ -2159,9 +2163,6 @@ def run_sunday_pregame() -> dict[str, Any]:
     """Sunday 90-minute pregame alert: checks active/inactive statuses, weather, and finalizes starters.
     Processes leagues concurrently to stay well below execution deadlines.
     """
-    import zoneinfo
-
-    eastern = zoneinfo.ZoneInfo("America/New_York")
     logger.info("Running Sunday pregame inactive & final lineup optimization...")
 
     results: dict[str, Any] = {}
@@ -2174,6 +2175,7 @@ def run_sunday_pregame() -> dict[str, Any]:
         )
 
     odds = fetch_week_odds()
+    slate_info = get_imminent_slate_info(odds)
 
     def _process_single_sunday_league(league_config: Any) -> dict[str, Any]:
         league_res: dict[str, Any] = {}
@@ -2240,8 +2242,17 @@ def run_sunday_pregame() -> dict[str, Any]:
         return {
             "job": "sunday_pregame",
             "results": results,
-            "generated_at": datetime.now(eastern).strftime("%A, %B %-d, %Y at %-I:%M %p %Z"),
-            "timestamp": datetime.now().isoformat(),
+            "slate_info": {
+                "slate_label": slate_info["slate_label"],
+                "slate_title": slate_info["slate_title"],
+                "minutes_to_next_kickoff": slate_info["minutes_to_next_kickoff"],
+                "next_kickoff": format_iso(slate_info["next_kickoff_dt"]) if slate_info["next_kickoff_dt"] else None,
+                "has_imminent_slate": slate_info["has_imminent_slate"],
+                "locked_teams": sorted(list(slate_info["locked_teams"])),
+                "imminent_teams": sorted(list(slate_info["imminent_teams"])),
+            },
+            "generated_at": format_et(now_et(), "%A, %B %-d, %Y at %-I:%M %p %Z"),
+            "timestamp": format_iso(now_et()),
         }
     except Exception as fatal_err:
         logger.error("Fatal error in sunday_pregame: %s", fatal_err, exc_info=True)

@@ -6,13 +6,15 @@ FROM python:3.12-slim
 # Prevent Python from writing .pyc files and enable unbuffered logging
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV TZ="America/New_York"
 ENV PORT=8080
 
 WORKDIR /app
 
-# Install system dependencies if any
+# Install system dependencies including tzdata for timezone awareness
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install python dependencies

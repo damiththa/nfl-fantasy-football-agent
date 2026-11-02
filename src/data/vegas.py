@@ -5,6 +5,8 @@ from typing import Optional
 
 import httpx
 
+from src.data.time_utils import now_utc, to_utc
+
 logger = logging.getLogger(__name__)
 
 # ESPN sometimes uses different abbreviations than espn-api or sleeper.
@@ -82,13 +84,9 @@ def fetch_week_odds() -> list[GameOdds]:
                     status_detail = event.get("status", {}).get("type", {})
                     state = status_detail.get("state", "pre")
 
-                    # Parse game time
+                    # Parse game time (guaranteed timezone-aware UTC)
                     date_str = event.get("date")
-                    game_time = (
-                        datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                        if date_str
-                        else datetime.now()
-                    )
+                    game_time = to_utc(date_str) or now_utc()
 
                     # Parse teams
                     competitions = event.get("competitions", [])

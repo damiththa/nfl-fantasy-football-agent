@@ -6,13 +6,14 @@ Uses Open-Meteo API to fetch game day weather conditions based on stadium coordi
 
 import json
 import logging
-import zoneinfo
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
+
+from src.data.time_utils import now_et, to_et
 
 logger = logging.getLogger(__name__)
 
@@ -146,13 +147,8 @@ def fetch_game_weather(team_abbr: str, game_datetime: datetime) -> GameWeather:
         times = hourly.get("time", [])
 
         # Open-Meteo returns hourly timestamps in America/New_York local time.
-        # Convert timezone-aware datetimes (e.g. UTC from ESPN scoreboard) to America/New_York first.
-        eastern = zoneinfo.ZoneInfo("America/New_York")
-        local_game_dt = (
-            game_datetime.astimezone(eastern)
-            if game_datetime.tzinfo is not None
-            else game_datetime
-        )
+        # Safely convert input game datetime to America/New_York (supporting both aware and naive UTC).
+        local_game_dt = to_et(game_datetime) or now_et()
 
         # Match local_game_dt to closest forecast hour
         target_idx = 0
@@ -241,7 +237,7 @@ def build_roster_weather_map(
             if clean_team and clean_team not in ("FA", "BYE", "FREE AGENT", "NONE", ""):
                 teams.add(clean_team)
 
-    fallback_dt = target_dt or datetime.now()
+    fallback_dt = to_et(target_dt) or now_et()
     weather_map: dict[str, GameWeather] = {}
     stadium_cache: dict[tuple[str, str], GameWeather] = {}
 
@@ -255,12 +251,11 @@ def build_roster_weather_map(
                 if game and getattr(game, "home_team", None):
                     host_team = game.home_team
                     if getattr(game, "game_time", None):
-                        game_dt = game.game_time
+                        game_dt = to_et(game.game_time) or fallback_dt
             except Exception as e:
                 logger.debug("Failed resolving host team odds for %s: %s", team, e)
 
-        eastern = zoneinfo.ZoneInfo("America/New_York")
-        cache_dt = game_dt.astimezone(eastern) if game_dt.tzinfo is not None else game_dt
+        cache_dt = to_et(game_dt) or fallback_dt
         cache_key = (host_team, cache_dt.strftime("%Y-%m-%d-%H"))
         if cache_key in stadium_cache:
             weather_map[team] = stadium_cache[cache_key]

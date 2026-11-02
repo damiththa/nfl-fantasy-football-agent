@@ -5,10 +5,10 @@ Models and functions for parsing ESPN roster data.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, List, Optional
 
 from src.config import SLOT_DISPLAY_NAMES, LeagueConfig
+from src.data.time_utils import is_kickoff_passed
 
 
 @dataclass
@@ -283,17 +283,10 @@ def parse_roster(team: Any, league_config: LeagueConfig, week: int | None = None
         else:
             proj_pts = 0.0
 
-        # Check kickoff timestamp (BoxPlayer.game_date) to lock players whose game is already underway
-        kickoff_passed = False
+        # Check kickoff timestamp (BoxPlayer.game_date) to lock players whose game is already underway.
+        # Uses timezone-aware UTC comparison to ensure daylight saving time transitions never cause locks to fail.
         game_date_attr = getattr(player, "game_date", None)
-        if isinstance(game_date_attr, datetime):
-            now_cmp = (
-                datetime.now(game_date_attr.tzinfo)
-                if game_date_attr.tzinfo is not None
-                else datetime.now()
-            )
-            if now_cmp >= game_date_attr:
-                kickoff_passed = True
+        kickoff_passed = is_kickoff_passed(game_date_attr)
 
         espn_locked = any(
             getattr(player, attr, None) is True
@@ -480,18 +473,29 @@ def enrich_roster_from_box_matchup(
             if bp.pro_opponent.upper() == "BYE" and current_week > 0:
                 p.bye_week = current_week
 
-        # Cross-reference Vegas schedule if pro_opponent is still empty
-        if not p.pro_opponent and odds:
+        # Cross-reference Vegas schedule if pro_opponent is still empty or to verify official kickoff lock
+        if odds:
             team_clean = (p.team or "").strip().upper()
             if team_clean not in ("", "UNK", "FA", "FREE AGENT", "NONE"):
                 game = get_player_game_odds(team_clean, odds)
                 if game:
                     norm_team = normalize_team_abbr(team_clean)
                     norm_home = normalize_team_abbr(game.home_team)
-                    p.pro_opponent = game.away_team if norm_team == norm_home else game.home_team
-                    if current_week and p.bye_week == current_week:
-                        p.bye_week = 0
-                elif len(odds) >= 10:
+                    if not p.pro_opponent:
+                        p.pro_opponent = game.away_team if norm_team == norm_home else game.home_team
+                        if current_week and p.bye_week == current_week:
+                            p.bye_week = 0
+                    # Lock player if game has kicked off based on official ESPN Scoreboard UTC game_time
+                    if not p.is_locked and is_kickoff_passed(game.game_time):
+                        p.is_locked = True
+                        slot_upper = (p.slot or "").upper()
+                        if slot_upper in ("BENCH", "BE"):
+                            p.lock_status = "LOCKED_ON_BENCH"
+                        elif slot_upper == "IR":
+                            p.lock_status = "LOCKED_ON_IR"
+                        else:
+                            p.lock_status = "LOCKED_IN_STARTING_LINEUP"
+                elif len(odds) >= 10 and not p.pro_opponent:
                     p.pro_opponent = "BYE"
                     if current_week > 0:
                         p.bye_week = current_week

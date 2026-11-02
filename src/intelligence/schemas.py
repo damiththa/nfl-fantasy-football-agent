@@ -3,7 +3,7 @@ Pydantic schemas for Gemini structured outputs in the NFL Fantasy Football Agent
 These schemas guarantee type-safe, machine-parseable analysis from the LLM.
 """
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -182,6 +182,14 @@ class LineupRecommendation(BaseModel):
     actionable_swaps: list[str] = Field(
         default_factory=list,
         description="Explicit player swap instructions to make in ESPN app",
+    )
+    slate_label: Optional[str] = Field(
+        default=None,
+        description="Active kickoff slate description and countdown (e.g. '1:00 PM EST Early Slate (in 75m)')",
+    )
+    imminent_slate: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Kickoff-aware slate breakdown, including countdown minutes, locked teams, and imminent games",
     )
     generated_at: str = Field(
         default="",

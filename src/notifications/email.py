@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import logging
 import os
-import zoneinfo
 from datetime import datetime
 from typing import Any
 
 import httpx
+
+from src.data.time_utils import format_et, now_et
 
 logger = logging.getLogger("fantasy_agent.email")
 
@@ -32,7 +33,7 @@ SENDER_NAME = "Fantasy Football Agent 🏈"
 
 def _now_et() -> datetime:
     """Return current timezone-aware datetime in America/New_York."""
-    return datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+    return now_et()
 
 
 def _get_sendgrid_key() -> str | None:
@@ -74,6 +75,20 @@ def _build_email_html(
     <div style="background: rgba(245, 158, 11, 0.15); border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 13px; color: #fbbf24; line-height: 1.4;">
       ⚠️ <strong>AI Fallback Alert:</strong> Live Gemini reasoning was temporarily unavailable ({reasons_summary}). Results were safely computed via the deterministic rules engine.
     </div>"""
+
+    # Check for imminent kickoff slate countdown
+    slate_banner = ""
+    for _lg, ldata in results.items():
+        if isinstance(ldata, dict):
+            slate_info = ldata.get("imminent_slate") or {}
+            slate_label = ldata.get("slate_label") or slate_info.get("slate_label")
+            if slate_label and slate_label != "No games kicking off within 2 hours":
+                slate_banner = f"""
+    <!-- Imminent Slate Alert Banner -->
+    <div style="background: rgba(14, 165, 233, 0.15); border-left: 4px solid #0ea5e9; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 13px; color: #38bdf8; line-height: 1.4;">
+      ⏳ <strong>IMMINENT SLATE COUNTDOWN:</strong> {slate_label}
+    </div>"""
+                break
 
     # Build league result sections
     league_sections = ""
@@ -124,6 +139,7 @@ def _build_email_html(
       <p style="color: #e2e8f0; font-size: 15px; margin: 0; font-style: italic;">{tagline}</p>
     </div>
 
+    {slate_banner}
     {fallback_banner}
 
     <!-- League Results -->
@@ -749,8 +765,24 @@ def _render_league_section(league_name: str, data: dict[str, Any], job_type: str
     </div>"""
 
 
-def _subject_for_job(job_type: str, day: str | None = None) -> str:
+def _subject_for_job(
+    job_type: str,
+    day: str | None = None,
+    results: dict[str, Any] | None = None,
+) -> str:
     """Generate a witty email subject line."""
+    if job_type == "sunday_pregame" and results:
+        for ldata in results.values():
+            if isinstance(ldata, dict):
+                slate_info = ldata.get("imminent_slate") or {}
+                slate_title = slate_info.get("slate_title")
+                mins = slate_info.get("minutes_to_next_kickoff")
+                if slate_title and mins is not None:
+                    return f"🚨 GAME DAY ALERT — {slate_title} Inactive Check ({mins}m to kickoff)"
+                slate_label = ldata.get("slate_label") or slate_info.get("slate_label")
+                if slate_label and slate_label != "No games kicking off within 2 hours":
+                    return f"🚨 GAME DAY ALERT — {slate_label}"
+
     subjects = {
         "weekly_analysis": {
             "Tuesday": "🎬 Film Room Recap & Waiver Wire Intel — Tuesday Digest",
@@ -790,8 +822,8 @@ def send_digest_email(
     if not api_key:
         return False
 
-    subject = _subject_for_job(job_type, day)
-    timestamp = _now_et().strftime("%B %d, %Y at %I:%M %p %Z")
+    subject = _subject_for_job(job_type, day, results=results)
+    timestamp = format_et(now_et(), "%B %-d, %Y at %-I:%M %p %Z")
 
     html_body = _build_email_html(
         subject=subject,
@@ -845,7 +877,7 @@ def send_error_alert_email(job_type: str, error_detail: str) -> bool:
         return False
 
     subject = f"🚨 Fantasy Agent Alert — Failure in {job_type}"
-    timestamp = _now_et().strftime("%B %d, %Y at %I:%M %p %Z")
+    timestamp = format_et(now_et(), "%B %-d, %Y at %-I:%M %p %Z")
     html_body = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
