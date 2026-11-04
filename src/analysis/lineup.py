@@ -13,6 +13,7 @@ from src.data.injuries import PlayerInjuryInfo, normalize_name
 from src.data.stats import fetch_player_stats, fetch_snap_counts
 from src.data.time_utils import (
     format_et,
+    format_iso,
     get_imminent_slate_info,
     now_et,
 )
@@ -587,11 +588,25 @@ def enrich_lineup_recommendation_with_espn_status(
             )
     rec.suboptimal_starters = suboptimal
 
-    # Kickoff slate categorization and metadata
+    # Kickoff slate categorization and metadata (strictly JSON-serializable primitives)
     if odds:
         slate_info = get_imminent_slate_info(odds)
         rec.slate_label = slate_info.get("slate_label")
-        rec.imminent_slate = slate_info
+        rec.imminent_slate = {
+            "slate_label": slate_info.get("slate_label"),
+            "slate_title": slate_info.get("slate_title"),
+            "minutes_to_next_kickoff": slate_info.get("minutes_to_next_kickoff"),
+            "next_kickoff": (
+                format_iso(slate_info["next_kickoff_dt"])
+                if slate_info.get("next_kickoff_dt")
+                else None
+            ),
+            "has_imminent_slate": slate_info.get("has_imminent_slate", False),
+            "locked_teams": sorted(list(slate_info.get("locked_teams", set()))),
+            "imminent_teams": sorted(list(slate_info.get("imminent_teams", set()))),
+            "imminent_game_count": len(slate_info.get("imminent_games", [])),
+            "locked_game_count": len(slate_info.get("locked_games", [])),
+        }
 
     # Generate explicit actionable swap instructions (filter out players whose games are locked)
     locked_starter_names = {

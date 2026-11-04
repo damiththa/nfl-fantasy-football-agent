@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -558,6 +559,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <option value="6">Week 6 Film Room</option>
             <option value="7">Week 7 Film Room</option>
             <option value="8">Week 8 Film Room</option>
+            <option value="9">Week 9 Film Room</option>
+            <option value="10">Week 10 Film Room</option>
+            <option value="11">Week 11 Film Room</option>
+            <option value="12">Week 12 Film Room</option>
+            <option value="13">Week 13 Film Room</option>
+            <option value="14">Week 14 Film Room</option>
+            <option value="15">Week 15 Film Room</option>
+            <option value="16">Week 16 Film Room</option>
+            <option value="17">Week 17 Film Room</option>
+            <option value="18">Week 18 Film Room</option>
           </select>
           <button class="btn btn-secondary" style="flex: 0 0 110px; min-height: 44px; font-size: 13px; margin: 0; padding: 6px 10px;" onclick="loadPastRecap(991059191, 'PNA 2026')">
             🎬 Film Room
@@ -594,6 +605,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <option value="6">Week 6 Film Room</option>
             <option value="7">Week 7 Film Room</option>
             <option value="8">Week 8 Film Room</option>
+            <option value="9">Week 9 Film Room</option>
+            <option value="10">Week 10 Film Room</option>
+            <option value="11">Week 11 Film Room</option>
+            <option value="12">Week 12 Film Room</option>
+            <option value="13">Week 13 Film Room</option>
+            <option value="14">Week 14 Film Room</option>
+            <option value="15">Week 15 Film Room</option>
+            <option value="16">Week 16 Film Room</option>
+            <option value="17">Week 17 Film Room</option>
+            <option value="18">Week 18 Film Room</option>
           </select>
           <button class="btn btn-secondary" style="flex: 0 0 110px; min-height: 44px; font-size: 13px; margin: 0; padding: 6px 10px;" onclick="loadPastRecap(735288, 'Chips Ahoy')">
             🎬 Film Room
@@ -1894,6 +1915,8 @@ def serve_dashboard() -> str:
 
 
 @app.get("/favicon.ico", include_in_schema=False)
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
 def favicon() -> Response:
     """Serve SVG football favicon for browser tab icon and bookmark requests."""
     svg_content = (
@@ -2290,14 +2313,12 @@ async def stream_with_heartbeat(
         result = await future
         if isinstance(result, str):
             yield result.encode("utf-8")
-        elif isinstance(result, (dict, list)):
-            yield json.dumps(result).encode("utf-8")
         elif hasattr(result, "model_dump_json"):
             yield result.model_dump_json().encode("utf-8")
         elif hasattr(result, "model_dump"):
-            yield json.dumps(result.model_dump()).encode("utf-8")
+            yield json.dumps(jsonable_encoder(result.model_dump(mode="json")), default=str).encode("utf-8")
         else:
-            yield json.dumps(result).encode("utf-8")
+            yield json.dumps(jsonable_encoder(result), default=str).encode("utf-8")
     except Exception as exc:
         logger.error("Error during streaming compute: %s", exc, exc_info=True)
         err_payload = {"error": str(exc), "detail": str(exc)}
@@ -2569,6 +2590,7 @@ def query_weekly_recap(
 
 
 @app.get("/query/lessons-summary")
+@app.post("/query/lessons-summary")
 def query_lessons_summary(
     league_id: int = Query(991059191, description="ESPN League ID"),
     season: Optional[int] = Query(None, description="NFL Season year (defaults to current)"),
@@ -2589,6 +2611,7 @@ def query_lessons_summary(
 
 
 @app.get("/query/lessons")
+@app.post("/query/lessons")
 def query_lessons_history(
     league_id: int = Query(991059191, description="ESPN League ID"),
     season: Optional[int] = Query(None, description="NFL Season year (defaults to current)"),

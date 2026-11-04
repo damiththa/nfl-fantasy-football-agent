@@ -423,4 +423,40 @@ def test_dashboard_contains_refresh_roster_and_ticker(client):
     assert "loadTradeRoster(true)" in response.text
 
 
+@pytest.mark.anyio
+async def test_stream_with_heartbeat_serializes_sets_and_datetimes():
+    import json
+    from datetime import datetime, timezone
+
+    from src.main import stream_with_heartbeat
+
+    def mock_calc_with_set():
+        return {
+            "status": "ok",
+            "locked_teams": {"KC", "BUF"},
+            "kickoff": datetime(2026, 11, 8, 18, 0, tzinfo=timezone.utc),
+        }
+
+    chunks = []
+    async for chunk in stream_with_heartbeat(mock_calc_with_set, heartbeat_interval=0.05):
+        chunks.append(chunk)
+
+    full_body = b"".join(chunks).decode("utf-8")
+    data = json.loads(full_body)
+    assert data["status"] == "ok"
+    assert set(data["locked_teams"]) == {"KC", "BUF"}
+    assert "error" not in data
+
+
+def test_post_lessons_summary_and_apple_touch_icon(client):
+    resp_post = client.post("/query/lessons-summary?league_id=991059191")
+    assert resp_post.status_code == 200
+    assert resp_post.json()["league_id"] == 991059191
+
+    resp_icon = client.get("/apple-touch-icon.png")
+    assert resp_icon.status_code == 200
+    assert "image/svg+xml" in resp_icon.headers["content-type"]
+
+
+
 

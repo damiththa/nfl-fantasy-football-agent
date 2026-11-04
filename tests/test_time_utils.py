@@ -191,3 +191,64 @@ class TestDynamicAlertNotifications:
         )
         assert "IMMINENT SLATE COUNTDOWN:" in html
         assert "1:00 PM EST Kickoff (in 75 mins — 8 games)" in html
+
+    def test_enriched_lineup_imminent_slate_is_json_serializable(self):
+        import json
+
+        from src.analysis.lineup import enrich_lineup_recommendation_with_espn_status
+        from src.config import PNA_2026
+        from src.data.vegas import GameOdds
+        from src.espn.roster import ParsedRoster, RosterPlayer
+        from src.intelligence.schemas import LineupRecommendation, StartSitDecision
+
+        odds = [
+            GameOdds(
+                game_id="g1",
+                home_team="KC",
+                away_team="BUF",
+                spread=-2.5,
+                over_under=49.5,
+                home_implied_total=26.0,
+                away_implied_total=23.5,
+                game_time=datetime(2026, 11, 8, 18, 0, tzinfo=timezone.utc),
+                status="pre",
+            )
+        ]
+        roster = ParsedRoster(
+            team_name="Mad Dawg",
+            players=[
+                RosterPlayer("Patrick Mahomes", "QB", "KC", "QB", 22.0, 0.0, "ACTIVE", 10, 99.0)
+            ],
+        )
+        rec = LineupRecommendation(
+            league_id=PNA_2026.league_id,
+            week=10,
+            game_theory_strategy="BALANCED",
+            strategy_reasoning="Test",
+            recommended_starters=[
+                StartSitDecision(
+                    player_name="Patrick Mahomes",
+                    position="QB",
+                    team="KC",
+                    action="START",
+                    confidence=0.95,
+                    floor=18.0,
+                    ceiling=30.0,
+                    projected_points=22.0,
+                    reasoning="Elite QB1",
+                )
+            ],
+            bench_players=[],
+            key_flex_decisions=[],
+        )
+
+        enriched = enrich_lineup_recommendation_with_espn_status(
+            rec, roster, PNA_2026, odds=odds, current_week=10
+        )
+        dumped = enriched.model_dump()
+        serialized = json.dumps(dumped)
+        parsed = json.loads(serialized)
+        assert isinstance(parsed["imminent_slate"]["locked_teams"], list)
+        assert isinstance(parsed["imminent_slate"]["imminent_teams"], list)
+        assert "error" not in parsed
+
