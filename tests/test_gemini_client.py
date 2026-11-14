@@ -147,27 +147,43 @@ def test_negotiate_active_model_upgrades_when_target_available():
     assert selected == "gemini-4-argon"
     assert diag["auto_upgrade_active"] is True
     assert diag["candidates"]["gemini-4-argon"]["available"] is True
-    assert diag["candidates"]["gemini-3.1-pro"]["available"] is True
+    assert diag["candidates"]["gemini-4-hydrogen"]["available"] is True
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
+    assert diag["candidates"]["gemini-3.8-flash"]["available"] is True
     assert diag["candidates"]["gemini-2.5-pro"]["available"] is True
 
 
-def test_negotiate_active_model_selects_preview_when_ga_is_404():
-    """Verify that if gemini-4-argon and GA gemini-3.1-pro return 404, the system selects gemini-3.1-pro-preview."""
-    class PreviewOnlyModels:
+def test_negotiate_active_model_selects_hydrogen_then_preview_when_argon_is_404():
+    """Verify fallback priority: gemini-4-argon -> gemini-4-hydrogen -> gemini-3.1-pro-preview."""
+    class HydrogenFallbackModels:
         def generate_content(self, model, contents, config=None):
-            if model in ("gemini-4-argon", "gemini-3.1-pro"):
+            if model == "gemini-4-argon":
                 raise ConnectionError("404 Publisher model not found")
             return MockModelResponse("ok")
 
-    class PreviewOnlyClient:
-        models = PreviewOnlyModels()
+    class HydrogenFallbackClient:
+        models = HydrogenFallbackModels()
 
-    selected, diag = negotiate_active_model(force=True, mock_client=PreviewOnlyClient())
+    selected, diag = negotiate_active_model(force=True, mock_client=HydrogenFallbackClient())
+    assert selected == "gemini-4-hydrogen"
+    assert diag["auto_upgrade_active"] is True
+    assert diag["candidates"]["gemini-4-argon"]["available"] is False
+    assert diag["candidates"]["gemini-4-hydrogen"]["available"] is True
+
+    class PreviewFallbackModels:
+        def generate_content(self, model, contents, config=None):
+            if model in ("gemini-4-argon", "gemini-4-hydrogen"):
+                raise ConnectionError("404 Publisher model not found")
+            return MockModelResponse("ok")
+
+    class PreviewFallbackClient:
+        models = PreviewFallbackModels()
+
+    selected, diag = negotiate_active_model(force=True, mock_client=PreviewFallbackClient())
     assert selected == "gemini-3.1-pro-preview"
     assert diag["auto_upgrade_active"] is True
     assert diag["candidates"]["gemini-4-argon"]["available"] is False
-    assert diag["candidates"]["gemini-3.1-pro"]["available"] is False
+    assert diag["candidates"]["gemini-4-hydrogen"]["available"] is False
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
 
 
@@ -319,4 +335,28 @@ def test_resolve_thinking_config_env_override(monkeypatch):
     assert cfg is not None
     assert cfg.thinking_budget == 4096
     assert resolve_thinking_config("gemini-4-argon") is None
+    assert resolve_thinking_config("gemini-4-hydrogen") is None
+
+
+def test_in_flight_failover_argon_to_hydrogen():
+    """Verify in-flight failover from gemini-4-argon routes to gemini-4-hydrogen first."""
+    calls = []
+
+    class ArgonFailoverModels:
+        def generate_content(self, model, contents, config=None):
+            calls.append(model)
+            if model == "gemini-4-argon":
+                raise RuntimeError("503 Service Unavailable")
+            return MockModelResponse('{"verdict": "HYDROGEN_OK", "score": 91.5}')
+
+    class ArgonFailoverClient:
+        models = ArgonFailoverModels()
+
+    client = GeminiIntelligenceClient(model="gemini-4-argon", mock_client=ArgonFailoverClient())
+    res = client.generate_structured("test prompt", DummySchema)
+    assert res.verdict == "HYDROGEN_OK"
+    assert res.score == 91.5
+    assert calls == ["gemini-4-argon", "gemini-4-hydrogen"]
+    assert client.model == "gemini-4-hydrogen"
+
 
