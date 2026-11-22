@@ -28,7 +28,7 @@
         "id": "ai-resilience",
         "label": "Model Ladder & Failover",
         "focus": ["fastapi", "engines", "gemini"],
-        "note": "Dynamic model negotiation: gemini-4-neon primary, failing over to gemini-4-argon, gemini-4-hydrogen, gemini-3.1-pro-preview, gemini-3.8-flash and gemini-2.5-pro."
+        "note": "Dynamic model negotiation: gemini-4-argon primary, failing over to gemini-4-hydrogen, gemini-4-neon, gemini-3.1-pro-preview, gemini-3.8-flash and gemini-2.5-pro."
       }
     ]
   },
@@ -41,7 +41,7 @@
     { "id": "fastapi", "type": "backend", "label": "FastAPI Engine", "sublabel": "Streaming • Keep-Alive", "pos": [260, 200], "size": [160, 60] },
     { "id": "secrets", "type": "security", "label": "Secret Manager", "sublabel": "ESPN S2/SWID & Keys", "pos": [260, 420], "size": [160, 60], "tag": "IAM Protected" },
 
-    { "id": "gemini", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "4-neon ➔ 4-argon ➔ 2.5-pro", "pos": [490, 90], "size": [170, 60], "tag": "Native Thinking" },
+    { "id": "gemini", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "4-argon ➔ 4-hydrogen ➔ 2.5-pro", "pos": [490, 90], "size": [170, 60], "tag": "Native Thinking" },
     { "id": "engines", "type": "backend", "label": "Decision & Trade Engines", "sublabel": "Lineup • Trade • Waivers", "pos": [490, 200], "size": [170, 60], "tag": "ROS & Bye-Week Guard" },
     { "id": "espn_adapter", "type": "backend", "label": "ESPN Ingestion Layer", "sublabel": "Roster & Matchup Parser", "pos": [490, 310], "size": [170, 60] },
 
@@ -86,7 +86,7 @@
       "items": [
         "Ingests My Team Roster, Opponent Lineups, and Free Agent Wire via private ESPN API",
         "Rest-of-Season (ROS) baseline & bye-week asset protection locks star players from drop or trade undervaluation",
-        "Dynamic model ladder: gemini-4-neon primary with gemini-4-argon, gemini-4-hydrogen, gemini-3.1-pro-preview, gemini-3.8-flash and gemini-2.5-pro failover",
+        "Dynamic model ladder: gemini-4-argon primary with gemini-4-hydrogen, gemini-4-neon, gemini-3.1-pro-preview, gemini-3.8-flash and gemini-2.5-pro failover",
         "Injury guardrails & DTD risk discount haircut with 429 exponential backoff retry loop"
       ]
     },

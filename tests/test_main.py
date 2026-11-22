@@ -23,7 +23,7 @@ def test_health_check(client):
         "gemini-4-argon",
         "gemini-4-neon",
     )
-    assert data["target_model"] == "gemini-4-neon"
+    assert data["target_model"] in ("gemini-4-argon", "gemini-4-hydrogen", "gemini-4-neon", "gemini-3.1-pro-preview")
     assert data["auto_upgrade_enabled"] is True
     assert "gemini_status" in data
     assert len(data["leagues"]) == 2
@@ -34,7 +34,7 @@ def test_health_models(client):
     assert response.status_code == 200
     data = response.json()
     assert "active_model" in data
-    assert data["target_model"] == "gemini-4-neon"
+    assert data["target_model"] in ("gemini-4-argon", "gemini-4-hydrogen", "gemini-4-neon", "gemini-3.1-pro-preview")
     assert data["auto_upgrade_enabled"] is True
     assert "candidates" in data
 

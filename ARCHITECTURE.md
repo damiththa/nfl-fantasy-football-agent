@@ -88,9 +88,9 @@ flowchart TB
     end
 
     subgraph External_Services ["🌐 External APIs & Upstream Providers"]
-        Gemini_4_Neon["gemini-4-neon<br/>(Vertex Global — Primary Active)"]
-        Gemini_4_Argon["gemini-4-argon<br/>(Vertex Global — 1st Fallback)"]
+        Gemini_4_Argon["gemini-4-argon<br/>(Vertex Global — Primary Active)"]
         Gemini_4_Hydrogen["gemini-4-hydrogen<br/>(Vertex Global — High-Speed Fallback)"]
+        Gemini_4_Neon["gemini-4-neon<br/>(Vertex Global — Reasoning Fallback)"]
         Gemini_31_Preview["gemini-3.1-pro-preview<br/>(Vertex Global — Pro Fallback)"]
         Gemini_38_Flash["gemini-3.8-flash<br/>(Vertex Global — Flash Fallback)"]
         Gemini_25_Pro["gemini-2.5-pro<br/>(Stable GA Fallback)"]
@@ -122,9 +122,9 @@ flowchart TB
     Trade_Layer <-->|"Holistic Roster Data"| AI_Intelligence
 
     %% Model Negotiation Ladder
-    ModelNegotiator -->|"probe 1st"| Gemini_4_Neon
-    ModelNegotiator -->|"probe 2nd"| Gemini_4_Argon
-    ModelNegotiator -->|"probe 3rd"| Gemini_4_Hydrogen
+    ModelNegotiator -->|"probe 1st"| Gemini_4_Argon
+    ModelNegotiator -->|"probe 2nd"| Gemini_4_Hydrogen
+    ModelNegotiator -->|"probe 3rd"| Gemini_4_Neon
     ModelNegotiator -->|"probe 4th"| Gemini_31_Preview
     ModelNegotiator -->|"probe 5th"| Gemini_38_Flash
     ModelNegotiator -->|"stable fallback"| Gemini_25_Pro
@@ -185,9 +185,9 @@ flowchart LR
     end
 
     subgraph AILayer ["🧠 Gemini Model Ladder"]
-        G4N["gemini-4-neon (Primary)"]
-        G4A["gemini-4-argon"]
+        G4A["gemini-4-argon (Primary)"]
         G4H["gemini-4-hydrogen"]
+        G4N["gemini-4-neon"]
         G31P["gemini-3.1-pro-preview"]
         G38F["gemini-3.8-flash"]
         G25["gemini-2.5-pro"]
@@ -211,9 +211,9 @@ flowchart LR
     Weather --> Agent
 
     Agent <-->|"Pydantic JSON Schema"| AILayer
-    G4N -.->|"failover"| G4A
     G4A -.->|"failover"| G4H
-    G4H -.->|"failover"| G31P
+    G4H -.->|"probe"| G4N
+    G4N -.->|"failover"| G31P
     G31P -.->|"probe"| G38F
     G38F -.->|"probe"| G25
 
@@ -326,13 +326,13 @@ flowchart LR
 
 * **Dynamic Model Negotiation (`negotiate_active_model()`):**
   * At startup and on-demand via `/health/models?force=true`, probes each model in the preference ladder:
-    1. `gemini-4-neon` (Primary Target — newest Gemini 4 frontier reasoning model)
-    2. `gemini-4-argon` (Gemini 4 deep-reasoning fallback)
-    3. `gemini-4-hydrogen` (Gemini 4 high-speed fallback)
+    1. `gemini-4-argon` (Primary Target — Vertex AI Native Thinking)
+    2. `gemini-4-hydrogen` (Gemini 4 high-speed fallback)
+    3. `gemini-4-neon` (Gemini 4 reasoning fallback)
     4. `gemini-3.1-pro-preview` (Pro reasoning fallback)
     5. `gemini-3.8-flash` (Flash fallback)
     6. `gemini-2.5-pro` (Stable GA fallback)
-  * In-flight failover per request: `gemini-4-neon` → `gemini-4-argon` → `gemini-4-hydrogen` → `gemini-3.1-pro-preview` → `gemini-2.5-pro`.
+  * In-flight failover per request: `gemini-4-argon` → `gemini-4-hydrogen` → `gemini-3.1-pro-preview` → `gemini-2.5-pro`.
   * Result cached in `_NEGOTIATED_MODEL`. Interactive 🧠 Brain Badge in the UI displays the active model with color-coded status (green = target, amber = fallback).
 * **429 Exponential Backoff Retry:**
   * Rate-limit errors (HTTP 429 / `RESOURCE_EXHAUSTED`) trigger up to 3 retries with exponential backoff (5s → 10s → 20s) before failing over to the next model in the ladder.

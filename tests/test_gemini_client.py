@@ -144,39 +144,21 @@ def test_negotiate_active_model_upgrades_when_target_available():
         models = AllAvailableModels()
 
     selected, diag = negotiate_active_model(force=True, mock_client=AllAvailableClient())
-    assert selected == "gemini-4-neon"
+    assert selected == "gemini-4-argon"
     assert diag["auto_upgrade_active"] is True
-    assert diag["candidates"]["gemini-4-neon"]["available"] is True
     assert diag["candidates"]["gemini-4-argon"]["available"] is True
     assert diag["candidates"]["gemini-4-hydrogen"]["available"] is True
+    assert diag["candidates"]["gemini-4-neon"]["available"] is True
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
     assert diag["candidates"]["gemini-3.8-flash"]["available"] is True
     assert diag["candidates"]["gemini-2.5-pro"]["available"] is True
 
 
-def test_negotiate_active_model_selects_argon_when_neon_is_404():
-    """Verify fallback priority: gemini-4-neon -> gemini-4-argon."""
-    class ArgonFallbackModels:
-        def generate_content(self, model, contents, config=None):
-            if model == "gemini-4-neon":
-                raise ConnectionError("404 Publisher model not found")
-            return MockModelResponse("ok")
-
-    class ArgonFallbackClient:
-        models = ArgonFallbackModels()
-
-    selected, diag = negotiate_active_model(force=True, mock_client=ArgonFallbackClient())
-    assert selected == "gemini-4-argon"
-    assert diag["auto_upgrade_active"] is True
-    assert diag["candidates"]["gemini-4-neon"]["available"] is False
-    assert diag["candidates"]["gemini-4-argon"]["available"] is True
-
-
-def test_negotiate_active_model_selects_hydrogen_then_preview_when_argon_is_404():
-    """Verify fallback priority: neon/argon -> gemini-4-hydrogen -> gemini-3.1-pro-preview."""
+def test_negotiate_active_model_selects_hydrogen_then_neon_then_preview_when_argon_is_404():
+    """Verify fallback priority: gemini-4-argon -> gemini-4-hydrogen -> gemini-4-neon -> gemini-3.1-pro-preview."""
     class HydrogenFallbackModels:
         def generate_content(self, model, contents, config=None):
-            if model in ("gemini-4-neon", "gemini-4-argon"):
+            if model == "gemini-4-argon":
                 raise ConnectionError("404 Publisher model not found")
             return MockModelResponse("ok")
 
@@ -189,9 +171,25 @@ def test_negotiate_active_model_selects_hydrogen_then_preview_when_argon_is_404(
     assert diag["candidates"]["gemini-4-argon"]["available"] is False
     assert diag["candidates"]["gemini-4-hydrogen"]["available"] is True
 
+    class NeonFallbackModels:
+        def generate_content(self, model, contents, config=None):
+            if model in ("gemini-4-argon", "gemini-4-hydrogen"):
+                raise ConnectionError("404 Publisher model not found")
+            return MockModelResponse("ok")
+
+    class NeonFallbackClient:
+        models = NeonFallbackModels()
+
+    selected, diag = negotiate_active_model(force=True, mock_client=NeonFallbackClient())
+    assert selected == "gemini-4-neon"
+    assert diag["auto_upgrade_active"] is True
+    assert diag["candidates"]["gemini-4-argon"]["available"] is False
+    assert diag["candidates"]["gemini-4-hydrogen"]["available"] is False
+    assert diag["candidates"]["gemini-4-neon"]["available"] is True
+
     class PreviewFallbackModels:
         def generate_content(self, model, contents, config=None):
-            if model in ("gemini-4-neon", "gemini-4-argon", "gemini-4-hydrogen"):
+            if model in ("gemini-4-argon", "gemini-4-hydrogen", "gemini-4-neon"):
                 raise ConnectionError("404 Publisher model not found")
             return MockModelResponse("ok")
 
@@ -203,6 +201,7 @@ def test_negotiate_active_model_selects_hydrogen_then_preview_when_argon_is_404(
     assert diag["auto_upgrade_active"] is True
     assert diag["candidates"]["gemini-4-argon"]["available"] is False
     assert diag["candidates"]["gemini-4-hydrogen"]["available"] is False
+    assert diag["candidates"]["gemini-4-neon"]["available"] is False
     assert diag["candidates"]["gemini-3.1-pro-preview"]["available"] is True
 
 
@@ -379,11 +378,10 @@ def test_in_flight_failover_neon_to_argon():
     assert client.model == "gemini-4-argon"
 
 
-def test_build_models_to_try_full_chain_for_neon():
-    """Verify the complete in-flight failover ladder for the primary model."""
-    client = GeminiIntelligenceClient(model="gemini-4-neon", mock_client=object())
+def test_build_models_to_try_full_chain_for_argon():
+    """Verify the complete in-flight failover ladder for the primary model (gemini-4-argon)."""
+    client = GeminiIntelligenceClient(model="gemini-4-argon", mock_client=object())
     assert client._build_models_to_try() == [
-        "gemini-4-neon",
         "gemini-4-argon",
         "gemini-4-hydrogen",
         "gemini-3.1-pro-preview",
