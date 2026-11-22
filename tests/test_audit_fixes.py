@@ -856,7 +856,7 @@ def test_negotiate_active_model_fast_probe_stops_on_first_available_model():
         active, diag = negotiate_active_model(
             force=True, mock_client=CountingClient(), probe_all=False
         )
-        assert active == "gemini-4-argon"
+        assert active == "gemini-4-neon"
         assert call_count == 1
         assert diag["fast_probe"] is True
     finally:

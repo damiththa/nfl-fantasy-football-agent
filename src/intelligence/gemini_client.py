@@ -27,8 +27,9 @@ INITIAL_BACKOFF_SECONDS = 1.0
 BACKOFF_MULTIPLIER = 1.5
 
 PREFERRED_MODELS: list[str] = [
-    "gemini-4-argon",          # Primary frontier Gemini 4 deep-reasoning model (Vertex AI `global`)
-    "gemini-4-hydrogen",       # Secondary frontier Gemini 4 high-speed model (Vertex AI `global`)
+    "gemini-4-neon",           # Primary: newest Gemini 4 frontier reasoning model (Vertex AI `global`)
+    "gemini-4-argon",          # Secondary Gemini 4 deep-reasoning model (Vertex AI `global`)
+    "gemini-4-hydrogen",       # Tertiary Gemini 4 high-speed model (Vertex AI `global`)
     "gemini-3.1-pro-preview",  # Tertiary Pro reasoning backup (Vertex AI `global`)
     "gemini-3.8-flash",        # High-speed Gemini 3.8 backup (Vertex AI `global`)
     "gemini-2.5-pro",          # Stable GA fallback
@@ -57,7 +58,7 @@ def resolve_temperature(model_id: str, requested: float) -> float:
 def resolve_thinking_config(model_id: str) -> Optional[types.ThinkingConfig]:
     """Return thinking configuration tailored for the model.
 
-    Gemini 4 models (e.g. gemini-4-argon) do not support integer thinking_budget
+    Gemini 4 models (e.g. gemini-4-neon, gemini-4-argon) do not support integer thinking_budget
     and raise 400 INVALID_ARGUMENT if thinking_budget is passed; they manage
     thinking natively when thinking_config is None.
     For Gemini 3/2.5 models, if GEMINI_THINKING_BUDGET is explicitly set in the
@@ -105,7 +106,7 @@ def negotiate_active_model(
     mock_client: Optional[Any] = None,
     probe_all: bool = True,
 ) -> tuple[str, dict[str, Any]]:
-    """Probe candidate models in preference order (gemini-4-argon -> gemini-2.5-pro).
+    """Probe candidate models in preference order (gemini-4-neon -> gemini-2.5-pro).
 
     Args:
         force: Force re-probing even if a negotiated model is cached.
@@ -237,11 +238,13 @@ class GeminiIntelligenceClient:
     def _build_models_to_try(self) -> list[str]:
         """Build ordered list of models for in-flight failover."""
         models_to_try = [self.model]
-        fallbacks = (
-            ("gemini-4-hydrogen", "gemini-3.1-pro-preview", PREFERRED_MODELS[-1])
-            if self.model == "gemini-4-argon"
-            else ("gemini-3.1-pro-preview", PREFERRED_MODELS[-1])
-        )
+        fallbacks: list[str] = []
+        if self.model in PREFERRED_MODELS and self.model.startswith("gemini-4"):
+            # Gemini 4 models fail over through the lower-priority Gemini 4 models first
+            # (e.g. neon -> argon -> hydrogen) before dropping to the 3.x / 2.5 backups.
+            idx = PREFERRED_MODELS.index(self.model)
+            fallbacks.extend(m for m in PREFERRED_MODELS[idx + 1 :] if m.startswith("gemini-4"))
+        fallbacks.extend(["gemini-3.1-pro-preview", PREFERRED_MODELS[-1]])
         for fallback in fallbacks:
             if fallback != self.model and fallback not in models_to_try:
                 models_to_try.append(fallback)
