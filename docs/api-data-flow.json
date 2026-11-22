@@ -35,7 +35,7 @@
     { "id": "api_queries", "type": "backend", "label": "REST Query Endpoints", "sublabel": "streaming • keep-alive", "pos": [250, 200], "size": [150, 60], "tag": "Heartbeat Stream" },
     { "id": "gcs_memory_store", "type": "database", "label": "GCS Memory Store", "sublabel": "JSON Lessons & Tape", "pos": [250, 310], "size": [150, 60], "tag": "Zero DB Tables" },
 
-    { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "4-argon ➔ 3.1-pro ➔ 2.5-pro", "pos": [510, 90], "size": [160, 60], "tag": "Native Thinking" },
+    { "id": "gemini_ladder", "type": "backend", "label": "Gemini Model Ladder", "sublabel": "4-argon ➔ 4-hydrogen ➔ 2.5", "pos": [510, 90], "size": [160, 60], "tag": "Native Thinking" },
     { "id": "pydantic_contracts", "type": "backend", "label": "6 Pydantic Contracts", "sublabel": "JSON Schema Enforcement", "pos": [510, 200], "size": [160, 60] },
     { "id": "espn_pipeline", "type": "backend", "label": "Data Ingestion Layer", "sublabel": "Rosters, Wire, Odds, Wx, Stats", "pos": [510, 310], "size": [160, 60] },
 
